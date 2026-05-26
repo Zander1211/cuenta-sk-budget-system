@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useAuditLog } from './AuditLogContext'
+import { supabase } from '../supabase/supabaseClient'
 
 const BudgetContext = createContext(null)
 const STORAGE_KEY = 'cuenta.budgetData'
@@ -80,6 +81,36 @@ function BudgetProvider({ children }) {
       )
     }
   }, [budgets, requests, expenses])
+
+  // Attempt to sync expenses from Supabase (read-only) on mount
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      if (typeof window === 'undefined') return
+      try {
+        const { data, error } = await supabase.from('expenses').select('*').order('created_at', { ascending: false }).limit(200)
+        if (!mounted) return
+        if (!error && Array.isArray(data) && data.length) {
+          // map server rows into local expense shape
+          const mapped = data.map((r) => ({
+            id: r.id || `${Date.now()}-${Math.random()}`,
+            event: r.event || r.project || r.title || '',
+            project: r.project || r.event || '',
+            category: r.category || r.type || '',
+            amount: Number(r.amount) || 0,
+            status: r.status || 'Approved',
+            created_at: r.created_at || r.createdAt || new Date().toISOString(),
+            receipt: r.receipt_url || r.file_path || null,
+          }))
+          setExpenses(mapped)
+        }
+      } catch (e) {
+        // ignore network errors — keep local state
+        console.warn('Supabase expenses sync failed', e.message || e)
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
 
   function addQuarterBudget({ quarter, amount }) {
     const id =
