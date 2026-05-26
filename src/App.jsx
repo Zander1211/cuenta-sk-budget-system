@@ -17,6 +17,7 @@ import ProfilePage from './pages/ProfilePage'
 import { AuditLogProvider } from './context/AuditLogContext'
 import { BudgetProvider } from './context/BudgetContext'
 import { AuthProvider } from './context/AuthContext'
+import ChatWidget from './components/ChatWidget'
 
 function App() {
   return (
@@ -44,6 +45,7 @@ function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>
+          <ChatWidget />
         </BudgetProvider>
       </AuditLogProvider>
     </AuthProvider>
