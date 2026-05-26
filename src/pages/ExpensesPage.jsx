@@ -8,7 +8,12 @@ const currency = new Intl.NumberFormat('en-PH', {
 })
 
 function ExpensesPage() {
-  const { expenses } = useBudget()
+  const {
+    expenses,
+    expensesSyncStatus,
+    refreshExpensesFromSupabase,
+    seedDemoExpenses,
+  } = useBudget()
   const [projectFilter, setProjectFilter] = useState('')
   const [dateFilter, setDateFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All')
@@ -66,6 +71,32 @@ function ExpensesPage() {
       </header>
 
       <section className="dashboard-content">
+        {expensesSyncStatus === 'empty' && expenses.length === 0 ? (
+          <div className="overview-card sync-banner">
+            <p className="eyebrow">Supabase sync</p>
+            <h2>No expenses found</h2>
+            <p>
+              We did not find expenses in Supabase yet. Import again or seed demo
+              data to continue.
+            </p>
+            <div className="sync-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={refreshExpensesFromSupabase}
+              >
+                Import from Supabase
+              </button>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={seedDemoExpenses}
+              >
+                Seed demo expenses
+              </button>
+            </div>
+          </div>
+        ) : null}
         <div className="overview-card">
           <p className="eyebrow">Filters</p>
           <h2>Expense filters</h2>

@@ -11,6 +11,78 @@ const sampleEntries = new Set([
   'Youth Sports Festival|Events|12000',
 ])
 
+function mapExpenseRow(row) {
+  const approvedAt =
+    row.approved_at ||
+    row.approvedAt ||
+    row.created_at ||
+    row.createdAt ||
+    new Date().toISOString()
+
+  return {
+    id: row.id || `${Date.now()}-${Math.random()}`,
+    event: row.event || row.project || row.title || '',
+    project: row.project || row.event || '',
+    category: row.category || row.type || '',
+    amount: Number(row.amount ?? row.total ?? 0),
+    status: row.status || 'Approved',
+    approvedAt,
+    date: row.date || row.event_date || row.eventDate || null,
+    eventDate: row.event_date || row.eventDate || null,
+    venue: row.venue || '',
+    description: row.description || '',
+    notes: row.notes || '',
+    breakdown: Array.isArray(row.breakdown) ? row.breakdown : [],
+    receiptUrl: row.receipt_url || row.receiptUrl || null,
+    receiptName: row.receipt_name || row.receiptName || '',
+  }
+}
+
+function buildDemoExpenses() {
+  const now = new Date()
+  const iso = now.toISOString()
+  const shortDate = iso.slice(0, 10)
+
+  return [
+    {
+      id: `demo-${now.getTime()}-1`,
+      event: 'Community Cleanup Drive',
+      project: 'Community Cleanup Drive',
+      category: 'Environment',
+      amount: 4200,
+      status: 'Approved',
+      approvedAt: iso,
+      eventDate: shortDate,
+      venue: 'Barangay Hall',
+      description: 'Cleanup supplies and hauling',
+      breakdown: [
+        { itemName: 'Trash bags', quantity: 20, unitCost: 25 },
+        { itemName: 'Gloves', quantity: 15, unitCost: 60 },
+      ],
+      receiptName: 'Demo receipt',
+      receiptUrl: '',
+    },
+    {
+      id: `demo-${now.getTime()}-2`,
+      event: 'Youth Sports Clinic',
+      project: 'Youth Sports Clinic',
+      category: 'Sports',
+      amount: 7800,
+      status: 'Approved',
+      approvedAt: iso,
+      eventDate: shortDate,
+      venue: 'Covered Court',
+      description: 'Sports equipment and snacks',
+      breakdown: [
+        { itemName: 'Training cones', quantity: 12, unitCost: 120 },
+        { itemName: 'Snacks', quantity: 80, unitCost: 35 },
+      ],
+      receiptName: 'Demo receipt',
+      receiptUrl: '',
+    },
+  ]
+}
+
 function isSample(entry) {
   const key = `${entry.event}|${entry.category}|${Number(entry.amount)}`
   return sampleEntries.has(key)
@@ -72,6 +144,7 @@ function BudgetProvider({ children }) {
   const [budgets, setBudgets] = useState(() => getInitialState().budgets)
   const [requests, setRequests] = useState(() => getInitialState().requests)
   const [expenses, setExpenses] = useState(() => getInitialState().expenses)
+  const [expensesSyncStatus, setExpensesSyncStatus] = useState('idle')
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -82,34 +155,46 @@ function BudgetProvider({ children }) {
     }
   }, [budgets, requests, expenses])
 
+  async function loadExpensesFromSupabase() {
+    if (typeof window === 'undefined') return
+    setExpensesSyncStatus('loading')
+
+    try {
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200)
+
+      if (error) {
+        throw error
+      }
+
+      if (Array.isArray(data) && data.length) {
+        setExpenses(data.map(mapExpenseRow))
+        setExpensesSyncStatus('loaded')
+      } else {
+        setExpensesSyncStatus('empty')
+      }
+    } catch (error) {
+      console.warn('Supabase expenses sync failed', error?.message || error)
+      setExpensesSyncStatus('error')
+    }
+  }
+
+  function refreshExpensesFromSupabase() {
+    return loadExpensesFromSupabase()
+  }
+
+  function seedDemoExpenses() {
+    setExpenses(buildDemoExpenses())
+    setExpensesSyncStatus('loaded')
+    addLog({ action: 'Seeded demo expenses' })
+  }
+
   // Attempt to sync expenses from Supabase (read-only) on mount
   useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      if (typeof window === 'undefined') return
-      try {
-        const { data, error } = await supabase.from('expenses').select('*').order('created_at', { ascending: false }).limit(200)
-        if (!mounted) return
-        if (!error && Array.isArray(data) && data.length) {
-          // map server rows into local expense shape
-          const mapped = data.map((r) => ({
-            id: r.id || `${Date.now()}-${Math.random()}`,
-            event: r.event || r.project || r.title || '',
-            project: r.project || r.event || '',
-            category: r.category || r.type || '',
-            amount: Number(r.amount) || 0,
-            status: r.status || 'Approved',
-            created_at: r.created_at || r.createdAt || new Date().toISOString(),
-            receipt: r.receipt_url || r.file_path || null,
-          }))
-          setExpenses(mapped)
-        }
-      } catch (e) {
-        // ignore network errors — keep local state
-        console.warn('Supabase expenses sync failed', e.message || e)
-      }
-    })()
-    return () => { mounted = false }
+    loadExpensesFromSupabase()
   }, [])
 
   function addQuarterBudget({ quarter, amount }) {
@@ -310,6 +395,7 @@ function BudgetProvider({ children }) {
       budgets,
       requests,
       expenses,
+      expensesSyncStatus,
       totals,
       addQuarterBudget,
       approveRequest,
@@ -318,11 +404,14 @@ function BudgetProvider({ children }) {
       restoreRequest,
       addExpense,
       addRequest,
+      refreshExpensesFromSupabase,
+      seedDemoExpenses,
     }),
     [
       budgets,
       requests,
       expenses,
+      expensesSyncStatus,
       totals,
     ]
   )
