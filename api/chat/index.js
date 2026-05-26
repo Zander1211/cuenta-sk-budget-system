@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js'
-import pdfParse from 'pdf-parse'
 
 export default async function handler(req, res) {
   // Health check: GET returns presence of required env vars (no secrets)
@@ -61,8 +60,14 @@ export default async function handler(req, res) {
       const buffer = Buffer.from(arrayBuffer)
 
       if (rows.file_name?.toLowerCase().endsWith('.pdf')) {
-        const parsed = await pdfParse(buffer)
-        reportText = parsed.text || ''
+        try {
+          const { default: pdfParse } = await import('pdf-parse')
+          const parsed = await pdfParse(buffer)
+          reportText = parsed.text || ''
+        } catch (e) {
+          console.error('pdf-parse import/parse failed', e)
+          throw e
+        }
       } else {
         reportText = buffer.toString('utf8')
       }
@@ -84,14 +89,15 @@ export default async function handler(req, res) {
   const MODEL_CHUNK = process.env.OPENAI_CHUNK_MODEL || 'gpt-3.5-turbo'
 
   // Helper to call OpenAI
-  async function callOpenAI(messagesPayload) {
+  async function callOpenAI(messagesPayload, modelOverride) {
+    const modelToUse = modelOverride || MODEL_SYNTH
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
-      body: JSON.stringify({ model: MODEL, messages: messagesPayload }),
+      body: JSON.stringify({ model: modelToUse, messages: messagesPayload }),
     })
 
     if (!resp.ok) {
