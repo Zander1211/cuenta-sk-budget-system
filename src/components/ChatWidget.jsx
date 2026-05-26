@@ -31,6 +31,30 @@ export default function ChatWidget() {
     loadReportsList()
   }, [])
 
+  // Health check for server env configuration
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const res = await fetch('/api/chat')
+        if (!mounted) return
+        if (res.ok) {
+          const info = await res.json()
+          const missing = []
+          if (!info.hasOpenAI) missing.push('OPENAI_API_KEY')
+          if (!info.hasSupabaseKey) missing.push('SUPABASE_SERVICE_ROLE_KEY')
+          if (missing.length) {
+            setMessages(prev => [...prev, { role: 'assistant', content: 'Configuration missing: ' + missing.join(', ') + '. Set them in Vercel env and redeploy.' }])
+          }
+        }
+      } catch (e) {
+        // network or server error — show simple guidance
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Cannot reach server API — ensure deployment and env vars are configured.' }])
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
+
   useEffect(() => {
     scrollToBottom()
   }, [messages, open])

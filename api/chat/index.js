@@ -2,6 +2,14 @@ import { createClient } from '@supabase/supabase-js'
 import pdfParse from 'pdf-parse'
 
 export default async function handler(req, res) {
+  // Health check: GET returns presence of required env vars (no secrets)
+  if (req.method === 'GET') {
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
+    res.json({ ok: true, hasOpenAI: !!OPENAI_API_KEY, hasSupabaseKey: !!SUPABASE_SERVICE_ROLE_KEY })
+    return
+  }
+
   if (req.method !== 'POST') {
     res.status(405).send('Method Not Allowed')
     return
