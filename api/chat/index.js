@@ -71,8 +71,9 @@ export default async function handler(req, res) {
   }
 
   // If we have reportText, prepend instructions and the report content (truncated)
-  // Use model specified or default to gpt-4 for higher-quality summaries
-  const MODEL = process.env.OPENAI_MODEL || 'gpt-4'
+  // Models: use a cheaper model for chunk summarization and a higher-quality model for synthesis
+  const MODEL_SYNTH = process.env.OPENAI_MODEL || 'gpt-4'
+  const MODEL_CHUNK = process.env.OPENAI_CHUNK_MODEL || 'gpt-3.5-turbo'
 
   // Helper to call OpenAI
   async function callOpenAI(messagesPayload) {
@@ -95,6 +96,27 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Check cache first (if reportId provided)
+    if (reportId) {
+      try {
+        const { data: cached, error: cacheErr } = await supabaseAdmin
+          .from('report_summaries')
+          .select('id, summary, model, updated_at')
+          .eq('report_id', reportId)
+          .eq('model', MODEL_SYNTH)
+          .limit(1)
+          .maybeSingle()
+
+        if (!cacheErr && cached && cached.summary) {
+          res.json({ reply: cached.summary, cached: true })
+          return
+        }
+      } catch (e) {
+        // ignore cache errors (table may not exist)
+        console.warn('Cache check failed', e.message || e)
+      }
+    }
+
     if (reportText && reportText.length > 16000) {
       // Chunk the report and summarize each chunk, then synthesize
       const CHUNK_SIZE = 8000
@@ -104,19 +126,24 @@ export default async function handler(req, res) {
       }
 
       const chunkSummaries = []
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i]
-        const prompt = [
-          {
-            role: 'system',
-            content:
-              'You are a helpful assistant that extracts concise summaries and key figures from report text. Provide 4–6 bullet points per chunk and include any numeric figures or dates you see.',
-          },
-          { role: 'user', content: `Chunk ${i + 1} of ${chunks.length}:\n\n${chunk}` },
-        ]
-
-        const summary = await callOpenAI(prompt)
-        chunkSummaries.push(`Chunk ${i + 1} summary:\n${summary}`)
+      // run chunk summaries in batches to limit concurrency
+      const BATCH_SIZE = 3
+      for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+        const batch = chunks.slice(i, i + BATCH_SIZE)
+        const promises = batch.map((chunk, idx) => {
+          const prompt = [
+            {
+              role: 'system',
+              content:
+                'You are a helpful assistant that extracts concise summaries and key figures from report text. Provide 4–6 bullet points per chunk and include any numeric figures or dates you see.',
+            },
+            { role: 'user', content: `Chunk ${i + idx + 1} of ${chunks.length}:\n\n${chunk}` },
+          ]
+          return callOpenAI(prompt, MODEL_CHUNK)
+            .then(s => `Chunk ${i + idx + 1} summary:\n${s}`)
+        })
+        const results = await Promise.all(promises)
+        chunkSummaries.push(...results)
       }
 
       // Synthesize chunk summaries into final executive summary
@@ -130,8 +157,22 @@ export default async function handler(req, res) {
         { role: 'user', content: 'Synthesize the above into a single executive summary and list key figures/dates.' },
         ...messages,
       ]
-
       const finalReply = await callOpenAI(synthPrompt)
+
+      // store synthesized summary in cache table
+      if (reportId) {
+        try {
+          await supabaseAdmin.from('report_summaries').upsert({
+            report_id: reportId,
+            model: MODEL_SYNTH,
+            summary: finalReply,
+            updated_at: new Date().toISOString(),
+          })
+        } catch (e) {
+          console.warn('Failed to upsert summary cache', e.message || e)
+        }
+      }
+
       res.json({ reply: finalReply })
       return
     }
@@ -150,6 +191,20 @@ export default async function handler(req, res) {
       : messages
 
     const reply = await callOpenAI(finalMessages)
+
+    if (reportId) {
+      try {
+        await supabaseAdmin.from('report_summaries').upsert({
+          report_id: reportId,
+          model: MODEL_SYNTH,
+          summary: reply,
+          updated_at: new Date().toISOString(),
+        })
+      } catch (e) {
+        console.warn('Failed to upsert summary cache', e.message || e)
+      }
+    }
+
     res.json({ reply })
   } catch (err) {
     console.error(err)
