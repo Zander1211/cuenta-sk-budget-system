@@ -26,12 +26,29 @@ const formatNumberInput = (value) => {
   return numberFormatter.format(Number(numeric))
 }
 
+const monthOptions = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
+
 function BudgetsPage() {
   const { role } = useAuth()
-  const { budgets, addQuarterBudget } = useBudget()
-  const [quarter, setQuarter] = useState('')
+  const { budgets, addMonthlyBudget } = useBudget()
+  const now = new Date()
+  const [month, setMonth] = useState(now.getMonth())
+  const [year, setYear] = useState(now.getFullYear())
   const [amount, setAmount] = useState('')
-  const canEdit = role === 'SK Chairman'
+  const canEdit = role === 'SK Treasurer'
 
   function handleSubmit(event) {
     event.preventDefault()
@@ -41,16 +58,16 @@ function BudgetsPage() {
     }
 
     const cleanedAmount = parseNumberInput(amount)
-    if (!quarter.trim() || Number.isNaN(cleanedAmount)) {
+    if (Number.isNaN(cleanedAmount) || cleanedAmount <= 0) {
       return
     }
 
-    addQuarterBudget({
-      quarter: quarter.trim(),
+    addMonthlyBudget({
+      month,
+      year,
       amount: cleanedAmount,
     })
 
-    setQuarter('')
     setAmount('')
   }
 
@@ -60,8 +77,8 @@ function BudgetsPage() {
         <div className="header-left">
           <div>
             <p className="eyebrow">Budgets</p>
-            <h1>Quarterly budget allocation</h1>
-            <p>Set the total quarterly budget for SK programs.</p>
+            <h1>Monthly budget allocation</h1>
+            <p>Set the monthly budget for SK programs.</p>
           </div>
         </div>
       </header>
@@ -70,16 +87,30 @@ function BudgetsPage() {
         {canEdit ? (
           <div className="overview-card">
             <p className="eyebrow">New budget</p>
-            <h2>Add a quarterly budget</h2>
+            <h2>Add a monthly budget</h2>
             <form className="user-form" onSubmit={handleSubmit}>
               <div className="form-grid">
                 <label className="field">
-                  <span>Quarter</span>
+                  <span>Month</span>
+                  <select
+                    value={month}
+                    onChange={(event) => setMonth(Number(event.target.value))}
+                  >
+                    {monthOptions.map((label, index) => (
+                      <option key={label} value={index}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Year</span>
                   <input
-                    type="text"
-                    value={quarter}
-                    onChange={(event) => setQuarter(event.target.value)}
-                    placeholder="2026 Q3"
+                    type="number"
+                    value={year}
+                    min="2000"
+                    max="2100"
+                    onChange={(event) => setYear(Number(event.target.value))}
                     required
                   />
                 </label>
@@ -105,9 +136,9 @@ function BudgetsPage() {
         ) : (
           <div className="overview-card">
             <p className="eyebrow">Budget summary</p>
-            <h2>Quarterly budgets</h2>
+            <h2>Monthly budgets</h2>
             <p className="form-note">
-              Only the SK Chairman can add or edit budgets. You have view-only
+              Only the SK Treasurer can add or edit budgets. You have view-only
               access.
             </p>
           </div>
@@ -119,7 +150,8 @@ function BudgetsPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Quarter</th>
+                <th>Month</th>
+                <th>Year</th>
                 <th>Total Budget</th>
                 <th>Date Added</th>
               </tr>
@@ -128,15 +160,16 @@ function BudgetsPage() {
               {budgets.length ? (
                 budgets.map((budget) => (
                   <tr key={budget.id}>
-                    <td>{budget.quarter}</td>
+                    <td>{monthOptions[budget.month] || '—'}</td>
+                    <td>{budget.year}</td>
                     <td>{currency.format(budget.amount)}</td>
                     <td>{new Date(budget.createdAt).toLocaleDateString()}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="3" className="empty-state">
-                    No quarterly budgets yet.
+                  <td colSpan="4" className="empty-state">
+                    No monthly budgets yet.
                   </td>
                 </tr>
               )}

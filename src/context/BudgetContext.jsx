@@ -3,13 +3,23 @@ import { useAuditLog } from './AuditLogContext'
 import { supabase } from '../supabase/supabaseClient'
 
 const BudgetContext = createContext(null)
-const STORAGE_KEY = 'cuenta.budgetData'
+const STORAGE_KEY = 'cuenta.budgetData.v2'
 
 const defaultRequests = []
-const sampleEntries = new Set([
-  'Community Skills Workshop|Training|8500',
-  'Youth Sports Festival|Events|12000',
-])
+const monthLabels = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
 
 function mapExpenseRow(row) {
   const approvedAt =
@@ -27,6 +37,7 @@ function mapExpenseRow(row) {
     amount: Number(row.amount ?? row.total ?? 0),
     status: row.status || 'Approved',
     approvedAt,
+    archivedAt: row.archived_at || row.archivedAt || null,
     date: row.date || row.event_date || row.eventDate || null,
     eventDate: row.event_date || row.eventDate || null,
     venue: row.venue || '',
@@ -36,56 +47,6 @@ function mapExpenseRow(row) {
     receiptUrl: row.receipt_url || row.receiptUrl || null,
     receiptName: row.receipt_name || row.receiptName || '',
   }
-}
-
-function buildDemoExpenses() {
-  const now = new Date()
-  const iso = now.toISOString()
-  const shortDate = iso.slice(0, 10)
-
-  return [
-    {
-      id: `demo-${now.getTime()}-1`,
-      event: 'Community Cleanup Drive',
-      project: 'Community Cleanup Drive',
-      category: 'Environment',
-      amount: 4200,
-      status: 'Approved',
-      approvedAt: iso,
-      eventDate: shortDate,
-      venue: 'Barangay Hall',
-      description: 'Cleanup supplies and hauling',
-      breakdown: [
-        { itemName: 'Trash bags', quantity: 20, unitCost: 25 },
-        { itemName: 'Gloves', quantity: 15, unitCost: 60 },
-      ],
-      receiptName: 'Demo receipt',
-      receiptUrl: '',
-    },
-    {
-      id: `demo-${now.getTime()}-2`,
-      event: 'Youth Sports Clinic',
-      project: 'Youth Sports Clinic',
-      category: 'Sports',
-      amount: 7800,
-      status: 'Approved',
-      approvedAt: iso,
-      eventDate: shortDate,
-      venue: 'Covered Court',
-      description: 'Sports equipment and snacks',
-      breakdown: [
-        { itemName: 'Training cones', quantity: 12, unitCost: 120 },
-        { itemName: 'Snacks', quantity: 80, unitCost: 35 },
-      ],
-      receiptName: 'Demo receipt',
-      receiptUrl: '',
-    },
-  ]
-}
-
-function isSample(entry) {
-  const key = `${entry.event}|${entry.category}|${Number(entry.amount)}`
-  return sampleEntries.has(key)
 }
 
 function getInitialState() {
@@ -108,10 +69,27 @@ function getInitialState() {
     }
 
     const parsed = JSON.parse(stored)
-    const budgets = parsed.budgets ?? []
-    const requests = (parsed.requests ?? defaultRequests)
-      .filter((item) => !isSample(item))
+    const budgets = (parsed.budgets ?? [])
       .map((item) => {
+        const month = Number(item.month)
+        const year = Number(item.year)
+        if (!Number.isFinite(month) || !Number.isFinite(year)) {
+          return null
+        }
+        if (month < 0 || month > 11) {
+          return null
+        }
+
+        return {
+          id: item.id || `${Date.now()}-${Math.random()}`,
+          month,
+          year,
+          amount: Number(item.amount) || 0,
+          createdAt: item.createdAt || new Date().toISOString(),
+        }
+      })
+      .filter(Boolean)
+    const requests = (parsed.requests ?? defaultRequests).map((item) => {
         const breakdown = Array.isArray(item.breakdown) ? item.breakdown : []
         return {
           ...item,
@@ -123,7 +101,7 @@ function getInitialState() {
           })),
         }
       })
-    const expenses = (parsed.expenses ?? []).filter((item) => !isSample(item))
+    const expenses = parsed.expenses ?? []
 
     return {
       budgets,
@@ -186,18 +164,23 @@ function BudgetProvider({ children }) {
     return loadExpensesFromSupabase()
   }
 
-  function seedDemoExpenses() {
-    setExpenses(buildDemoExpenses())
-    setExpensesSyncStatus('loaded')
-    addLog({ action: 'Seeded demo expenses' })
-  }
 
   // Attempt to sync expenses from Supabase (read-only) on mount
   useEffect(() => {
     loadExpensesFromSupabase()
   }, [])
 
-  function addQuarterBudget({ quarter, amount }) {
+  function addMonthlyBudget({ month, year, amount }) {
+    const normalizedMonth = Number(month)
+    const normalizedYear = Number(year)
+
+    if (!Number.isFinite(normalizedMonth) || !Number.isFinite(normalizedYear)) {
+      return
+    }
+    if (normalizedMonth < 0 || normalizedMonth > 11) {
+      return
+    }
+
     const id =
       typeof crypto !== 'undefined' && crypto.randomUUID
         ? crypto.randomUUID()
@@ -206,14 +189,18 @@ function BudgetProvider({ children }) {
     setBudgets((prev) => [
       {
         id,
-        quarter,
-        amount,
+        month: normalizedMonth,
+        year: normalizedYear,
+        amount: Number(amount) || 0,
         createdAt: new Date().toISOString(),
       },
       ...prev,
     ])
 
-    addLog({ action: `Added quarterly budget: ${quarter} (${amount})` })
+    const monthLabel = monthLabels[normalizedMonth] || `Month ${normalizedMonth + 1}`
+    addLog({
+      action: `Added monthly budget: ${monthLabel} ${normalizedYear} (${amount})`,
+    })
   }
 
   function approveRequest(requestId) {
@@ -366,12 +353,53 @@ function BudgetProvider({ children }) {
         id,
         status: 'Pending',
         approvedAt: new Date().toISOString(),
+        archivedAt: null,
         ...entry,
       },
       ...prev,
     ])
 
     addLog({ action: `Added expense: ${entry.event || entry.project}` })
+  }
+
+  function archiveExpense(expenseId) {
+    const expense = expenses.find((item) => item.id === expenseId)
+    if (!expense || expense.archivedAt) {
+      return
+    }
+
+    setExpenses((prev) =>
+      prev.map((item) =>
+        item.id === expenseId
+          ? {
+              ...item,
+              archivedAt: new Date().toISOString(),
+            }
+          : item
+      )
+    )
+
+    addLog({ action: `Archived expense for ${expense.event || expense.project}` })
+  }
+
+  function restoreExpense(expenseId) {
+    const expense = expenses.find((item) => item.id === expenseId)
+    if (!expense || !expense.archivedAt) {
+      return
+    }
+
+    setExpenses((prev) =>
+      prev.map((item) =>
+        item.id === expenseId
+          ? {
+              ...item,
+              archivedAt: null,
+            }
+          : item
+      )
+    )
+
+    addLog({ action: `Restored expense for ${expense.event || expense.project}` })
   }
 
   const totals = useMemo(() => {
@@ -397,15 +425,16 @@ function BudgetProvider({ children }) {
       expenses,
       expensesSyncStatus,
       totals,
-      addQuarterBudget,
+      addMonthlyBudget,
       approveRequest,
       rejectRequest,
       archiveRequest,
       restoreRequest,
       addExpense,
+      archiveExpense,
+      restoreExpense,
       addRequest,
       refreshExpensesFromSupabase,
-      seedDemoExpenses,
     }),
     [
       budgets,

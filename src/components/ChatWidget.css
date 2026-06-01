@@ -36,3 +36,30 @@
 .chat-input input { flex: 1; padding: 8px 10px; border-radius: 8px; border: 1px solid #ddd }
 .chat-input button { padding: 8px 12px; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer }
 .chat-toggle { width: 56px; height: 56px; border-radius: 50%; background: #3b82f6; color: white; border: none; box-shadow: 0 8px 24px rgba(0,0,0,0.2); font-size: 22px }
+
+@media (max-width: 720px) {
+  .chat-widget {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+  }
+
+  .chat-widget.open {
+    width: auto;
+  }
+
+  .chat-widget .chat-body {
+    height: min(70vh, 520px);
+  }
+
+  .chat-widget:not(.open) .chat-header {
+    display: none;
+  }
+
+  .chat-toggle {
+    width: 52px;
+    height: 52px;
+    font-size: 20px;
+  }
+}

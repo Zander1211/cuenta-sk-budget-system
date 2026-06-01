@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 
@@ -36,6 +37,7 @@ const categories = [
 
 function RequestPage() {
   const { requests, addRequest, archiveRequest } = useBudget()
+  const navigate = useNavigate()
   const [event, setEvent] = useState('')
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('')
@@ -129,6 +131,11 @@ function RequestPage() {
     setDescription('')
     setNotes('')
     setBreakdownItems([{ itemName: '', quantity: 1, unitCost: 0 }])
+  }
+
+  function handleArchive(requestId) {
+    archiveRequest(requestId)
+    navigate('/dashboard/archive')
   }
 
   return (
@@ -359,7 +366,7 @@ function RequestPage() {
                       <button
                         className="secondary-button"
                         type="button"
-                        onClick={() => archiveRequest(request.id)}
+                        onClick={() => handleArchive(request.id)}
                       >
                         Archive
                       </button>

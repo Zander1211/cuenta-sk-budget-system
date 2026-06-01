@@ -44,8 +44,8 @@ function App() {
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            <ChatWidget />
           </BrowserRouter>
-          <ChatWidget />
         </BudgetProvider>
       </AuditLogProvider>
     </AuthProvider>

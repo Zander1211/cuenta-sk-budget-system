@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react'
+import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 
 const currency = new Intl.NumberFormat('en-PH', {
@@ -8,8 +9,15 @@ const currency = new Intl.NumberFormat('en-PH', {
 })
 
 function ApprovalsPage() {
-  const { requests, approveRequest, rejectRequest, archiveRequest } = useBudget()
+  const {
+    requests,
+    approveRequest,
+    rejectRequest,
+    archiveRequest,
+    restoreRequest,
+  } = useBudget()
   const [expanded, setExpanded] = useState({})
+  const [activeTab, setActiveTab] = useState('pending')
   const [rejectingId, setRejectingId] = useState(null)
   const [rejectNote, setRejectNote] = useState('')
   const [rejectError, setRejectError] = useState('')
@@ -48,6 +56,18 @@ function ApprovalsPage() {
     setRejectingId(null)
     setRejectNote('')
     setRejectError('')
+  }
+
+  function handleTabChange(nextTab) {
+    setActiveTab(nextTab)
+    setRejectingId(null)
+    setRejectNote('')
+    setRejectError('')
+  }
+
+  function handleArchive(requestId) {
+    archiveRequest(requestId)
+    setActiveTab('archive')
   }
 
   function renderRequestRow(
@@ -120,7 +140,7 @@ function ApprovalsPage() {
               <button
                 className="secondary-button"
                 type="button"
-                onClick={() => archiveRequest(request.id)}
+                onClick={() => handleArchive(request.id)}
               >
                 Archive
               </button>
@@ -283,9 +303,10 @@ function ApprovalsPage() {
     (request) =>
       (!request.status || request.status === 'Pending') && !request.archivedAt
   )
+  const archivedRequests = requests.filter((request) => request.archivedAt)
 
   return (
-    <>
+    <RoleGate allow={['SK Chairman']}>
       <header className="dashboard-header">
         <div className="header-left">
           <div>
@@ -294,47 +315,112 @@ function ApprovalsPage() {
             <p>Requests submitted by the SK Treasurer appear here.</p>
           </div>
         </div>
+        <div
+          className="header-actions page-tabs"
+          role="tablist"
+          aria-label="Approvals views"
+        >
+          <button
+            className={`page-tab ${
+              activeTab === 'pending' ? 'is-active' : ''
+            }`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'pending'}
+            onClick={() => handleTabChange('pending')}
+          >
+            Pending
+          </button>
+          <button
+            className={`page-tab ${
+              activeTab === 'archive' ? 'is-active' : ''
+            }`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'archive'}
+            onClick={() => handleTabChange('archive')}
+          >
+            Archive
+          </button>
+        </div>
       </header>
 
       <section className="dashboard-content">
-        <div className="overview-card">
-          <p className="eyebrow">Pending requests</p>
-          <h2>Awaiting SK Chairman approval</h2>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Event</th>
-                <th>Category</th>
-                <th>Total amount</th>
-                <th>Event Date</th>
-                <th>Venue</th>
-                <th>Requested by</th>
-                <th>Submitted</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {pendingRequests.length ? (
-                pendingRequests.map((request) =>
-                  renderRequestRow(request, {
-                    allowApprove: true,
-                    allowReject: true,
-                    allowArchive: true,
-                  })
-                )
-              ) : (
+        {activeTab === 'pending' ? (
+          <div className="overview-card">
+            <p className="eyebrow">Pending requests</p>
+            <h2>Awaiting SK Chairman approval</h2>
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <td colSpan="8" className="empty-state">
-                    No pending requests right now.
-                  </td>
+                  <th>Event</th>
+                  <th>Category</th>
+                  <th>Total amount</th>
+                  <th>Event Date</th>
+                  <th>Venue</th>
+                  <th>Requested by</th>
+                  <th>Submitted</th>
+                  <th></th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
+              </thead>
+              <tbody>
+                {pendingRequests.length ? (
+                  pendingRequests.map((request) =>
+                    renderRequestRow(request, {
+                      allowApprove: true,
+                      allowReject: true,
+                      allowArchive: true,
+                    })
+                  )
+                ) : (
+                  <tr>
+                    <td colSpan="8" className="empty-state">
+                      No pending requests right now.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="overview-card">
+            <p className="eyebrow">Archive</p>
+            <h2>Archived requests</h2>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Category</th>
+                  <th>Total amount</th>
+                  <th>Event Date</th>
+                  <th>Venue</th>
+                  <th>Requested by</th>
+                  <th>Submitted</th>
+                  <th>Archived</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {archivedRequests.length ? (
+                  archivedRequests.map((request) =>
+                    renderRequestRow(request, {
+                      showArchivedAt: true,
+                      allowRestore: true,
+                    })
+                  )
+                ) : (
+                  <tr>
+                    <td colSpan="9" className="empty-state">
+                      No archived requests yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
-    </>
+    </RoleGate>
   )
 }
 

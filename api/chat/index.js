@@ -1,11 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
-
 export default async function handler(req, res) {
   // Health check: GET returns presence of required env vars (no secrets)
   if (req.method === 'GET') {
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY
-    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
-    res.json({ ok: true, hasOpenAI: !!OPENAI_API_KEY, hasSupabaseKey: !!SUPABASE_SERVICE_ROLE_KEY })
+    res.json({ ok: true, hasOpenAI: !!OPENAI_API_KEY })
     return
   }
 
@@ -14,212 +11,129 @@ export default async function handler(req, res) {
     return
   }
 
-  const { messages, reportId } = req.body || {}
+  const { messages, context } = req.body || {}
   if (!messages) {
     res.status(400).json({ error: 'Missing messages in request body' })
     return
   }
 
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY
-  const SUPABASE_URL = process.env.SUPABASE_URL || 'https://imxwgkwlxjqadwigjuxz.supabase.co'
-  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
 
   if (!OPENAI_API_KEY) {
     res.status(500).json({ error: 'OPENAI_API_KEY is not configured on the server' })
     return
   }
 
-  const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  const MODEL_SYNTH = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+  const MODEL_FALLBACK = process.env.OPENAI_FALLBACK_MODEL || 'gpt-4o-mini'
 
-  // If reportId supplied, fetch the report file and extract text
-  let reportText = null
-  if (reportId) {
-    try {
-      const { data: rows, error: selectError } = await supabaseAdmin
-        .from('liquidation_reports')
-        .select('id, title, file_name, file_path')
-        .eq('id', reportId)
-        .limit(1)
-        .single()
-
-      if (selectError) {
-        throw selectError
-      }
-
-      const filePath = rows.file_path
-      const bucket = 'liquidation-reports'
-      const { data: downloadData, error: downloadError } = await supabaseAdmin.storage
-        .from(bucket)
-        .download(filePath)
-
-      if (downloadError) {
-        throw downloadError
-      }
-
-      const arrayBuffer = await downloadData.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
-
-      if (rows.file_name?.toLowerCase().endsWith('.pdf')) {
-        try {
-          const { default: pdfParse } = await import('pdf-parse')
-          const parsed = await pdfParse(buffer)
-          reportText = parsed.text || ''
-        } catch (e) {
-          console.error('pdf-parse import/parse failed', e)
-          throw e
-        }
-      } else {
-        reportText = buffer.toString('utf8')
-      }
-
-      // truncate to a safe size for the model
-      if (reportText && reportText.length > 25000) {
-        reportText = reportText.slice(0, 25000)
-      }
-    } catch (err) {
-      console.error('Report fetch/parse error', err)
-      res.status(500).json({ error: 'Failed to fetch or parse report: ' + (err.message || err) })
-      return
-    }
+  function shouldFallback(error) {
+    if (!error || typeof error.message !== 'string') return false
+    const message = error.message.toLowerCase()
+    return error.status === 404 ||
+      (error.status === 400 && (
+        message.includes('model') ||
+        message.includes('not found') ||
+        message.includes('does not exist')
+      ))
   }
 
-  // If we have reportText, prepend instructions and the report content (truncated)
-  // Models: use a cheaper model for chunk summarization and a higher-quality model for synthesis
-  const MODEL_SYNTH = process.env.OPENAI_MODEL || 'gpt-4'
-  const MODEL_CHUNK = process.env.OPENAI_CHUNK_MODEL || 'gpt-3.5-turbo'
-
-  // Helper to call OpenAI
-  async function callOpenAI(messagesPayload, modelOverride) {
-    const modelToUse = modelOverride || MODEL_SYNTH
+  async function requestOpenAI(model, messagesPayload) {
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
-      body: JSON.stringify({ model: modelToUse, messages: messagesPayload }),
+      body: JSON.stringify({ model, messages: messagesPayload }),
     })
 
+    const text = await resp.text()
     if (!resp.ok) {
-      const text = await resp.text()
-      throw new Error(text || `OpenAI request failed with status ${resp.status}`)
+      const error = new Error(text || `OpenAI request failed with status ${resp.status}`)
+      error.status = resp.status
+      throw error
     }
 
-    const data = await resp.json()
+    const data = text ? JSON.parse(text) : {}
     return data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content
   }
 
+  // Helper to call OpenAI (with model fallback)
+  async function callOpenAI(messagesPayload, modelOverride) {
+    const primaryModel = modelOverride || MODEL_SYNTH
+    try {
+      return await requestOpenAI(primaryModel, messagesPayload)
+    } catch (error) {
+      if (primaryModel !== MODEL_FALLBACK && shouldFallback(error)) {
+        return await requestOpenAI(MODEL_FALLBACK, messagesPayload)
+      }
+      throw error
+    }
+  }
+
+  const systemPrompt = [
+    'You are "Cuenta Assistant" - a helpful, concise assistant for the Cuenta budgeting app.',
+    'You receive a JSON context object containing: role, currentPage, totals, requests (list), expenses (list), budgets (list), auditLogs (list).',
+    'Use that live data only (do not invent facts). Always avoid exposing or echoing any PII from context.',
+    '',
+    'Behavior:',
+    '- Analyze the provided context and the user query. Be concise and actionable.',
+    "- Prioritize safety: if data is missing say you don't have enough info and list what's needed.",
+    '- Detect issues: high utilization (>85%), negative remaining, many pending requests, large spikes, unusual monthly totals.',
+    '- Provide suggestions the user can act on (approve, generate documents, review expenses, reconcile receipts).',
+    '- Prefer bullet points and short sentences.',
+    '',
+    'Output format (RETURN EXACT JSON): Return a single JSON object with these fields:',
+    '- content: string (Markdown or plain). Friendly short explanation and findings.',
+    '- summary: string (one-line TL;DR).',
+    '- alerts: array of strings (each a short alert).',
+    '- actions: array of objects { label: string, to: string } — suggested UI navigation (e.g. {label: "Open Approvals", to: "/approvals"}).',
+    '- dataHighlights: object with optional keys like { topExpenses: [{label,amount}], topCategories: [{cat,amount}], lastAction: string } — only include if available.',
+    '- If you cannot provide structured actions (no permission/data), set actions: [].',
+    '',
+    'Rules:',
+    '- Never reveal or repeat PII (names, emails, IDs, tokens).',
+    '- If uncertain, say: “I don’t have enough data to answer — please provide …”.',
+    '- Keep content <= ~300 words for readability.',
+    '- Use currency formatting consistent with the context when showing amounts.',
+    '- Tailor suggestions to the user role responsibilities.',
+    '- Return only JSON. No extra text, no code fences.',
+  ].join('\n')
+
+  const sanitizedMessages = Array.isArray(messages)
+    ? messages.filter((msg) => msg && msg.role && msg.role !== 'system')
+    : []
+
+  const contextJson = JSON.stringify(context ?? {}, null, 2)
+
+  const finalMessages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'system', content: `Context JSON:\n${contextJson}` },
+    ...sanitizedMessages,
+  ]
+
   try {
-    // Check cache first (if reportId provided)
-    if (reportId) {
-      try {
-        const { data: cached, error: cacheErr } = await supabaseAdmin
-          .from('report_summaries')
-          .select('id, summary, model, updated_at')
-          .eq('report_id', reportId)
-          .eq('model', MODEL_SYNTH)
-          .limit(1)
-          .maybeSingle()
-
-        if (!cacheErr && cached && cached.summary) {
-          res.json({ reply: cached.summary, cached: true })
-          return
-        }
-      } catch (e) {
-        // ignore cache errors (table may not exist)
-        console.warn('Cache check failed', e.message || e)
-      }
-    }
-
-    if (reportText && reportText.length > 16000) {
-      // Chunk the report and summarize each chunk, then synthesize
-      const CHUNK_SIZE = 8000
-      const chunks = []
-      for (let i = 0; i < reportText.length; i += CHUNK_SIZE) {
-        chunks.push(reportText.slice(i, i + CHUNK_SIZE))
-      }
-
-      const chunkSummaries = []
-      // run chunk summaries in batches to limit concurrency
-      const BATCH_SIZE = 3
-      for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-        const batch = chunks.slice(i, i + BATCH_SIZE)
-        const promises = batch.map((chunk, idx) => {
-          const prompt = [
-            {
-              role: 'system',
-              content:
-                'You are a helpful assistant that extracts concise summaries and key figures from report text. Provide 4–6 bullet points per chunk and include any numeric figures or dates you see.',
-            },
-            { role: 'user', content: `Chunk ${i + idx + 1} of ${chunks.length}:\n\n${chunk}` },
-          ]
-          return callOpenAI(prompt, MODEL_CHUNK)
-            .then(s => `Chunk ${i + idx + 1} summary:\n${s}`)
-        })
-        const results = await Promise.all(promises)
-        chunkSummaries.push(...results)
-      }
-
-      // Synthesize chunk summaries into final executive summary
-      const synthPrompt = [
-        {
-          role: 'system',
-          content:
-            'You are an assistant specialized in summarizing liquidation and financial reports. Produce a concise executive summary (3-6 bullets), list key figures and important dates, and then answer follow-up questions clearly and concisely.',
-        },
-        { role: 'user', content: `Here are the chunk summaries:\n\n${chunkSummaries.join('\n\n')}` },
-        { role: 'user', content: 'Synthesize the above into a single executive summary and list key figures/dates.' },
-        ...messages,
-      ]
-      const finalReply = await callOpenAI(synthPrompt)
-
-      // store synthesized summary in cache table
-      if (reportId) {
-        try {
-          await supabaseAdmin.from('report_summaries').upsert({
-            report_id: reportId,
-            model: MODEL_SYNTH,
-            summary: finalReply,
-            updated_at: new Date().toISOString(),
-          })
-        } catch (e) {
-          console.warn('Failed to upsert summary cache', e.message || e)
-        }
-      }
-
-      res.json({ reply: finalReply })
-      return
-    }
-
-    // For short reports or no report provided, do single-shot query
-    const finalMessages = reportText
-      ? [
-          {
-            role: 'system',
-            content:
-              'You are an assistant specialized in summarizing liquidation and financial reports. For any summary request, first produce a concise executive summary (3-6 bullets), then list any key figures or important dates, and finally answer follow-up questions clearly and concisely.',
-          },
-          { role: 'system', content: `Report content (truncated):\n\n${reportText}` },
-          ...messages,
-        ]
-      : messages
-
     const reply = await callOpenAI(finalMessages)
+    const trimmed = String(reply || '').trim()
+    let normalized = trimmed
 
-    if (reportId) {
-      try {
-        await supabaseAdmin.from('report_summaries').upsert({
-          report_id: reportId,
-          model: MODEL_SYNTH,
-          summary: reply,
-          updated_at: new Date().toISOString(),
-        })
-      } catch (e) {
-        console.warn('Failed to upsert summary cache', e.message || e)
+    try {
+      const parsed = JSON.parse(trimmed)
+      normalized = JSON.stringify(parsed)
+    } catch {
+      const fallback = {
+        content:
+          "I don't have enough data to answer — please provide the missing totals, requests, expenses, budgets, or audit logs.",
+        summary: 'Insufficient data.',
+        alerts: [],
+        actions: [],
+        dataHighlights: {},
       }
+      normalized = JSON.stringify(fallback)
     }
 
-    res.json({ reply })
+    res.json({ reply: normalized })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: err.message || String(err) })

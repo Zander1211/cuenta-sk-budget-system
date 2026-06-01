@@ -7,4 +7,13 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://cuenta-chi.vercel.app',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
+  },
 })

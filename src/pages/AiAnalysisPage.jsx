@@ -294,7 +294,8 @@ function AiAnalysisPage() {
         date: expense.date || expense.approvedAt,
       })),
       budgets: budgets.map((budget) => ({
-        quarter: budget.quarter,
+        month: budget.month,
+        year: budget.year,
         amount: Number(budget.amount || 0),
         createdAt: budget.createdAt,
       })),

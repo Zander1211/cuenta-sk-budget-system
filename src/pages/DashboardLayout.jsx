@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
+import { Bell, Menu } from 'lucide-react'
 import { logoutUser } from '../services/authService'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
@@ -31,7 +33,7 @@ const navItems = [
     roles: ['SK Treasurer'],
   },
   {
-    label: 'Documents',
+    label: 'Receipts',
     path: '/dashboard/documents',
     roles: ['SK Chairman', 'SK Treasurer'],
   },
@@ -43,7 +45,7 @@ const navItems = [
   {
     label: 'Archive',
     path: '/dashboard/archive',
-    roles: ['SK Chairman', 'SK Treasurer'],
+    roles: ['SK Treasurer'],
   },
   {
     label: 'AI Analysis',
@@ -51,9 +53,9 @@ const navItems = [
     roles: ['SK Chairman', 'SK Treasurer'],
   },
   {
-    label: 'Reports',
+    label: 'Report',
     path: '/dashboard/reports',
-    roles: ['SK Chairman'],
+    roles: ['SK Chairman', 'SK Treasurer'],
   },
   {
     label: 'Audit Logs',
@@ -75,7 +77,8 @@ const navItems = [
 function DashboardLayout() {
   const navigate = useNavigate()
   const { addLog } = useAuditLog()
-  const { role, isLoading, isAuthenticated } = useAuth()
+  const { role, isLoading, isAuthenticated, profileName, profileSurname } = useAuth()
+  const [isSidebarOpen, setSidebarOpen] = useState(false)
 
   if (isLoading) {
     return null
@@ -86,21 +89,67 @@ function DashboardLayout() {
   }
 
   const visibleItems = navItems.filter((item) => item.roles.includes(role))
+  const fullName = profileName
+  const surname =
+    profileSurname || fullName.split(' ').filter(Boolean).slice(-1)[0] || ''
+  const sidebarRole = [role, surname].filter(Boolean).join(', ')
+
+  function handleNavClick(label) {
+    addLog({ action: `Opened ${label} page` })
+    setSidebarOpen(false)
+  }
+
+  function handleNotifications() {
+    addLog({ action: 'Opened notifications' })
+  }
 
   async function handleLogout() {
     await logoutUser()
     addLog({ action: 'Logged out' })
+    setSidebarOpen(false)
     navigate('/')
   }
 
   return (
     <div className="dashboard">
       <div className="dashboard-shell">
-        <div className="dashboard-layout">
+        <div className="dashboard-mobile-header">
+          <button
+            className="mobile-icon-button"
+            type="button"
+            onClick={() => setSidebarOpen((open) => !open)}
+            aria-label="Toggle menu"
+          >
+            <Menu size={20} />
+          </button>
+          <div className="mobile-header-title">
+            <span className="mobile-header-role">{role}</span>
+            <span className="mobile-header-subtitle">Dashboard</span>
+          </div>
+          <button
+            className="mobile-icon-button"
+            type="button"
+            onClick={handleNotifications}
+            aria-label="Notifications"
+          >
+            <Bell size={20} />
+          </button>
+        </div>
+
+        {isSidebarOpen ? (
+          <button
+            className="sidebar-scrim"
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close menu"
+          />
+        ) : null}
+
+        <div className={`dashboard-layout ${isSidebarOpen ? 'is-sidebar-open' : ''}`}>
           <aside className="dashboard-sidebar">
             <div className="sidebar-brand">
               <span className="brand-chip">Cuenta</span>
-              <span className="sidebar-role">{role}</span>
+              <span className="sidebar-role">{sidebarRole}</span>
             </div>
             <nav className="sidebar-nav" aria-label="Dashboard sections">
               {visibleItems.map((item) => (
@@ -111,9 +160,7 @@ function DashboardLayout() {
                   className={({ isActive }) =>
                     `sidebar-tab ${isActive ? 'is-active' : ''}`
                   }
-                  onClick={() => {
-                    addLog({ action: `Opened ${item.label} page` })
-                  }}
+                  onClick={() => handleNavClick(item.label)}
                 >
                   {item.label}
                 </NavLink>

@@ -1,53 +1,103 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useMemo, useState, useRef, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import './ChatWidget.css'
-import { supabase } from '../supabase/supabaseClient'
+import { useAuth } from '../context/AuthContext'
+import { useBudget } from '../context/BudgetContext'
+import { useAuditLog } from '../context/AuditLogContext'
 
 export default function ChatWidget() {
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || ''
+  const apiEndpoint = apiBaseUrl ? `${apiBaseUrl.replace(/\/$/, '')}/api/chat` : '/api/chat'
+  const location = useLocation()
+  const { role } = useAuth()
+  const { totals, requests, expenses, budgets } = useBudget()
+  const { logs } = useAuditLog()
   const [open, setOpen] = useState(false)
-  const [messages, setMessages] = useState([
-    { role: 'system', content: 'You are an assistant that summarizes reports and answers questions about them.' },
-  ])
+  const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef(null)
-  const [reportsList, setReportsList] = useState([])
 
-  useEffect(() => {
-    async function loadReportsList() {
-      try {
-        const { data, error } = await supabase
-          .from('liquidation_reports')
-          .select('id, title')
-          .order('created_at', { ascending: false })
-          .limit(10)
+  if (location.pathname === '/') {
+    return null
+  }
 
-        if (error) return
-        setReportsList(data ?? [])
-      } catch (e) {
-        // ignore
-      }
+  function normalizeAuditAction(action = '') {
+    const lowered = action.toLowerCase()
+    if (lowered.includes('approved')) return 'approved request'
+    if (lowered.includes('rejected')) return 'rejected request'
+    if (lowered.includes('archived')) return 'archived item'
+    if (lowered.includes('restored')) return 'restored item'
+    if (lowered.includes('submitted')) return 'submitted request'
+    if (lowered.includes('opened')) return 'opened page'
+    if (lowered.includes('logged out')) return 'logout'
+    return 'activity'
+  }
+
+  const contextPayload = useMemo(() => {
+    const safeRequests = (requests || []).map((request) => ({
+      status: request.status || 'Pending',
+      amount: Number(request.amount || 0),
+      category: request.category || 'Uncategorized',
+      submittedAt: request.submittedAt || null,
+      approvedAt: request.approvedAt || null,
+      archivedAt: request.archivedAt || null,
+    }))
+
+    const safeExpenses = (expenses || []).map((expense) => ({
+      amount: Number(expense.amount || 0),
+      category: expense.category || 'Uncategorized',
+      status: expense.status || 'Approved',
+      date: expense.date || null,
+      approvedAt: expense.approvedAt || null,
+      archivedAt: expense.archivedAt || null,
+      receiptAttached: Boolean(expense.receiptUrl || expense.receiptName),
+    }))
+
+    const safeBudgets = (budgets || []).map((budget) => ({
+      month: budget.month,
+      year: budget.year,
+      amount: Number(budget.amount || 0),
+      createdAt: budget.createdAt || null,
+    }))
+
+    const safeLogs = (logs || []).map((log) => ({
+      type: normalizeAuditAction(log.action || ''),
+      timestamp: log.timestamp || null,
+    }))
+
+    return {
+      role: role || 'Unknown',
+      currentPage: location.pathname || '/dashboard',
+      totals: totals || {
+        totalBudget: 0,
+        totalExpenses: 0,
+        remaining: 0,
+      },
+      requests: safeRequests,
+      expenses: safeExpenses,
+      budgets: safeBudgets,
+      auditLogs: safeLogs,
     }
-
-    loadReportsList()
-  }, [])
+  }, [role, location.pathname, totals, requests, expenses, budgets, logs])
 
   // Health check for server env configuration
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
-        const res = await fetch('/api/chat')
+        const res = await fetch(apiEndpoint)
         if (!mounted) return
         if (res.ok) {
           const info = await res.json()
-          const missing = []
-          if (!info.hasOpenAI) missing.push('OPENAI_API_KEY')
-          if (!info.hasSupabaseKey) missing.push('SUPABASE_SERVICE_ROLE_KEY')
-          if (missing.length) {
-            setMessages(prev => [...prev, { role: 'assistant', content: 'Configuration missing: ' + missing.join(', ') + '. Set them in Vercel env and redeploy.' }])
+          if (!info.hasOpenAI) {
+            setMessages(prev => [...prev, { role: 'assistant', content: 'Configuration missing: OPENAI_API_KEY. Set it in the server environment and redeploy.' }])
           }
+        } else {
+          setMessages(prev => [...prev, { role: 'assistant', content: `Server API returned ${res.status}. Check deployment and logs.` }])
         }
       } catch (e) {
+        if (!mounted) return
         // network or server error — show simple guidance
         setMessages(prev => [...prev, { role: 'assistant', content: 'Cannot reach server API — ensure deployment and env vars are configured.' }])
       }
@@ -65,50 +115,30 @@ export default function ChatWidget() {
 
   async function sendMessage(e) {
     e.preventDefault()
-    if (!input.trim()) return
-    const userMsg = { role: 'user', content: input.trim() }
+    const trimmed = input.trim()
+    if (!trimmed) return
+    const userMsg = { role: 'user', content: trimmed }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
     setInput('')
     setLoading(true)
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages }),
+        body: JSON.stringify({ messages: newMessages, context: contextPayload }),
       })
       if (!res.ok) {
         const text = await res.text()
         throw new Error(text || 'Request failed')
       }
       const data = await res.json()
-      const assistant = { role: 'assistant', content: data.reply || 'No response' }
-      setMessages(prev => [...prev, assistant])
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Error: ' + (err.message || err) }])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function summarizeReport(reportId, title) {
-    setLoading(true)
-    const userMsg = { role: 'user', content: `Please summarize the report: ${title || reportId}` }
-    setMessages(prev => [...prev, userMsg])
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [userMsg], reportId }),
-      })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(text || 'Request failed')
-      }
-      const data = await res.json()
-      const assistant = { role: 'assistant', content: data.reply || 'No response' }
+      const reply =
+        typeof data.reply === 'string'
+          ? data.reply
+          : JSON.stringify(data.reply || {}, null, 2)
+      const assistant = { role: 'assistant', content: reply || 'No response' }
       setMessages(prev => [...prev, assistant])
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Error: ' + (err.message || err) }])
@@ -120,41 +150,14 @@ export default function ChatWidget() {
   return (
     <div className={open ? 'chat-widget open' : 'chat-widget'}>
       <div className="chat-header" onClick={() => setOpen(o => !o)}>
-        <div className="chat-title">AI Reports</div>
-        <div className="chat-sub">Summarize & ask about reports</div>
+        <div className="chat-title">Cuenta Assistant</div>
+        <div className="chat-sub">Budget insights & next actions</div>
       </div>
 
       {open ? (
         <div className="chat-body">
-          <div className="chat-toolbar" style={{ padding: 8, borderBottom: '1px solid #eee' }}>
-            <select
-              style={{ padding: 6, borderRadius: 6, border: '1px solid #ddd' }}
-              onChange={(e) => {
-                const id = e.target.value
-                const rpt = reportsList.find(r => String(r.id) === String(id))
-                // store selected id on the select element dataset for quick access
-                e.target.dataset.selected = id
-              }}
-            >
-              <option value="">Select report…</option>
-              {reportsList.map(r => (
-                <option key={r.id} value={r.id}>{r.title}</option>
-              ))}
-            </select>
-            <button
-              style={{ marginLeft: 8, padding: '6px 10px', borderRadius: 6, background: '#06b6d4', color: 'white', border: 'none' }}
-              onClick={() => {
-                const sel = document.querySelector('.chat-toolbar select')
-                const id = sel?.value
-                const title = sel?.selectedOptions?.[0]?.text || ''
-                if (id) summarizeReport(id, title)
-              }}
-              disabled={loading}
-            >Summarize</button>
-          </div>
           <div className="chat-messages">
             {messages
-              .filter(m => m.role !== 'system')
               .map((m, i) => (
                 <div key={i} className={m.role === 'user' ? 'msg user' : 'msg assistant'}>
                   {m.content}
@@ -167,7 +170,7 @@ export default function ChatWidget() {
             <input
               value={input}
               onChange={e => setInput(e.target.value)}
-              placeholder={loading ? 'Waiting for response...' : 'Ask about reports or request a summary...'}
+              placeholder={loading ? 'Waiting for response...' : 'Ask about budgets, approvals, or receipts...'}
               disabled={loading}
             />
             <button type="submit" disabled={loading || !input.trim()}>

@@ -42,21 +42,24 @@ export async function updatePassword(newPassword) {
   return { data, error }
 }
 
-// PASSWORD RESET EMAIL (OTP/LINK)
-export async function sendPasswordReset(email) {
-  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+// PASSWORD UPDATE OTP
+export async function sendEmailOtp(email) {
+  const { data, error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      shouldCreateUser: false,
+    },
   })
 
   return { data, error }
 }
 
-// VERIFY RECOVERY OTP
-export async function verifyRecoveryOtp(email, token) {
+// VERIFY EMAIL OTP
+export async function verifyEmailOtp(email, token) {
   const { data, error } = await supabase.auth.verifyOtp({
     email,
     token,
-    type: 'recovery',
+    type: 'magiclink',
   })
 
   return { data, error }
