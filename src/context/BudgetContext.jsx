@@ -247,7 +247,7 @@ function BudgetProvider({ children }) {
     addNotification({
       type: 'approval',
       title: 'Budget Request Approved',
-      message: `"${request.event}" has been approved — ${new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(request.amount)}`,
+      message: `Project: ${request.event}\nApproved: ₱${Number(request.amount).toLocaleString()}\nDate Approved: ${new Date().toLocaleDateString()}\nStatus: Approved`,
     })
   }
 
@@ -357,6 +357,11 @@ function BudgetProvider({ children }) {
     ])
 
     addLog({ action: `Submitted budget request for ${event}` })
+    addNotification({
+      type: 'system',
+      title: 'New Budget Request Pending',
+      message: `Project: ${event}\nRequested: ₱${Number(amount || 0).toLocaleString()}\nDate Submitted: ${new Date().toLocaleDateString()}\nBy: SK Treasurer`,
+    })
   }
 
   function updateProjectStatus(requestId, newStatus) {

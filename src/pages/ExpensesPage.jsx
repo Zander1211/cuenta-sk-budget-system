@@ -454,24 +454,7 @@ function ExpensesPage() {
       </header>
 
       <section className="dashboard-content">
-        {expensesSyncStatus === 'empty' && expenses.length === 0 ? (
-          <div className="overview-card sync-banner">
-            <p className="eyebrow">Supabase sync</p>
-            <h2>No expenses found</h2>
-            <p>
-              We did not find expenses in Supabase yet. Import again to continue.
-            </p>
-            <div className="sync-actions">
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={refreshExpensesFromSupabase}
-              >
-                Import from Supabase
-              </button>
-            </div>
-          </div>
-        ) : null}
+
 
         {/* Filters */}
         <div className="overview-card">

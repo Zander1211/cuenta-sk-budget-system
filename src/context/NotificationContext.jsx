@@ -22,6 +22,23 @@ function NotificationProvider({ children }) {
     }
   }, [notifications])
 
+  useEffect(() => {
+    function handleStorageChange(event) {
+      if (event.key === STORAGE_KEY && event.newValue) {
+        try {
+          setNotifications(JSON.parse(event.newValue))
+        } catch {
+          // ignore parsing error
+        }
+      }
+    }
+    
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorageChange)
+      return () => window.removeEventListener('storage', handleStorageChange)
+    }
+  }, [])
+
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.read).length,
     [notifications]

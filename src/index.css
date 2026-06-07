@@ -3122,3 +3122,5 @@ td.nr-info-label {
 .overview-card { overflow: hidden; }
 @media (max-width: 720px) { .data-table, .user-table, .audit-table { padding-bottom: 8px; } }
 
+. n o t i f i c a t i o n - i t e m - m e s s a g e   {   w h i t e - s p a c e :   p r e - w r a p ;   l i n e - h e i g h t :   1 . 4 ;   m a r g i n - t o p :   4 p x ;   d i s p l a y :   b l o c k ;   }  
+ 
