@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Bell,
   ClipboardCheck,
   PieChart,
   Receipt,
@@ -9,8 +8,10 @@ import {
   TriangleAlert,
   Wallet,
 } from 'lucide-react'
+import NotificationBell from '../components/NotificationBell'
 import { useAuth } from '../context/AuthContext'
 import { useBudget } from '../context/BudgetContext'
+import GlobalSearch from '../components/GlobalSearch'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -48,6 +49,7 @@ function MainDashboardPage() {
   const currentYear = currentDate.getFullYear()
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth())
   const [selectedYear, setSelectedYear] = useState(currentYear)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
 
   const availableYears = useMemo(() => {
     const years = new Set([currentYear])
@@ -138,6 +140,15 @@ function MainDashboardPage() {
   const filteredRequests = requests.filter((request) =>
     isInPeriod(request.submittedAt || request.createdAt || request.eventDate)
   )
+
+  const currentHour = currentDate.getHours()
+  let timeOfDayGreeting = 'Good evening'
+  if (currentHour >= 5 && currentHour < 12) {
+    timeOfDayGreeting = 'Good morning'
+  } else if (currentHour >= 12 && currentHour < 18) {
+    timeOfDayGreeting = 'Good afternoon'
+  }
+
   const pendingRequests = filteredRequests.filter(
     (request) =>
       (!request.status || request.status === 'Pending') && !request.archivedAt
@@ -240,21 +251,15 @@ function MainDashboardPage() {
     <>
       <section className="dashboard-topbar">
         <div className="topbar-greeting">
-          <h1>Good morning, {greetingRole}!</h1>
+          <h1>{timeOfDayGreeting}, {greetingRole}!</h1>
           <p>Here&apos;s an overview of your financial status and key insights.</p>
         </div>
         <div className="topbar-actions">
-          <label className="search-field">
+          <label className="search-field" onClick={() => setIsSearchOpen(true)}>
             <Search size={16} />
-            <input type="search" placeholder="Search anything..." aria-label="Search" />
-            <span className="search-shortcut">Ctrl K</span>
+            <input type="button" value="Search projects, categories..." aria-label="Search" style={{ textAlign: 'left', cursor: 'pointer' }} />
           </label>
-          <button className="icon-button" type="button" aria-label="Notifications">
-            <Bell size={18} />
-          </button>
-          <button className="icon-button" type="button" aria-label="Settings">
-            <Settings size={18} />
-          </button>
+          <NotificationBell />
           <div className="user-chip">
             <span className="user-avatar">{initials}</span>
             <span className="user-info">
@@ -396,7 +401,6 @@ function MainDashboardPage() {
               <p className="panel-eyebrow">Budget Allocation</p>
               <h2>{viewMode === 'monthly' ? 'Monthly allocation' : 'Yearly allocation'}</h2>
             </div>
-            <button className="ghost-button" type="button">View report</button>
           </div>
           <div className="allocation-grid">
             <div>
@@ -445,6 +449,8 @@ function MainDashboardPage() {
           </div>
         </div>
       </section>
+
+      <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </>
   )
 }

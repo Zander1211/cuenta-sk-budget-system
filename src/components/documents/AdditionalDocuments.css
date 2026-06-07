@@ -1,0 +1,616 @@
+/* ── Additional Documents — Shared Styles ── */
+/* Covers: Disbursement Voucher, Payroll, Project Design, Itinerary of Travel, Transmittal Letter */
+
+/* ── Government Letterhead ── */
+.gov-letterhead {
+  text-align: center;
+  margin-bottom: 16px;
+  line-height: 1.5;
+  font-size: 12px;
+}
+
+.gov-letterhead .gov-line {
+  margin: 0;
+}
+
+.gov-letterhead .gov-line-bold {
+  margin: 0;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.gov-letterhead .gov-office {
+  margin: 8px 0 0;
+  font-size: 11px;
+  font-style: italic;
+}
+
+.gov-logo-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 4px;
+}
+
+.gov-logo-placeholder {
+  width: 60px;
+  height: 60px;
+  border: 1.5px solid #000;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 8px;
+  color: #666;
+  flex-shrink: 0;
+}
+
+.gov-letterhead-text {
+  text-align: center;
+}
+
+/* ── Form: Add-row tables ── */
+.add-row-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 8px;
+}
+
+.add-row-table th,
+.add-row-table td {
+  border: 1px solid rgba(15, 31, 54, 0.12);
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.add-row-table th {
+  background: rgba(15, 31, 54, 0.05);
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.add-row-table input,
+.add-row-table select {
+  width: 100%;
+  min-width: 60px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 31, 54, 0.12);
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.add-row-table input:focus,
+.add-row-table select:focus {
+  outline: none;
+  border-color: rgba(255, 107, 61, 0.6);
+  box-shadow: 0 0 0 3px rgba(255, 107, 61, 0.12);
+}
+
+.add-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.add-row-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 31, 54, 0.15);
+  background: #fff;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--ink);
+  transition: all 0.2s;
+}
+
+.add-row-btn:hover {
+  border-color: rgba(255, 107, 61, 0.5);
+  color: var(--coral-dark);
+  transform: translateY(-1px);
+}
+
+.remove-row-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  background: rgba(220, 38, 38, 0.05);
+  color: #b91c1c;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s;
+}
+
+.remove-row-btn:hover {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.4);
+}
+
+.computed-cell {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 0.85rem;
+}
+
+.total-row {
+  font-weight: 700;
+  background: rgba(15, 31, 54, 0.04);
+}
+
+/* ── Form helpers ── */
+.doc-form-section {
+  margin-bottom: 16px;
+}
+
+.doc-form-section h3 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.objectives-list,
+.beneficiaries-list {
+  display: grid;
+  gap: 8px;
+}
+
+.list-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.list-item-row input {
+  flex: 1;
+}
+
+.list-item-number {
+  font-weight: 600;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  min-width: 20px;
+}
+
+/* ── Print preview: DV ── */
+.dv-header-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  border: 1px solid #000;
+  margin-bottom: 0;
+}
+
+.dv-header-left,
+.dv-header-right {
+  padding: 8px 12px;
+}
+
+.dv-header-left {
+  border-right: 1px solid #000;
+}
+
+.dv-particulars {
+  border: 1px solid #000;
+  border-top: none;
+  padding: 10px 14px;
+  min-height: 80px;
+}
+
+.dv-particulars-title {
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.dv-amount-row {
+  border: 1px solid #000;
+  border-top: none;
+  padding: 8px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dv-total-row {
+  border: 1px solid #000;
+  border-top: none;
+  padding: 10px 14px;
+  font-weight: 700;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  text-transform: uppercase;
+}
+
+/* DV Certification grid — 3 columns */
+.dv-cert-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  border: 1px solid #000;
+  border-top: none;
+}
+
+.dv-cert-box {
+  padding: 10px 12px;
+  border-right: 1px solid #000;
+  font-size: 11px;
+  text-align: center;
+}
+
+.dv-cert-box:last-child {
+  border-right: none;
+}
+
+.dv-cert-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.dv-cert-text {
+  font-size: 10px;
+  line-height: 1.4;
+  margin-bottom: 20px;
+  min-height: 36px;
+}
+
+.dv-cert-sig-line {
+  border-top: 1px solid #000;
+  margin: 0 20px;
+  padding-top: 4px;
+}
+
+.dv-cert-name {
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.dv-cert-position {
+  font-size: 10px;
+  font-style: italic;
+}
+
+.dv-cert-date {
+  font-size: 10px;
+  margin-top: 2px;
+}
+
+/* DV Received payment */
+.dv-received {
+  border: 1px solid #000;
+  border-top: none;
+  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 11px;
+}
+
+/* DV Accounting entries table */
+.dv-accounting {
+  border: 1px solid #000;
+  border-top: none;
+}
+
+.dv-accounting-title {
+  text-align: center;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 6px;
+  border-bottom: 1px solid #000;
+}
+
+/* ── Print preview: Payroll ── */
+.payroll-header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.payroll-header h2 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.payroll-period {
+  font-style: italic;
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.payroll-info-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+/* Payroll 4-column certification */
+.payroll-cert-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  border: 1px solid #000;
+  margin-top: 8px;
+}
+
+.payroll-cert-box {
+  padding: 8px 10px;
+  border-right: 1px solid #000;
+  font-size: 10px;
+  text-align: center;
+}
+
+.payroll-cert-box:last-child {
+  border-right: none;
+}
+
+/* ── Print preview: Project Design ── */
+.project-section {
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.project-section .section-label {
+  font-weight: 700;
+  margin-right: 8px;
+}
+
+.project-section .section-value {
+  font-weight: 400;
+}
+
+.project-section .section-text {
+  margin: 4px 0 0 40px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.project-section ol,
+.project-section ul {
+  margin: 4px 0 0 40px;
+  padding-left: 20px;
+  line-height: 1.6;
+}
+
+.project-source-fund {
+  font-weight: 700;
+  font-size: 12px;
+  margin-top: 6px;
+  padding: 4px 0;
+}
+
+.project-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 40px;
+  gap: 40px;
+}
+
+.project-sig-block {
+  text-align: center;
+  font-size: 12px;
+}
+
+.project-sig-title {
+  margin-bottom: 30px;
+}
+
+.project-sig-name {
+  font-weight: 700;
+  text-transform: uppercase;
+  border-top: 1px solid #000;
+  display: inline-block;
+  padding-top: 4px;
+  min-width: 180px;
+}
+
+.project-sig-role {
+  font-style: italic;
+  font-size: 11px;
+}
+
+/* ── Print preview: Itinerary ── */
+.itinerary-top-labels {
+  text-align: right;
+  font-size: 10px;
+  margin-bottom: 8px;
+}
+
+.itinerary-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 12px;
+  font-size: 12px;
+  gap: 4px;
+}
+
+.itinerary-cert-box {
+  border: 1px solid #000;
+  padding: 10px 14px;
+  font-size: 10px;
+  line-height: 1.5;
+  margin-top: 12px;
+}
+
+.itinerary-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 16px;
+}
+
+.itinerary-sig-block {
+  text-align: center;
+  font-size: 12px;
+}
+
+.itinerary-sig-title {
+  margin-bottom: 28px;
+  text-align: left;
+}
+
+.itinerary-sig-name {
+  font-weight: 700;
+  text-transform: uppercase;
+  border-top: 1px solid #000;
+  display: inline-block;
+  padding-top: 4px;
+  min-width: 180px;
+}
+
+.itinerary-sig-line {
+  font-style: italic;
+  font-size: 10px;
+}
+
+.itinerary-sig-role {
+  font-size: 11px;
+}
+
+.itinerary-supervisor {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 12px;
+}
+
+/* ── Print preview: Transmittal Letter ── */
+.transmittal-body {
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.transmittal-date {
+  text-align: right;
+  margin-bottom: 16px;
+}
+
+.transmittal-to {
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.transmittal-salutation {
+  margin-bottom: 12px;
+}
+
+.transmittal-paragraph {
+  text-indent: 40px;
+  margin-bottom: 16px;
+  line-height: 1.8;
+}
+
+.transmittal-account {
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.transmittal-no-transaction {
+  text-align: center;
+  padding: 12px;
+  font-weight: 700;
+  font-style: italic;
+  color: #333;
+}
+
+.transmittal-section-title {
+  font-weight: 700;
+  font-size: 11px;
+  margin: 16px 0 6px;
+  text-transform: uppercase;
+}
+
+.transmittal-closing {
+  text-align: right;
+  margin-top: 24px;
+  line-height: 1.6;
+}
+
+.transmittal-closing-name {
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-top: 28px;
+}
+
+.transmittal-closing-role {
+  font-style: italic;
+  font-size: 11px;
+}
+
+.transmittal-bottom-sigs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 24px;
+  font-size: 12px;
+}
+
+.transmittal-sig-block {
+  text-align: center;
+}
+
+.transmittal-sig-name {
+  font-weight: 700;
+  text-transform: uppercase;
+  border-top: 1px solid #000;
+  display: inline-block;
+  padding-top: 4px;
+  min-width: 160px;
+}
+
+.transmittal-sig-role {
+  font-style: italic;
+  font-size: 11px;
+}
+
+.transmittal-received {
+  margin-top: 20px;
+  font-size: 12px;
+}
+
+.transmittal-received-sig {
+  margin-top: 24px;
+  border-top: 1px solid #000;
+  display: inline-block;
+  padding-top: 4px;
+  min-width: 200px;
+  font-style: italic;
+  font-size: 10px;
+}
+
+.transmittal-acknowledge {
+  margin-top: 24px;
+  font-style: italic;
+  font-size: 11px;
+}
+
+/* ── @media print additions ── */
+@media print {
+  .add-row-btn,
+  .remove-row-btn,
+  .add-row-actions,
+  .doc-type-toggle,
+  .doc-gen-form,
+  .doc-gen-actions {
+    display: none !important;
+  }
+}

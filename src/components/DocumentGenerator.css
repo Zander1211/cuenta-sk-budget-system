@@ -1,0 +1,90 @@
+/* ── Document Generator Form Styles ── */
+
+.doc-gen-section {
+  display: grid;
+  gap: 16px;
+}
+
+.doc-type-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.doc-type-btn {
+  border: 1px solid rgba(15, 31, 54, 0.15);
+  border-radius: 999px;
+  padding: 10px 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: #fff;
+  color: var(--ink-soft);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.doc-type-btn:hover {
+  border-color: rgba(15, 31, 54, 0.3);
+  color: var(--ink);
+}
+
+.doc-type-btn.is-active {
+  background: rgba(15, 31, 54, 0.92);
+  color: #fff;
+  border-color: rgba(15, 31, 54, 0.92);
+}
+
+.doc-gen-form {
+  display: grid;
+  gap: 16px;
+}
+
+.doc-gen-form .form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.doc-breakdown-editor {
+  margin-top: 8px;
+}
+
+.doc-breakdown-editor table {
+  width: 100%;
+}
+
+.doc-breakdown-editor input {
+  width: 100%;
+  min-width: 60px;
+}
+
+.doc-gen-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.doc-counter-note {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+/* Mobile: horizontal scroll for toggle row */
+@media (max-width: 768px) {
+  .doc-type-toggle {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+
+  .doc-type-btn {
+    flex-shrink: 0;
+    padding: 8px 16px;
+    font-size: 0.8rem;
+  }
+}

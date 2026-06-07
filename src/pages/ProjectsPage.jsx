@@ -8,7 +8,7 @@ const currency = new Intl.NumberFormat('en-PH', {
 })
 
 function ProjectsPage() {
-  const { expenses } = useBudget()
+  const { expenses, updateProjectStatus } = useBudget()
   const completed = expenses.filter((item) => {
     const status = item.status || 'Approved'
     return ['Approved', 'Released'].includes(status)
@@ -37,27 +37,43 @@ function ProjectsPage() {
                 <th>Category</th>
                 <th>Amount</th>
                 <th>Status</th>
+                <th>Project Status</th>
                 <th>Approved</th>
               </tr>
             </thead>
             <tbody>
               {completed.length ? (
-                completed.map((item) => (
-                  <tr key={item.id}>
-                    <td>{item.project || item.event}</td>
-                    <td>{item.category}</td>
-                    <td>{currency.format(item.amount)}</td>
-                    <td>
-                      <span className="status-pill status-approved">
-                        {item.status || 'Approved'}
-                      </span>
-                    </td>
-                    <td>{new Date(item.approvedAt).toLocaleDateString()}</td>
-                  </tr>
-                ))
+                completed.map((item) => {
+                  const projectStatus = item.projectStatus || 'Ongoing'
+                  return (
+                    <tr key={item.id}>
+                      <td>{item.project || item.event}</td>
+                      <td>{item.category}</td>
+                      <td>{currency.format(item.amount)}</td>
+                      <td>
+                        <span className="status-pill status-approved">
+                          {item.status || 'Approved'}
+                        </span>
+                      </td>
+                      <td>
+                        <select
+                          className="project-status-select"
+                          value={projectStatus}
+                          onChange={(e) =>
+                            updateProjectStatus(item.id, e.target.value)
+                          }
+                        >
+                          <option value="Ongoing">Ongoing</option>
+                          <option value="Completed">Completed</option>
+                        </select>
+                      </td>
+                      <td>{new Date(item.approvedAt).toLocaleDateString()}</td>
+                    </tr>
+                  )
+                })
               ) : (
                 <tr>
-                  <td colSpan="5" className="empty-state">
+                  <td colSpan="6" className="empty-state">
                     No approved projects yet.
                   </td>
                 </tr>
@@ -71,3 +87,4 @@ function ProjectsPage() {
 }
 
 export default ProjectsPage
+

@@ -23,6 +23,11 @@ const navItems = [
     roles: ['SK Chairman', 'SK Treasurer'],
   },
   {
+    label: 'Approved Projects',
+    path: '/dashboard/approved-projects',
+    roles: ['SK Kagawad', 'Barangay Treasurer'],
+  },
+  {
     label: 'Expenses',
     path: '/dashboard/expenses',
     roles: ['SK Chairman', 'SK Treasurer'],
@@ -33,7 +38,7 @@ const navItems = [
     roles: ['SK Treasurer'],
   },
   {
-    label: 'Receipts',
+    label: 'Documents',
     path: '/dashboard/documents',
     roles: ['SK Chairman', 'SK Treasurer'],
   },
@@ -41,11 +46,6 @@ const navItems = [
     label: 'Approvals',
     path: '/dashboard/approvals',
     roles: ['SK Chairman'],
-  },
-  {
-    label: 'Archive',
-    path: '/dashboard/archive',
-    roles: ['SK Treasurer'],
   },
   {
     label: 'AI Analysis',

@@ -36,8 +36,9 @@ const categories = [
 ]
 
 function RequestPage() {
-  const { requests, addRequest, archiveRequest } = useBudget()
+  const { requests, addRequest, archiveRequest, restoreRequest } = useBudget()
   const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState('active')
   const [event, setEvent] = useState('')
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('')
@@ -57,6 +58,7 @@ function RequestPage() {
   }, 0)
 
   const activeRequests = requests.filter((request) => !request.archivedAt)
+  const archivedRequests = requests.filter((request) => request.archivedAt)
 
   function updateBreakdownItem(index, field, value) {
     setBreakdownItems((prev) =>
@@ -135,7 +137,7 @@ function RequestPage() {
 
   function handleArchive(requestId) {
     archiveRequest(requestId)
-    navigate('/dashboard/archive')
+    setActiveTab('archive')
   }
 
   return (
@@ -148,10 +150,36 @@ function RequestPage() {
             <p>Create a budget request that will appear in SK Chairman approvals.</p>
           </div>
         </div>
+        <div
+          className="header-actions page-tabs"
+          role="tablist"
+          aria-label="Request views"
+        >
+          <button
+            className={`page-tab ${activeTab === 'active' ? 'is-active' : ''}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'active'}
+            onClick={() => setActiveTab('active')}
+          >
+            Active
+          </button>
+          <button
+            className={`page-tab ${activeTab === 'archive' ? 'is-active' : ''}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'archive'}
+            onClick={() => setActiveTab('archive')}
+          >
+            Archive
+          </button>
+        </div>
       </header>
 
       <section className="dashboard-content">
-        <div className="overview-card">
+        {activeTab === 'active' ? (
+          <>
+            <div className="overview-card">
           <p className="eyebrow">New request</p>
           <h2>Submit budget request</h2>
           <form className="user-form" onSubmit={handleSubmit}>
@@ -383,6 +411,63 @@ function RequestPage() {
             </tbody>
           </table>
         </div>
+        </>
+        ) : (
+          <div className="overview-card">
+            <p className="eyebrow">Archive</p>
+            <h2>Archived requests</h2>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Category</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Note</th>
+                  <th>Archived Date</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {archivedRequests.length ? (
+                  archivedRequests.map((request) => (
+                    <tr key={request.id}>
+                      <td>{request.event}</td>
+                      <td>{request.category}</td>
+                      <td>{currency.format(request.amount)}</td>
+                      <td>
+                        <span
+                          className={`status-pill status-${(
+                            request.status || 'Pending'
+                          ).toLowerCase()}`}
+                        >
+                          {request.status || 'Pending'}
+                        </span>
+                      </td>
+                      <td>{request.rejectionReason || '—'}</td>
+                      <td>{new Date(request.archivedAt).toLocaleDateString()}</td>
+                      <td className="table-actions">
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() => restoreRequest(request.id)}
+                        >
+                          Restore
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="7" className="empty-state">
+                      No archived requests yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </RoleGate>
   )

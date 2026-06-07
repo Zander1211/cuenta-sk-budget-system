@@ -15,6 +15,7 @@ function ApprovalsPage() {
     rejectRequest,
     archiveRequest,
     restoreRequest,
+    updateProjectStatus,
   } = useBudget()
   const [expanded, setExpanded] = useState({})
   const [activeTab, setActiveTab] = useState('pending')
@@ -87,7 +88,9 @@ function ApprovalsPage() {
     const requestedAmount = Number(request.amount) || 0
     const totalAmount = requestedAmount > 0 ? requestedAmount : breakdownTotal
     const hasBreakdown = breakdownItems.length > 0
-    const columnCount = showArchivedAt ? 9 : 8
+    const projectStatus = request.projectStatus || 'Pending'
+    const isApproved = request.status === 'Approved'
+    const columnCount = showArchivedAt ? 10 : 9
 
     return (
       <Fragment key={request.id}>
@@ -102,7 +105,33 @@ function ApprovalsPage() {
           </td>
           <td>{request.venue || '—'}</td>
           <td>{request.requestedBy}</td>
-          <td>{new Date(request.submittedAt).toLocaleDateString()}</td>
+          <td>
+            <span
+              className={`status-pill status-${(request.status || 'Pending').toLowerCase()}`}
+            >
+              {request.status || 'Pending'}
+            </span>
+          </td>
+          <td>
+            {isApproved ? (
+              <select
+                className="project-status-select"
+                value={projectStatus}
+                onChange={(e) =>
+                  updateProjectStatus(request.id, e.target.value)
+                }
+              >
+                <option value="Ongoing">Ongoing</option>
+                <option value="Completed">Completed</option>
+              </select>
+            ) : (
+              <span
+                className={`status-pill status-${projectStatus.toLowerCase()}`}
+              >
+                {projectStatus}
+              </span>
+            )}
+          </td>
           {showArchivedAt ? (
             <td>
               {request.archivedAt
@@ -303,6 +332,7 @@ function ApprovalsPage() {
     (request) =>
       (!request.status || request.status === 'Pending') && !request.archivedAt
   )
+  const allActiveRequests = requests.filter((request) => !request.archivedAt)
   const archivedRequests = requests.filter((request) => request.archivedAt)
 
   return (
@@ -333,6 +363,17 @@ function ApprovalsPage() {
           </button>
           <button
             className={`page-tab ${
+              activeTab === 'all' ? 'is-active' : ''
+            }`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'all'}
+            onClick={() => handleTabChange('all')}
+          >
+            All Requests
+          </button>
+          <button
+            className={`page-tab ${
               activeTab === 'archive' ? 'is-active' : ''
             }`}
             type="button"
@@ -359,7 +400,8 @@ function ApprovalsPage() {
                   <th>Event Date</th>
                   <th>Venue</th>
                   <th>Requested by</th>
-                  <th>Submitted</th>
+                  <th>Status</th>
+                  <th>Project Status</th>
                   <th></th>
                 </tr>
               </thead>
@@ -374,8 +416,43 @@ function ApprovalsPage() {
                   )
                 ) : (
                   <tr>
-                    <td colSpan="8" className="empty-state">
+                    <td colSpan="9" className="empty-state">
                       No pending requests right now.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : activeTab === 'all' ? (
+          <div className="overview-card">
+            <p className="eyebrow">All requests</p>
+            <h2>All active budget requests</h2>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Category</th>
+                  <th>Total amount</th>
+                  <th>Event Date</th>
+                  <th>Venue</th>
+                  <th>Requested by</th>
+                  <th>Status</th>
+                  <th>Project Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {allActiveRequests.length ? (
+                  allActiveRequests.map((request) =>
+                    renderRequestRow(request, {
+                      allowArchive: true,
+                    })
+                  )
+                ) : (
+                  <tr>
+                    <td colSpan="9" className="empty-state">
+                      No requests yet.
                     </td>
                   </tr>
                 )}
@@ -395,7 +472,8 @@ function ApprovalsPage() {
                   <th>Event Date</th>
                   <th>Venue</th>
                   <th>Requested by</th>
-                  <th>Submitted</th>
+                  <th>Status</th>
+                  <th>Project Status</th>
                   <th>Archived</th>
                   <th></th>
                 </tr>
@@ -410,7 +488,7 @@ function ApprovalsPage() {
                   )
                 ) : (
                   <tr>
-                    <td colSpan="9" className="empty-state">
+                    <td colSpan="10" className="empty-state">
                       No archived requests yet.
                     </td>
                   </tr>

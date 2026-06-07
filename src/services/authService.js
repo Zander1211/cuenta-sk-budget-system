@@ -42,6 +42,15 @@ export async function updatePassword(newPassword) {
   return { data, error }
 }
 
+// UPDATE EMAIL
+export async function updateEmail(newEmail) {
+  const { data, error } = await supabase.auth.updateUser({
+    email: newEmail,
+  })
+
+  return { data, error }
+}
+
 // PASSWORD UPDATE OTP
 export async function sendEmailOtp(email) {
   const { data, error } = await supabase.auth.signInWithOtp({

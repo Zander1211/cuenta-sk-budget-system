@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { useAuth } from './AuthContext'
 
 const AuditLogContext = createContext(null)
 const STORAGE_KEY = 'cuenta.auditLogs'
@@ -18,6 +19,7 @@ function getStoredLogs() {
 
 function AuditLogProvider({ children }) {
   const [logs, setLogs] = useState(() => getStoredLogs())
+  const { profileName, role } = useAuth()
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -25,10 +27,13 @@ function AuditLogProvider({ children }) {
     }
   }, [logs])
 
-  function addLog({ action, actor = 'SK Chairman' }) {
+  function addLog({ action, actor }) {
     if (!action) {
       return
     }
+
+    // Auto-detect actor from auth context if not provided
+    const resolvedActor = actor || profileName || role || 'System'
 
     const id =
       typeof crypto !== 'undefined' && crypto.randomUUID
@@ -38,14 +43,19 @@ function AuditLogProvider({ children }) {
     const nextEntry = {
       id,
       action,
-      actor,
+      actor: resolvedActor,
+      role: role || '',
       timestamp: new Date().toISOString(),
     }
 
     setLogs((prev) => [nextEntry, ...prev])
   }
 
-  const value = useMemo(() => ({ logs, addLog }), [logs])
+  function clearLogs() {
+    setLogs([])
+  }
+
+  const value = useMemo(() => ({ logs, addLog, clearLogs }), [logs])
 
   return (
     <AuditLogContext.Provider value={value}>

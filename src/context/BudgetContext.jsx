@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useAuditLog } from './AuditLogContext'
+import { useNotifications } from './NotificationContext'
 import { supabase } from '../supabase/supabaseClient'
 
 const BudgetContext = createContext(null)
@@ -119,6 +120,7 @@ function getInitialState() {
 
 function BudgetProvider({ children }) {
   const { addLog } = useAuditLog()
+  const { addNotification } = useNotifications()
   const [budgets, setBudgets] = useState(() => getInitialState().budgets)
   const [requests, setRequests] = useState(() => getInitialState().requests)
   const [expenses, setExpenses] = useState(() => getInitialState().expenses)
@@ -215,6 +217,7 @@ function BudgetProvider({ children }) {
           ? {
               ...item,
               status: 'Approved',
+              projectStatus: 'Ongoing',
               approvedAt: new Date().toISOString(),
             }
           : item
@@ -234,12 +237,18 @@ function BudgetProvider({ children }) {
         notes: request.notes,
         breakdown: request.breakdown,
         status: 'Approved',
+        projectStatus: 'Ongoing',
         approvedAt: new Date().toISOString(),
       },
       ...prev,
     ])
 
     addLog({ action: `Approved budget request for ${request.event}` })
+    addNotification({
+      type: 'approval',
+      title: 'Budget Request Approved',
+      message: `"${request.event}" has been approved — ${new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(request.amount)}`,
+    })
   }
 
   function rejectRequest(requestId, reason) {
@@ -257,6 +266,13 @@ function BudgetProvider({ children }) {
     )
 
     addLog({ action: `Rejected budget request ${requestId}` })
+
+    const request = requests.find((item) => item.id === requestId)
+    addNotification({
+      type: 'rejection',
+      title: 'Budget Request Rejected',
+      message: request ? `"${request.event}" was rejected. Reason: ${reason}` : `Request ${requestId} was rejected.`,
+    })
   }
 
   function archiveRequest(requestId) {
@@ -334,12 +350,39 @@ function BudgetProvider({ children }) {
           : [],
         requestedBy: 'SK Treasurer',
         status: 'Pending',
+        projectStatus: 'Pending',
         submittedAt: new Date().toISOString(),
       },
       ...prev,
     ])
 
     addLog({ action: `Submitted budget request for ${event}` })
+  }
+
+  function updateProjectStatus(requestId, newStatus) {
+    const validStatuses = ['Pending', 'Ongoing', 'Completed']
+    if (!validStatuses.includes(newStatus)) return
+
+    const request = requests.find((item) => item.id === requestId)
+    if (!request) return
+
+    setRequests((prev) =>
+      prev.map((item) =>
+        item.id === requestId
+          ? { ...item, projectStatus: newStatus }
+          : item
+      )
+    )
+
+    setExpenses((prev) =>
+      prev.map((item) =>
+        item.id === requestId
+          ? { ...item, projectStatus: newStatus }
+          : item
+      )
+    )
+
+    addLog({ action: `Updated project status for ${request.event} to ${newStatus}` })
   }
 
   function addExpense(entry) {
@@ -434,6 +477,7 @@ function BudgetProvider({ children }) {
       archiveExpense,
       restoreExpense,
       addRequest,
+      updateProjectStatus,
       refreshExpensesFromSupabase,
     }),
     [

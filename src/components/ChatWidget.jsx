@@ -1,14 +1,13 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import './ChatWidget.css'
 import { useAuth } from '../context/AuthContext'
 import { useBudget } from '../context/BudgetContext'
 import { useAuditLog } from '../context/AuditLogContext'
 
 export default function ChatWidget() {
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || ''
-  const apiEndpoint = apiBaseUrl ? `${apiBaseUrl.replace(/\/$/, '')}/api/chat` : '/api/chat'
   const location = useLocation()
+  const navigate = useNavigate()
   const { role } = useAuth()
   const { totals, requests, expenses, budgets } = useBudget()
   const { logs } = useAuditLog()
@@ -81,29 +80,7 @@ export default function ChatWidget() {
     }
   }, [role, location.pathname, totals, requests, expenses, budgets, logs])
 
-  // Health check for server env configuration
-  useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const res = await fetch(apiEndpoint)
-        if (!mounted) return
-        if (res.ok) {
-          const info = await res.json()
-          if (!info.hasOpenAI) {
-            setMessages(prev => [...prev, { role: 'assistant', content: 'Configuration missing: OPENAI_API_KEY. Set it in the server environment and redeploy.' }])
-          }
-        } else {
-          setMessages(prev => [...prev, { role: 'assistant', content: `Server API returned ${res.status}. Check deployment and logs.` }])
-        }
-      } catch (e) {
-        if (!mounted) return
-        // network or server error — show simple guidance
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Cannot reach server API — ensure deployment and env vars are configured.' }])
-      }
-    })()
-    return () => { mounted = false }
-  }, [])
+  // Removed API Health check since chatbot is now local
 
   useEffect(() => {
     scrollToBottom()
@@ -111,6 +88,61 @@ export default function ChatWidget() {
 
   function scrollToBottom() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  function generateLocalResponse(input, context) {
+    const text = input.toLowerCase()
+    
+    if (text.includes('budget') || text.includes('total') || text.includes('remaining')) {
+      const { totalBudget, totalExpenses, remaining } = context.totals || {}
+      return {
+        summary: 'Budget Overview',
+        content: `Your total budget is ₱${(totalBudget || 0).toLocaleString()}. You have spent ₱${(totalExpenses || 0).toLocaleString()}, leaving you with a remaining balance of ₱${(remaining || 0).toLocaleString()}.`,
+        actions: [{ label: 'View Budgets', to: '/dashboard/budgets' }]
+      }
+    }
+    
+    if (text.includes('expense') || text.includes('spent') || text.includes('spending')) {
+      const expenses = context.expenses || []
+      const recent = expenses.slice(0, 3)
+      if (!recent.length) return { content: 'You have no recorded expenses yet.' }
+      
+      const alerts = recent.map(e => `${e.category || 'Uncategorized'}: ₱${Number(e.amount || 0).toLocaleString()}`)
+      return {
+        summary: 'Recent Expenses',
+        content: `Here are your most recent expenses:`,
+        alerts,
+        actions: [{ label: 'View Expenses', to: '/dashboard/expenses' }]
+      }
+    }
+    
+    if (text.includes('request') || text.includes('pending') || text.includes('approve')) {
+      const requests = context.requests || []
+      const pending = requests.filter(r => r.status === 'Pending')
+      if (!pending.length) return { content: 'There are no pending budget requests.' }
+      
+      return {
+        summary: 'Pending Requests',
+        content: `You have ${pending.length} pending budget request(s) waiting for approval.`,
+        actions: [{ label: 'View Approvals', to: '/dashboard/approvals' }]
+      }
+    }
+    
+    if (text.includes('receipt') || text.includes('missing')) {
+      const expenses = context.expenses || []
+      const missing = expenses.filter(e => !e.receiptAttached)
+      if (!missing.length) return { content: 'Great job! All your expenses have receipts attached.' }
+      
+      return {
+        summary: 'Missing Receipts',
+        content: `You have ${missing.length} approved expenses without receipts.`,
+        actions: [{ label: 'Upload Receipts', to: '/dashboard/reports' }]
+      }
+    }
+
+    return {
+      content: "I'm Cue, your local AI assistant. I can answer questions about your budgets, expenses, pending requests, and missing receipts. What would you like to know?"
+    }
   }
 
   async function sendMessage(e) {
@@ -123,46 +155,71 @@ export default function ChatWidget() {
     setInput('')
     setLoading(true)
 
-    try {
-      const res = await fetch(apiEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages, context: contextPayload }),
-      })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(text || 'Request failed')
-      }
-      const data = await res.json()
-      const reply =
-        typeof data.reply === 'string'
-          ? data.reply
-          : JSON.stringify(data.reply || {}, null, 2)
-      const assistant = { role: 'assistant', content: reply || 'No response' }
-      setMessages(prev => [...prev, assistant])
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Error: ' + (err.message || err) }])
-    } finally {
+    setTimeout(() => {
+      const reply = generateLocalResponse(trimmed, contextPayload)
+      setMessages(prev => [...prev, { role: 'assistant', ...reply }])
       setLoading(false)
-    }
+    }, 800)
   }
 
   return (
     <div className={open ? 'chat-widget open' : 'chat-widget'}>
       <div className="chat-header" onClick={() => setOpen(o => !o)}>
-        <div className="chat-title">Cuenta Assistant</div>
-        <div className="chat-sub">Budget insights & next actions</div>
+        <div className="chat-header-main">
+          <div className="chat-title">Cue</div>
+          <div className="chat-sub">Insights, actions, and quick answers</div>
+        </div>
+        {open ? (
+          <button
+            type="button"
+            className="chat-close"
+            aria-label="Close chat"
+            onClick={(event) => {
+              event.stopPropagation()
+              setOpen(false)
+            }}
+          >
+            ×
+          </button>
+        ) : null}
       </div>
 
       {open ? (
         <div className="chat-body">
           <div className="chat-messages">
-            {messages
-              .map((m, i) => (
+            {messages.length ? (
+              messages.map((m, i) => (
                 <div key={i} className={m.role === 'user' ? 'msg user' : 'msg assistant'}>
-                  {m.content}
+                  {m.summary ? <div className="msg-summary">{m.summary}</div> : null}
+                  <div className="msg-content">{m.content || ''}</div>
+                  {Array.isArray(m.alerts) && m.alerts.length ? (
+                    <ul className="msg-alerts">
+                      {m.alerts.map((alert, idx) => (
+                        <li key={idx}>{alert}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {Array.isArray(m.actions) && m.actions.length ? (
+                    <div className="chat-actions">
+                      {m.actions.map((action, idx) => (
+                        <button
+                          key={`${action.to || 'action'}-${idx}`}
+                          type="button"
+                          className="chat-action-btn"
+                          onClick={() => action.to && navigate(action.to)}
+                        >
+                          {action.label || 'Open'}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
-              ))}
+              ))
+            ) : (
+              <div className="chat-empty">
+                Ask me about budgets, approvals, expenses, or receipts.
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 

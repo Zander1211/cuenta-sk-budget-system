@@ -8,22 +8,28 @@ import ExpensesPage from './pages/ExpensesPage'
 import RequestPage from './pages/RequestPage'
 import DocumentsPage from './pages/DocumentsPage'
 import ApprovalsPage from './pages/ApprovalsPage'
-import ArchivedRequestsPage from './pages/ArchivedRequestsPage'
 import AiAnalysisPage from './pages/AiAnalysisPage'
 import ReportsPage from './pages/ReportsPage'
 import AuditLogsPage from './pages/AuditLogsPage'
 import UserManagementPage from './pages/UserManagementPage'
 import ProfilePage from './pages/ProfilePage'
+import BudgetRequestsPage from './pages/BudgetRequestsPage'
+import ReceiptReportsPage from './pages/ReceiptReportsPage'
+import NarrativeReportPage from './pages/NarrativeReportPage'
+import AnnualReportPage from './pages/AnnualReportPage'
+import ApprovedProjectsPage from './pages/ApprovedProjectsPage'
 import { AuditLogProvider } from './context/AuditLogContext'
 import { BudgetProvider } from './context/BudgetContext'
 import { AuthProvider } from './context/AuthContext'
 import ChatWidget from './components/ChatWidget'
+import { NotificationProvider } from './context/NotificationContext'
 
 function App() {
   return (
     <AuthProvider>
       <AuditLogProvider>
-        <BudgetProvider>
+        <NotificationProvider>
+          <BudgetProvider>
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<LoginPage />} />
@@ -35,18 +41,23 @@ function App() {
                 <Route path="request" element={<RequestPage />} />
                 <Route path="documents" element={<DocumentsPage />} />
                 <Route path="approvals" element={<ApprovalsPage />} />
-                <Route path="archive" element={<ArchivedRequestsPage />} />
                 <Route path="ai-analysis" element={<AiAnalysisPage />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="audit-logs" element={<AuditLogsPage />} />
                 <Route path="user-management" element={<UserManagementPage />} />
+                <Route path="budget-requests" element={<BudgetRequestsPage />} />
+                <Route path="approved-projects" element={<ApprovedProjectsPage />} />
+                <Route path="receipt-reports" element={<ReceiptReportsPage />} />
+                <Route path="narrative-report" element={<NarrativeReportPage />} />
+                <Route path="annual-report" element={<AnnualReportPage />} />
                 <Route path="profile" element={<ProfilePage />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
             <ChatWidget />
           </BrowserRouter>
-        </BudgetProvider>
+          </BudgetProvider>
+        </NotificationProvider>
       </AuditLogProvider>
     </AuthProvider>
   )
