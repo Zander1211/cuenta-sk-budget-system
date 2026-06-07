@@ -3118,9 +3118,9 @@ td.nr-info-label {
 .spinner { width: 40px; height: 40px; border: 4px solid rgba(15, 31, 54, 0.1); border-left-color: var(--sea); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; } @keyframes spin { to { transform: rotate(360deg); } }
 
 
+
 .data-table, .user-table, .audit-table { display: block; overflow-x: auto; white-space: nowrap; width: 100%; -webkit-overflow-scrolling: touch; }
 .overview-card { overflow: hidden; }
 @media (max-width: 720px) { .data-table, .user-table, .audit-table { padding-bottom: 8px; } }
 
-. n o t i f i c a t i o n - i t e m - m e s s a g e   {   w h i t e - s p a c e :   p r e - w r a p ;   l i n e - h e i g h t :   1 . 4 ;   m a r g i n - t o p :   4 p x ;   d i s p l a y :   b l o c k ;   }  
- 
+.notification-item-message { white-space: pre-wrap; line-height: 1.4; margin-top: 4px; display: block; }
