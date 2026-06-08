@@ -184,6 +184,23 @@ body {
 	animation-delay: 0.12s;
 }
 
+.login-header {
+	text-align: center;
+}
+
+.login-logo-container {
+	display: flex;
+	justify-content: center;
+	margin-bottom: 24px;
+}
+
+.login-logo {
+	height: clamp(120px, 20vw, 160px);
+	width: auto;
+	max-width: 100%;
+	object-fit: contain;
+}
+
 .login-header h2 {
 	margin: 10px 0 6px;
 	font-size: clamp(1.6rem, 2vw, 2.2rem);

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { loginUser } from '../services/authService'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
+import logo from '../assets/logo.png'
 
 function LoginPage() {
   const [email, setEmail] = useState('')
@@ -32,6 +33,9 @@ function LoginPage() {
       <div className="login-shell">
         <section className="login-panel">
           <header className="login-header">
+            <div className="login-logo-container">
+              <img src={logo} alt="Cuenta Logo" className="login-logo" />
+            </div>
             <p className="eyebrow">Welcome back</p>
             <h2>Sign in to Cuenta</h2>
             <p className="subcopy">Use your work email to continue.</p>
