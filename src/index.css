@@ -3124,3 +3124,37 @@ td.nr-info-label {
 @media (max-width: 720px) { .data-table, .user-table, .audit-table { padding-bottom: 8px; } }
 
 .notification-item-message { white-space: pre-wrap; line-height: 1.4; margin-top: 4px; display: block; }
+
+.profile-edit-options {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	align-items: flex-start;
+}
+
+/* Fix table spacing */
+.data-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+	padding: 14px 16px;
+	text-align: left;
+	border-bottom: 1px solid rgba(15, 31, 54, 0.08);
+}
+
+.data-table th {
+	font-size: 0.75rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	color: var(--ink-soft);
+	background: rgba(15, 31, 54, 0.02);
+}
+
+.data-table td {
+	color: var(--ink);
+	font-size: 0.95rem;
+}

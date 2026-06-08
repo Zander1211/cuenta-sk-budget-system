@@ -18,6 +18,10 @@ import ReceiptReportsPage from './pages/ReceiptReportsPage'
 import NarrativeReportPage from './pages/NarrativeReportPage'
 import AnnualReportPage from './pages/AnnualReportPage'
 import ApprovedProjectsPage from './pages/ApprovedProjectsPage'
+import UpdateDetailsPage from './pages/UpdateDetailsPage'
+import ChangePasswordPage from './pages/ChangePasswordPage'
+import UpdateOtpPage from './pages/UpdateOtpPage'
+import UpdateEmailPage from './pages/UpdateEmailPage'
 import { AuditLogProvider } from './context/AuditLogContext'
 import { BudgetProvider } from './context/BudgetContext'
 import { AuthProvider } from './context/AuthContext'
@@ -50,7 +54,13 @@ function App() {
                 <Route path="receipt-reports" element={<ReceiptReportsPage />} />
                 <Route path="narrative-report" element={<NarrativeReportPage />} />
                 <Route path="annual-report" element={<AnnualReportPage />} />
-                <Route path="profile" element={<ProfilePage />} />
+                <Route path="profile">
+                  <Route index element={<ProfilePage />} />
+                  <Route path="update-details" element={<UpdateDetailsPage />} />
+                  <Route path="change-password" element={<ChangePasswordPage />} />
+                  <Route path="update-otp" element={<UpdateOtpPage />} />
+                  <Route path="update-email" element={<UpdateEmailPage />} />
+                </Route>
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { loginUser } from '../services/authService'
 import { useAuditLog } from '../context/AuditLogContext'
+import { useAuth } from '../context/AuthContext'
 
 function LoginPage() {
   const [email, setEmail] = useState('')
@@ -9,6 +10,7 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
   const { addLog } = useAuditLog()
+  const { refreshSession } = useAuth()
 
   async function handleLogin(e) {
     e.preventDefault()
@@ -20,6 +22,7 @@ function LoginPage() {
       return
     }
 
+    await refreshSession()
     addLog({ action: 'Logged in', actor: email || 'SK Chairman' })
     navigate('/dashboard')
   }

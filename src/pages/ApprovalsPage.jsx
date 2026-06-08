@@ -252,7 +252,7 @@ function ApprovalsPage() {
                     <table className="data-table">
                       <thead>
                         <tr>
-                          <th>Other expenses</th>
+                          <th>Requisition</th>
                           <th>Quantity</th>
                           <th>Unit cost</th>
                           <th>Total cost</th>

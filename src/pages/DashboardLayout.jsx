@@ -77,7 +77,7 @@ const navItems = [
 function DashboardLayout() {
   const navigate = useNavigate()
   const { addLog } = useAuditLog()
-  const { role, isLoading, isAuthenticated, profileName, profileSurname } = useAuth()
+  const { role, isLoading, isAuthenticated, profileName, profileSurname, refreshSession } = useAuth()
   const [isSidebarOpen, setSidebarOpen] = useState(false)
 
   if (isLoading) {
@@ -89,9 +89,9 @@ function DashboardLayout() {
   }
 
   const visibleItems = navItems.filter((item) => item.roles.includes(role))
-  const fullName = profileName
+  const fullName = profileName || ''
   const surname =
-    profileSurname || fullName.split(' ').filter(Boolean).slice(-1)[0] || ''
+    profileSurname || (fullName ? fullName.split(' ').filter(Boolean).slice(-1)[0] : '') || ''
   const sidebarRole = [role, surname].filter(Boolean).join(', ')
 
   function handleNavClick(label) {
@@ -105,6 +105,7 @@ function DashboardLayout() {
 
   async function handleLogout() {
     await logoutUser()
+    await refreshSession()
     addLog({ action: 'Logged out' })
     setSidebarOpen(false)
     navigate('/')

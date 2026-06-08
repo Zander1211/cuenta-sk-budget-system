@@ -262,11 +262,11 @@ function RequestPage() {
 
             <div className="overview-card">
               <p className="eyebrow">Budget breakdown</p>
-              <h2>Other expenses</h2>
+              <h2>Requisition</h2>
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Other expenses</th>
+                    <th>Requisition</th>
                     <th>Quantity</th>
                     <th>Unit cost</th>
                     <th>Total cost</th>
@@ -287,7 +287,7 @@ function RequestPage() {
                               eventChange.target.value
                             )
                           }
-                          placeholder="Other expenses"
+                          placeholder="Requisition"
                         />
                       </td>
                       <td>
@@ -343,7 +343,7 @@ function RequestPage() {
                   className="secondary-button"
                   onClick={addBreakdownRow}
                 >
-                  Add expense
+                  Add requisition
                 </button>
                 <div className="form-note">
                   Total cost from breakdown: {currency.format(totalFromBreakdown)}
