@@ -4,6 +4,8 @@ import './ChatWidget.css'
 import { useAuth } from '../context/AuthContext'
 import { useBudget } from '../context/BudgetContext'
 import { useAuditLog } from '../context/AuditLogContext'
+import { supabase } from '../supabase/supabaseClient'
+import ReactMarkdown from 'react-markdown'
 
 export default function ChatWidget() {
   const location = useLocation()
@@ -155,11 +157,23 @@ export default function ChatWidget() {
     setInput('')
     setLoading(true)
 
-    setTimeout(() => {
-      const reply = generateLocalResponse(trimmed, contextPayload)
-      setMessages(prev => [...prev, { role: 'assistant', ...reply }])
+    try {
+      const { data, error } = await supabase.functions.invoke('chat-assistant', {
+        body: { input: trimmed, contextPayload },
+      })
+
+      if (error) {
+        throw error
+      }
+
+      setMessages((prev) => [...prev, { role: 'assistant', content: data?.content || 'I received an empty response.' }])
+    } catch (err) {
+      console.error('Chat error:', err)
+      const fallback = generateLocalResponse(trimmed, contextPayload)
+      setMessages((prev) => [...prev, { role: 'assistant', ...fallback }])
+    } finally {
       setLoading(false)
-    }, 800)
+    }
   }
 
   return (
@@ -191,7 +205,15 @@ export default function ChatWidget() {
               messages.map((m, i) => (
                 <div key={i} className={m.role === 'user' ? 'msg user' : 'msg assistant'}>
                   {m.summary ? <div className="msg-summary">{m.summary}</div> : null}
-                  <div className="msg-content">{m.content || ''}</div>
+                  <div className="msg-content">
+                    {m.role === 'assistant' ? (
+                      <div className="markdown-body">
+                        <ReactMarkdown>{m.content || ''}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      m.content || ''
+                    )}
+                  </div>
                   {Array.isArray(m.alerts) && m.alerts.length ? (
                     <ul className="msg-alerts">
                       {m.alerts.map((alert, idx) => (

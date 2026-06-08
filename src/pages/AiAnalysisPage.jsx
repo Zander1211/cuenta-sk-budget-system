@@ -35,12 +35,14 @@ const normalizeAiResponse = (payload) => {
       summary: '',
       insights: [],
       alerts: [],
+      recommendations: [],
       updatedAt: null,
     }
   }
 
   const insights = Array.isArray(payload.insights) ? payload.insights : []
   const alerts = Array.isArray(payload.alerts) ? payload.alerts : []
+  const recommendations = Array.isArray(payload.recommendations) ? payload.recommendations : []
 
   return {
     summary: typeof payload.summary === 'string' ? payload.summary : '',
@@ -55,6 +57,11 @@ const normalizeAiResponse = (payload) => {
       severity: normalizeSeverity(item.severity || item.level),
       date: item.date || item.when || null,
     })),
+    recommendations: recommendations.map((item) => ({
+      title: item.title || item.headline || 'Recommendation',
+      detail: item.detail || item.description || '',
+      severity: normalizeSeverity(item.severity || item.level),
+    })),
     updatedAt: payload.updatedAt || payload.updated_at || null,
   }
 }
@@ -66,6 +73,7 @@ function AiAnalysisPage() {
     summary: '',
     insights: [],
     alerts: [],
+    recommendations: [],
     updatedAt: null,
   })
   const [aiError, setAiError] = useState('')
@@ -278,6 +286,48 @@ function AiAnalysisPage() {
     return alerts.slice(0, 3)
   }, [missingDocsCount, projectTotals, spendingPercent, usedPercent])
 
+  const fallbackRecommendations = useMemo(() => {
+    const recs = []
+
+    if (spendingPercent >= 85) {
+      recs.push({
+        title: 'Implement immediate spending freeze',
+        detail: 'Halt all non-essential expenditures to ensure funds remain for critical operations.',
+        severity: 'high',
+      })
+    } else if (spendingPercent >= 65) {
+      recs.push({
+        title: 'Review upcoming allocations',
+        detail: 'Analyze projected costs for the next month to avoid exceeding the budget limit.',
+        severity: 'medium',
+      })
+    } else {
+      recs.push({
+        title: 'Maintain current spending pace',
+        detail: 'Current budget utilization is healthy. Continue monitoring expenses regularly.',
+        severity: 'low',
+      })
+    }
+
+    if (missingDocsCount > 0) {
+      recs.push({
+        title: 'Enforce documentation policy',
+        detail: 'Require receipts for all pending and future reimbursements to improve auditability.',
+        severity: 'medium',
+      })
+    }
+
+    if (runwayMonths !== null && runwayMonths < 3) {
+      recs.push({
+        title: 'Explore cost-saving measures',
+        detail: 'Negotiate with frequent vendors or defer low-priority projects to extend budget runway.',
+        severity: 'high',
+      })
+    }
+
+    return recs.slice(0, 4)
+  }, [missingDocsCount, spendingPercent, runwayMonths])
+
   const aiPayload = useMemo(
     () => ({
       totals,
@@ -332,6 +382,7 @@ function AiAnalysisPage() {
       summary: normalized.summary,
       insights: normalized.insights,
       alerts: normalized.alerts,
+      recommendations: normalized.recommendations,
       updatedAt: normalized.updatedAt,
     })
   }, [aiPayload])
@@ -342,6 +393,7 @@ function AiAnalysisPage() {
 
   const insights = aiState.insights.length ? aiState.insights : fallbackInsights
   const alerts = aiState.alerts.length ? aiState.alerts : fallbackAlerts
+  const recommendations = aiState.recommendations.length ? aiState.recommendations : fallbackRecommendations
   const aiStatusLabel =
     aiState.status === 'loading'
       ? 'Generating analysis...'
@@ -483,6 +535,40 @@ function AiAnalysisPage() {
                 Refresh Analysis
               </button>
               {aiError ? <span className="ai-status error">{aiError}</span> : null}
+            </div>
+          </div>
+          
+          <div className="overview-card" style={{ gridColumn: '1 / -1' }}>
+            <div className="ai-card-header">
+              <div>
+                <p className="eyebrow">Budget Management</p>
+                <h2>AI Recommendations</h2>
+                <p>Suggested actions to optimize spending and prevent overspending.</p>
+              </div>
+              <span className="ai-chip">Actionable</span>
+            </div>
+            <div className="ai-insight-list" style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+              {recommendations.length ? (
+                recommendations.map((item, index) => (
+                  <div
+                    key={`${item.title}-${index}`}
+                    className={`ai-insight-item ${item.severity}`}
+                    style={{ borderLeft: `4px solid var(--${item.severity === 'high' ? 'cherry' : item.severity === 'medium' ? 'sun' : 'ocean'})`, background: 'var(--surface-sunken)', padding: '1rem', borderRadius: '8px' }}
+                  >
+                    <div className="ai-insight-head" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                      <span className="ai-insight-title" style={{ fontWeight: '600' }}>{item.title}</span>
+                      <span
+                        className={`ai-severity ai-severity-${item.severity}`}
+                      >
+                        {severityLabel[item.severity]}
+                      </span>
+                    </div>
+                    <p className="ai-insight-detail" style={{ fontSize: '0.9rem', color: 'var(--ink-soft)', margin: 0 }}>{item.detail}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="ai-empty">No recommendations available.</p>
+              )}
             </div>
           </div>
         </div>

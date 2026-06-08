@@ -9,12 +9,12 @@ import RequestPage from './pages/RequestPage'
 import DocumentsPage from './pages/DocumentsPage'
 import ApprovalsPage from './pages/ApprovalsPage'
 import AiAnalysisPage from './pages/AiAnalysisPage'
-import ReportsPage from './pages/ReportsPage'
+import ReceiptsPage from './pages/ReceiptsPage'
+import ReceiptDetailsPage from './pages/ReceiptDetailsPage'
 import AuditLogsPage from './pages/AuditLogsPage'
 import UserManagementPage from './pages/UserManagementPage'
 import ProfilePage from './pages/ProfilePage'
 import BudgetRequestsPage from './pages/BudgetRequestsPage'
-import ReceiptReportsPage from './pages/ReceiptReportsPage'
 import NarrativeReportPage from './pages/NarrativeReportPage'
 import AnnualReportPage from './pages/AnnualReportPage'
 import ApprovedProjectsPage from './pages/ApprovedProjectsPage'
@@ -46,12 +46,12 @@ function App() {
                 <Route path="documents" element={<DocumentsPage />} />
                 <Route path="approvals" element={<ApprovalsPage />} />
                 <Route path="ai-analysis" element={<AiAnalysisPage />} />
-                <Route path="reports" element={<ReportsPage />} />
+                <Route path="receipts" element={<ReceiptsPage />} />
                 <Route path="audit-logs" element={<AuditLogsPage />} />
                 <Route path="user-management" element={<UserManagementPage />} />
                 <Route path="budget-requests" element={<BudgetRequestsPage />} />
                 <Route path="approved-projects" element={<ApprovedProjectsPage />} />
-                <Route path="receipt-reports" element={<ReceiptReportsPage />} />
+                <Route path="receipt-details" element={<ReceiptDetailsPage />} />
                 <Route path="narrative-report" element={<NarrativeReportPage />} />
                 <Route path="annual-report" element={<AnnualReportPage />} />
                 <Route path="profile">

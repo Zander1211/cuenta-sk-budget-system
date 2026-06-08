@@ -53,8 +53,8 @@ const navItems = [
     roles: ['SK Chairman', 'SK Treasurer'],
   },
   {
-    label: 'Report',
-    path: '/dashboard/reports',
+    label: 'Receipts',
+    path: '/dashboard/receipts',
     roles: ['SK Chairman', 'SK Treasurer'],
   },
   {

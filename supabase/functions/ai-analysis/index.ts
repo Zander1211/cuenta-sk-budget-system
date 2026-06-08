@@ -13,6 +13,7 @@ const normalizeOutput = (payload: unknown) => {
     summary: '',
     insights: [] as Array<{ title: string; detail: string; severity: string }>,
     alerts: [] as Array<{ title: string; detail: string; severity: string; date: string }>,
+    recommendations: [] as Array<{ title: string; detail: string; severity: string }>,
     updatedAt: new Date().toISOString(),
   }
 
@@ -23,6 +24,7 @@ const normalizeOutput = (payload: unknown) => {
   const data = payload as Record<string, unknown>
   const insights = Array.isArray(data.insights) ? data.insights : []
   const alerts = Array.isArray(data.alerts) ? data.alerts : []
+  const recommendations = Array.isArray(data.recommendations) ? data.recommendations : []
 
   return {
     summary: typeof data.summary === 'string' ? data.summary : '',
@@ -39,6 +41,13 @@ const normalizeOutput = (payload: unknown) => {
         detail: String(item?.detail || item?.description || ''),
         severity: String(item?.severity || item?.level || 'low'),
         date: String(item?.date || item?.when || new Date().toISOString().slice(0, 10)),
+      }))
+      .slice(0, 4),
+    recommendations: recommendations
+      .map((item) => ({
+        title: String(item?.title || item?.headline || 'Recommendation'),
+        detail: String(item?.detail || item?.description || ''),
+        severity: String(item?.severity || item?.level || 'low'),
       }))
       .slice(0, 4),
     updatedAt: new Date().toISOString(),
@@ -64,17 +73,33 @@ const safeParse = (text: string) => {
 
 const buildPrompt = (payload: unknown) => {
   return `You are a finance analyst for a local government office.
+Please provide intelligent recommendations on how to allocate and manage budgets effectively to avoid overspending.
+Analyze the following aspects: previous projects, events, recorded expenses, budget allocations, remaining balances, and spending trends.
+Based on this analysis, provide recommendations such as:
+- How the remaining budget can be utilized effectively for ongoing projects or events.
+- Suggestions for improving budget allocation in future projects and events.
+- Recommendations for reducing unnecessary expenses.
+- Budget planning strategies for the next month based on historical spending patterns.
+- Suggested allocations for upcoming activities, projects, and events.
+- Areas where funds can be optimized to maximize community impact.
+- Insights on whether the current spending pattern is sustainable.
+- Recommendations for reserving emergency or contingency funds.
+- Forecasts and suggestions for future budget requirements based on previous expenditures.
+
 Return ONLY JSON with this schema:
 {
-  "summary": "short sentence",
+  "summary": "short sentence overview of financial health",
   "insights": [
     { "title": "...", "detail": "...", "severity": "high|medium|low" }
   ],
   "alerts": [
     { "title": "...", "detail": "...", "severity": "high|medium|low", "date": "YYYY-MM-DD" }
+  ],
+  "recommendations": [
+    { "title": "...", "detail": "...", "severity": "high|medium|low" }
   ]
 }
-Use at most 4 insights and 4 alerts. Keep statements concise.
+Use at most 4 insights, 4 alerts, and 4 recommendations. Keep statements concise.
 Data:
 ${JSON.stringify(payload)}
 `

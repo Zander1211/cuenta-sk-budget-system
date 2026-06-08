@@ -113,12 +113,12 @@ export const dashboardSections = {
       { label: 'Savings', value: '3.2%', meta: 'Suggested cuts' },
     ],
   },
-  reports: {
-    eyebrow: 'Reports',
-    title: 'Reports',
+  receipts: {
+    eyebrow: 'Receipts',
+    title: 'Receipts',
     description: 'Build summaries for council and committees.',
-    primaryAction: 'New Report',
-    overviewTitle: 'Reports in progress',
+    primaryAction: 'New Receipt',
+    overviewTitle: 'Receipts in progress',
     actions: [
       'Finalize the monthly financial report.',
       'Export project impact metrics.',

@@ -9,7 +9,7 @@ const currency = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 0,
 })
 
-function ReceiptReportsPage() {
+function ReceiptDetailsPage() {
   const { expenses, expensesSyncStatus } = useBudget()
   const [receiptLinks, setReceiptLinks] = useState({})
   const RECEIPTS_BUCKET = 'receipts'
@@ -64,7 +64,7 @@ function ReceiptReportsPage() {
       <header className="dashboard-header">
         <div className="header-left">
           <div>
-            <p className="eyebrow">Reports</p>
+            <p className="eyebrow">Receipts</p>
             <h1>Receipt reports</h1>
             <p>View all uploaded receipts and their associated projects and events.</p>
           </div>
@@ -195,4 +195,4 @@ function ReceiptReportsPage() {
   )
 }
 
-export default ReceiptReportsPage
+export default ReceiptDetailsPage

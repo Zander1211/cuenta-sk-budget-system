@@ -3,7 +3,7 @@ import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import { supabase } from '../supabase/supabaseClient'
 
-function ReportsPage() {
+function ReceiptsPage() {
   const { expenses, refreshExpensesFromSupabase, expensesSyncStatus } = useBudget()
   const [filesById, setFilesById] = useState({})
   const [errorsById, setErrorsById] = useState({})
@@ -248,7 +248,7 @@ function ReportsPage() {
       <header className="dashboard-header">
         <div className="header-left">
           <div>
-            <p className="eyebrow">Report</p>
+            <p className="eyebrow">Receipts</p>
             <h1>Approved events receipts</h1>
             <p>Upload receipts for events approved by the SK Chairman.</p>
           </div>
@@ -435,4 +435,4 @@ function ReportsPage() {
   )
 }
 
-export default ReportsPage
+export default ReceiptsPage
