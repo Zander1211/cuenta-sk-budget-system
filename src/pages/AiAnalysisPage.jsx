@@ -86,9 +86,14 @@ function AiAnalysisPage() {
     [requests]
   )
 
+  const activeExpenses = useMemo(
+    () => expenses.filter((e) => !e.archivedAt && e.status !== 'Cancelled'),
+    [expenses]
+  )
+
   const categoryTotals = useMemo(() => {
     const totalsByCategory = new Map()
-    expenses.forEach((expense) => {
+    activeExpenses.forEach((expense) => {
       const category = expense.category || 'Other'
       totalsByCategory.set(
         category,
@@ -102,7 +107,7 @@ function AiAnalysisPage() {
 
   const projectTotals = useMemo(() => {
     const totalsByProject = new Map()
-    expenses.forEach((expense) => {
+    activeExpenses.forEach((expense) => {
       const project = expense.project || expense.event || 'Unlabeled'
       totalsByProject.set(
         project,
@@ -121,10 +126,10 @@ function AiAnalysisPage() {
 
   const missingDocsCount = useMemo(
     () =>
-      expenses.filter(
+      activeExpenses.filter(
         (expense) => !expense.receiptUrl && !expense.receiptName
       ).length,
-    [expenses]
+    [activeExpenses]
   )
 
   const spendingTrend = useMemo(() => {
@@ -134,7 +139,7 @@ function AiAnalysisPage() {
     let last30 = 0
     let prev30 = 0
 
-    expenses.forEach((expense) => {
+    activeExpenses.forEach((expense) => {
       const dateValue = new Date(
         expense.date || expense.approvedAt || 0
       ).getTime()
@@ -161,10 +166,10 @@ function AiAnalysisPage() {
       return { label: 'Stable', delta: 0 }
     }
     return { label: change > 0 ? 'Increasing' : 'Decreasing', delta: change }
-  }, [expenses])
+  }, [activeExpenses])
 
   const runwayMonths = useMemo(() => {
-    const dates = expenses
+    const dates = activeExpenses
       .map((expense) =>
         new Date(expense.date || expense.approvedAt || 0).getTime()
       )
@@ -184,7 +189,7 @@ function AiAnalysisPage() {
     }
 
     return totals.remaining / avgMonthly
-  }, [expenses, totals])
+  }, [activeExpenses, totals])
 
   const fallbackInsights = useMemo(() => {
     const insights = []
@@ -337,7 +342,7 @@ function AiAnalysisPage() {
       missingDocuments: missingDocsCount,
       spendingTrend: spendingTrend.label,
       spendingTrendDelta: spendingTrend.delta,
-      recentExpenses: expenses.slice(0, 8).map((expense) => ({
+      recentExpenses: activeExpenses.slice(0, 8).map((expense) => ({
         project: expense.project || expense.event || 'Unlabeled',
         category: expense.category || 'Other',
         amount: Number(expense.amount || 0),
@@ -353,7 +358,7 @@ function AiAnalysisPage() {
     [
       budgets,
       categoryTotals,
-      expenses,
+      activeExpenses,
       missingDocsCount,
       pendingRequests.length,
       projectTotals,

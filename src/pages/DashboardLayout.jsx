@@ -127,14 +127,16 @@ function DashboardLayout() {
             <span className="mobile-header-role">{role}</span>
             <span className="mobile-header-subtitle">Dashboard</span>
           </div>
-          <button
-            className="mobile-icon-button"
-            type="button"
-            onClick={handleNotifications}
-            aria-label="Notifications"
-          >
-            <Bell size={20} />
-          </button>
+          {['SK Chairman', 'SK Treasurer'].includes(role) && (
+            <button
+              className="mobile-icon-button"
+              type="button"
+              onClick={handleNotifications}
+              aria-label="Notifications"
+            >
+              <Bell size={20} />
+            </button>
+          )}
         </div>
 
         {isSidebarOpen ? (

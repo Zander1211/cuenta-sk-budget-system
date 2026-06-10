@@ -26,26 +26,20 @@ const formatNumberInput = (value) => {
   return numberFormatter.format(Number(numeric))
 }
 
-const monthOptions = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
+const quarterOptions = [
+  { value: 1, label: 'Quarter 1 (Jan - Mar)' },
+  { value: 2, label: 'Quarter 2 (Apr - Jun)' },
+  { value: 3, label: 'Quarter 3 (Jul - Sep)' },
+  { value: 4, label: 'Quarter 4 (Oct - Dec)' },
 ]
 
 function BudgetsPage() {
   const { role } = useAuth()
-  const { budgets, addMonthlyBudget } = useBudget()
+  const { budgets, addQuarterlyBudget } = useBudget()
   const now = new Date()
-  const [month, setMonth] = useState(now.getMonth())
+  const currentMonth = now.getMonth()
+  const initialQuarter = Math.floor(currentMonth / 3) + 1
+  const [quarter, setQuarter] = useState(initialQuarter)
   const [year, setYear] = useState(now.getFullYear())
   const [amount, setAmount] = useState('')
   const canEdit = role === 'SK Treasurer'
@@ -62,8 +56,8 @@ function BudgetsPage() {
       return
     }
 
-    addMonthlyBudget({
-      month,
+    addQuarterlyBudget({
+      quarter,
       year,
       amount: cleanedAmount,
     })
@@ -77,8 +71,8 @@ function BudgetsPage() {
         <div className="header-left">
           <div>
             <p className="eyebrow">Budgets</p>
-            <h1>Monthly budget allocation</h1>
-            <p>Set the monthly budget for SK programs.</p>
+            <h1>Quarterly budget allocation</h1>
+            <p>Set the quarterly budget for SK programs.</p>
           </div>
         </div>
       </header>
@@ -87,18 +81,18 @@ function BudgetsPage() {
         {canEdit ? (
           <div className="overview-card">
             <p className="eyebrow">New budget</p>
-            <h2>Add a monthly budget</h2>
+            <h2>Add a quarterly budget</h2>
             <form className="user-form" onSubmit={handleSubmit}>
               <div className="form-grid">
                 <label className="field">
-                  <span>Month</span>
+                  <span>Quarter</span>
                   <select
-                    value={month}
-                    onChange={(event) => setMonth(Number(event.target.value))}
+                    value={quarter}
+                    onChange={(event) => setQuarter(Number(event.target.value))}
                   >
-                    {monthOptions.map((label, index) => (
-                      <option key={label} value={index}>
-                        {label}
+                    {quarterOptions.map((q) => (
+                      <option key={q.value} value={q.value}>
+                        {q.label}
                       </option>
                     ))}
                   </select>
@@ -136,7 +130,7 @@ function BudgetsPage() {
         ) : (
           <div className="overview-card">
             <p className="eyebrow">Budget summary</p>
-            <h2>Monthly budgets</h2>
+            <h2>Quarterly budgets</h2>
             <p className="form-note">
               Only the SK Treasurer can add or edit budgets. You have view-only
               access.
@@ -150,7 +144,7 @@ function BudgetsPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Month</th>
+                <th>Quarter</th>
                 <th>Year</th>
                 <th>Total Budget</th>
                 <th>Date Added</th>
@@ -160,7 +154,7 @@ function BudgetsPage() {
               {budgets.length ? (
                 budgets.map((budget) => (
                   <tr key={budget.id}>
-                    <td>{monthOptions[budget.month] || '—'}</td>
+                    <td>{quarterOptions.find(q => q.value === budget.quarter)?.label || `Q${budget.quarter}`}</td>
                     <td>{budget.year}</td>
                     <td>{currency.format(budget.amount)}</td>
                     <td>{new Date(budget.createdAt).toLocaleDateString()}</td>
@@ -169,7 +163,7 @@ function BudgetsPage() {
               ) : (
                 <tr>
                   <td colSpan="4" className="empty-state">
-                    No monthly budgets yet.
+                    No quarterly budgets yet.
                   </td>
                 </tr>
               )}

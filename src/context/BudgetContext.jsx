@@ -72,18 +72,22 @@ function getInitialState() {
     const parsed = JSON.parse(stored)
     const budgets = (parsed.budgets ?? [])
       .map((item) => {
-        const month = Number(item.month)
+        // Support migration from month to quarter
+        let quarter = Number(item.quarter)
+        if (!Number.isFinite(quarter) && Number.isFinite(Number(item.month))) {
+          quarter = Math.floor(Number(item.month) / 3) + 1
+        }
         const year = Number(item.year)
-        if (!Number.isFinite(month) || !Number.isFinite(year)) {
+        if (!Number.isFinite(quarter) || !Number.isFinite(year)) {
           return null
         }
-        if (month < 0 || month > 11) {
+        if (quarter < 1 || quarter > 4) {
           return null
         }
 
         return {
           id: item.id || `${Date.now()}-${Math.random()}`,
-          month,
+          quarter,
           year,
           amount: Number(item.amount) || 0,
           createdAt: item.createdAt || new Date().toISOString(),
@@ -172,14 +176,14 @@ function BudgetProvider({ children }) {
     loadExpensesFromSupabase()
   }, [])
 
-  function addMonthlyBudget({ month, year, amount }) {
-    const normalizedMonth = Number(month)
+  function addQuarterlyBudget({ quarter, year, amount }) {
+    const normalizedQuarter = Number(quarter)
     const normalizedYear = Number(year)
 
-    if (!Number.isFinite(normalizedMonth) || !Number.isFinite(normalizedYear)) {
+    if (!Number.isFinite(normalizedQuarter) || !Number.isFinite(normalizedYear)) {
       return
     }
-    if (normalizedMonth < 0 || normalizedMonth > 11) {
+    if (normalizedQuarter < 1 || normalizedQuarter > 4) {
       return
     }
 
@@ -191,7 +195,7 @@ function BudgetProvider({ children }) {
     setBudgets((prev) => [
       {
         id,
-        month: normalizedMonth,
+        quarter: normalizedQuarter,
         year: normalizedYear,
         amount: Number(amount) || 0,
         createdAt: new Date().toISOString(),
@@ -199,9 +203,8 @@ function BudgetProvider({ children }) {
       ...prev,
     ])
 
-    const monthLabel = monthLabels[normalizedMonth] || `Month ${normalizedMonth + 1}`
     addLog({
-      action: `Added monthly budget: ${monthLabel} ${normalizedYear} (${amount})`,
+      action: `Added quarterly budget: Q${normalizedQuarter} ${normalizedYear} (${amount})`,
     })
   }
 
@@ -272,6 +275,41 @@ function BudgetProvider({ children }) {
       type: 'rejection',
       title: 'Budget Request Rejected',
       message: request ? `"${request.event}" was rejected. Reason: ${reason}` : `Request ${requestId} was rejected.`,
+    })
+  }
+
+  function cancelApproval(requestId, reason) {
+    const request = requests.find((item) => item.id === requestId)
+    if (!request) return
+
+    setRequests((prev) =>
+      prev.map((item) =>
+        item.id === requestId
+          ? {
+              ...item,
+              status: 'Cancelled',
+              projectStatus: 'Cancelled',
+              cancelledAt: new Date().toISOString(),
+              cancellationReason: reason,
+            }
+          : item
+      )
+    )
+
+    // Archive the associated expense so it doesn't count towards the budget
+    setExpenses((prev) =>
+      prev.map((expense) =>
+        expense.id === requestId
+          ? { ...expense, status: 'Cancelled', archivedAt: new Date().toISOString() }
+          : expense
+      )
+    )
+
+    addLog({ action: `Cancelled approval for ${request.event}` })
+    addNotification({
+      type: 'rejection',
+      title: 'Approval Cancelled',
+      message: `The approval for "${request.event}" was cancelled. Reason: ${reason}`,
     })
   }
 
@@ -456,7 +494,10 @@ function BudgetProvider({ children }) {
       0
     )
     const totalExpenses = expenses.reduce(
-      (sum, item) => sum + Number(item.amount || 0),
+      (sum, item) => {
+        if (item.archivedAt || item.status === 'Cancelled') return sum;
+        return sum + Number(item.amount || 0);
+      },
       0
     )
     return {
@@ -473,9 +514,10 @@ function BudgetProvider({ children }) {
       expenses,
       expensesSyncStatus,
       totals,
-      addMonthlyBudget,
+      addQuarterlyBudget,
       approveRequest,
       rejectRequest,
+      cancelApproval,
       archiveRequest,
       restoreRequest,
       addExpense,

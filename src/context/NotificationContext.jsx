@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { useAuth } from './AuthContext'
 
 const NotificationContext = createContext(null)
 const STORAGE_KEY = 'cuenta.notifications'
@@ -14,6 +15,7 @@ function getStoredNotifications() {
 }
 
 function NotificationProvider({ children }) {
+  const { role } = useAuth()
   const [notifications, setNotifications] = useState(() => getStoredNotifications())
 
   useEffect(() => {
@@ -39,9 +41,13 @@ function NotificationProvider({ children }) {
     }
   }, [])
 
+  const visibleNotifications = useMemo(() => {
+    return notifications.filter((n) => n.actorRole !== role)
+  }, [notifications, role])
+
   const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.read).length,
-    [notifications]
+    () => visibleNotifications.filter((n) => !n.read).length,
+    [visibleNotifications]
   )
 
   function addNotification({ type = 'system', title, message }) {
@@ -60,6 +66,7 @@ function NotificationProvider({ children }) {
         message: message || '',
         timestamp: new Date().toISOString(),
         read: false,
+        actorRole: role,
       },
       ...prev,
     ])
@@ -81,14 +88,14 @@ function NotificationProvider({ children }) {
 
   const value = useMemo(
     () => ({
-      notifications,
+      notifications: visibleNotifications,
       unreadCount,
       addNotification,
       markAsRead,
       markAllAsRead,
       clearAll,
     }),
-    [notifications, unreadCount]
+    [visibleNotifications, unreadCount, role]
   )
 
   return (

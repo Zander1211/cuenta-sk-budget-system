@@ -51,10 +51,22 @@ function ExpensesPage() {
   // Receipt print preview state
   const [printPreview, setPrintPreview] = useState(null)
 
-  // Budget breakdown month filter
+  // Budget breakdown quarter filter
   const now = new Date()
-  const [breakdownMonth, setBreakdownMonth] = useState(now.getMonth())
+  const [breakdownQuarter, setBreakdownQuarter] = useState(Math.floor(now.getMonth() / 3) + 1)
   const [breakdownYear, setBreakdownYear] = useState(now.getFullYear())
+  const [expandedMonths, setExpandedMonths] = useState({})
+
+  function toggleMonthDetails(monthIdx) {
+    setExpandedMonths(prev => ({ ...prev, [monthIdx]: !prev[monthIdx] }))
+  }
+
+  const quarterOptions = [
+    { value: 1, label: 'Quarter 1 (Jan - Mar)' },
+    { value: 2, label: 'Quarter 2 (Apr - Jun)' },
+    { value: 3, label: 'Quarter 3 (Jul - Sep)' },
+    { value: 4, label: 'Quarter 4 (Oct - Dec)' },
+  ]
 
   const categories = [
     'Sports',
@@ -103,9 +115,26 @@ function ExpensesPage() {
       if (expense.archivedAt) return false
       const resolvedStatus = expense.status || 'Approved'
       const projectName = (expense.project || expense.event || '').toLowerCase()
-      const matchesProject = projectName.includes(projectFilter.toLowerCase())
-      const expenseDate = (expense.date || expense.approvedAt || '').slice(0, 10)
-      const matchesDate = dateFilter ? expenseDate === dateFilter : true
+      const descName = (expense.description || '').toLowerCase()
+      const searchTerms = projectFilter.toLowerCase()
+      const matchesProject = projectName.includes(searchTerms) || descName.includes(searchTerms)
+      
+      let matchesDate = true
+      if (dateFilter) {
+        const expenseDateStr = expense.date || expense.approvedAt
+        if (expenseDateStr) {
+          const d = new Date(expenseDateStr)
+          if (!Number.isNaN(d.getTime())) {
+            const localDateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+            matchesDate = localDateStr === dateFilter
+          } else {
+            matchesDate = false
+          }
+        } else {
+          matchesDate = false
+        }
+      }
+
       const matchesCategory =
         categoryFilter === 'All' || expense.category === categoryFilter
       const matchesStatus =
@@ -119,9 +148,26 @@ function ExpensesPage() {
       if (!expense.archivedAt) return false
       const resolvedStatus = expense.status || 'Approved'
       const projectName = (expense.project || expense.event || '').toLowerCase()
-      const matchesProject = projectName.includes(projectFilter.toLowerCase())
-      const expenseDate = (expense.date || expense.approvedAt || '').slice(0, 10)
-      const matchesDate = dateFilter ? expenseDate === dateFilter : true
+      const descName = (expense.description || '').toLowerCase()
+      const searchTerms = projectFilter.toLowerCase()
+      const matchesProject = projectName.includes(searchTerms) || descName.includes(searchTerms)
+      
+      let matchesDate = true
+      if (dateFilter) {
+        const expenseDateStr = expense.date || expense.approvedAt
+        if (expenseDateStr) {
+          const d = new Date(expenseDateStr)
+          if (!Number.isNaN(d.getTime())) {
+            const localDateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+            matchesDate = localDateStr === dateFilter
+          } else {
+            matchesDate = false
+          }
+        } else {
+          matchesDate = false
+        }
+      }
+
       const matchesCategory =
         categoryFilter === 'All' || expense.category === categoryFilter
       const matchesStatus =
@@ -130,46 +176,68 @@ function ExpensesPage() {
     })
   }, [expenses, projectFilter, dateFilter, categoryFilter, statusFilter])
 
-  // Budget breakdown data for selected month
+  // Budget breakdown data for selected quarter
   const breakdownData = useMemo(() => {
-    const monthExpenses = expenses.filter((expense) => {
+    const quarterExpenses = expenses.filter((expense) => {
       if (expense.archivedAt) return false
       const dateStr = expense.approvedAt || expense.date || expense.eventDate
       if (!dateStr) return false
       const d = new Date(dateStr)
-      return d.getFullYear() === breakdownYear && d.getMonth() === breakdownMonth
+      const q = Math.floor(d.getMonth() / 3) + 1
+      return d.getFullYear() === breakdownYear && q === breakdownQuarter
     })
 
-    const totalSpent = monthExpenses.reduce(
+    const totalSpent = quarterExpenses.reduce(
       (sum, e) => sum + (Number(e.amount) || 0), 0
     )
 
     // Group by category
     const byCategory = {}
-    monthExpenses.forEach((e) => {
+    quarterExpenses.forEach((e) => {
       const cat = e.category || 'Uncategorized'
       if (!byCategory[cat]) byCategory[cat] = { total: 0, items: [] }
       byCategory[cat].total += Number(e.amount) || 0
       byCategory[cat].items.push(e)
     })
 
-    // Get budget for this month
-    const monthBudgets = budgets.filter(
-      (b) => b.month === breakdownMonth && b.year === breakdownYear
+    // Group by month
+    const byMonth = {}
+    const startMonth = (breakdownQuarter - 1) * 3
+    for (let i = 0; i < 3; i++) {
+        byMonth[startMonth + i] = { total: 0, items: [], categories: {} }
+    }
+    quarterExpenses.forEach((e) => {
+      const dateStr = e.approvedAt || e.date || e.eventDate
+      if (!dateStr) return
+      const d = new Date(dateStr)
+      const m = d.getMonth()
+      if (byMonth[m]) {
+          byMonth[m].total += Number(e.amount) || 0
+          byMonth[m].items.push(e)
+          const cat = e.category || 'Uncategorized'
+          if (!byMonth[m].categories[cat]) byMonth[m].categories[cat] = 0
+          byMonth[m].categories[cat] += Number(e.amount) || 0
+      }
+    })
+
+    // Get budget for this quarter
+    const quarterBudgets = budgets.filter(
+      (b) => b.quarter === breakdownQuarter && b.year === breakdownYear
     )
-    const totalBudget = monthBudgets.reduce(
+    const totalBudget = quarterBudgets.reduce(
       (sum, b) => sum + (Number(b.amount) || 0), 0
     )
 
     return {
-      expenses: monthExpenses,
+      expenses: quarterExpenses,
       totalSpent,
       totalBudget,
       byCategory,
+      byMonth,
       remaining: totalBudget - totalSpent,
       utilization: totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0,
     }
-  }, [expenses, budgets, breakdownMonth, breakdownYear])
+  }, [expenses, budgets, breakdownQuarter, breakdownYear])
 
   function toggleDetails(expenseId) {
     setExpanded((prev) => ({
@@ -688,11 +756,11 @@ function ExpensesPage() {
               <div className="breakdown-month-selector">
                 <select
                   className="panel-select"
-                  value={breakdownMonth}
-                  onChange={(e) => setBreakdownMonth(Number(e.target.value))}
+                  value={breakdownQuarter}
+                  onChange={(e) => setBreakdownQuarter(Number(e.target.value))}
                 >
-                  {monthLabels.map((label, idx) => (
-                    <option key={label} value={idx}>{label}</option>
+                  {quarterOptions.map((q) => (
+                    <option key={q.value} value={q.value}>{q.label}</option>
                   ))}
                 </select>
                 <select
@@ -709,7 +777,7 @@ function ExpensesPage() {
             <p style={{ color: 'var(--ink-soft)', fontSize: '0.9rem', margin: '4px 0 16px' }}>
               You have utilized {currency.format(breakdownData.totalSpent)} out of the{' '}
               {currency.format(breakdownData.totalBudget)} allocated for{' '}
-              {monthLabels[breakdownMonth]} {breakdownYear}.
+              Quarter {breakdownQuarter} {breakdownYear}.
             </p>
             <div className="allocation-bar">
               <div
@@ -756,49 +824,89 @@ function ExpensesPage() {
               </div>
             ) : (
               <p className="empty-state" style={{ padding: '24px 0' }}>
-                No expenses recorded for {monthLabels[breakdownMonth]} {breakdownYear}.
+                No expenses recorded for Quarter {breakdownQuarter} {breakdownYear}.
               </p>
             )}
 
-            {/* Detailed breakdown table */}
-            {breakdownData.expenses.length ? (
-              <div style={{ marginTop: '16px' }}>
-                <p className="eyebrow" style={{ marginBottom: '8px' }}>Detailed Breakdown</p>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Project</th>
-                      <th>Category</th>
-                      <th>Amount</th>
-                      <th>Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {breakdownData.expenses
-                      .sort((a, b) => new Date(a.approvedAt || a.date || 0) - new Date(b.approvedAt || b.date || 0))
-                      .map((e) => (
-                        <tr key={e.id}>
-                          <td>{e.event || e.project || 'Untitled'}</td>
-                          <td><span className="category-tag">{e.category || 'Uncategorized'}</span></td>
-                          <td style={{ fontWeight: 600 }}>{currency.format(e.amount || 0)}</td>
-                          <td>
-                            {(e.approvedAt || e.date)
-                              ? new Date(e.approvedAt || e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                              : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <th colSpan="2">Total</th>
-                      <th>{currency.format(breakdownData.totalSpent)}</th>
-                      <th></th>
-                    </tr>
-                  </tfoot>
-                </table>
+            {/* Monthly breakdown hierarchical view */}
+            <div style={{ marginTop: '32px' }}>
+              <p className="eyebrow" style={{ marginBottom: '16px' }}>Monthly Breakdown</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {Object.entries(breakdownData.byMonth).map(([mStr, mData]) => {
+                  const m = Number(mStr)
+                  const isExpanded = expandedMonths[m]
+                  const utilization = breakdownData.totalBudget > 0 ? Math.round((mData.total / breakdownData.totalBudget) * 100) : 0
+                  return (
+                    <div key={m} className="overview-card" style={{ padding: '16px', boxShadow: 'none', border: '1px solid var(--border-soft)' }}>
+                      <div className="card-header-row" style={{ marginBottom: isExpanded ? '16px' : '0' }}>
+                        <div>
+                          <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem' }}>{monthLabels[m]}</h3>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--ink-soft)' }}>
+                            {mData.items.length} {mData.items.length === 1 ? 'project/event' : 'projects/events'} • {utilization}% of Q{breakdownQuarter} budget
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                          <span style={{ fontWeight: 600, fontSize: '1.1rem' }}>{currency.format(mData.total)}</span>
+                          <button className="secondary-button" type="button" onClick={() => toggleMonthDetails(m)}>
+                            {isExpanded ? 'Hide Details' : 'View Details'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {isExpanded && mData.items.length > 0 && (
+                        <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-soft)' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                            <div>
+                              <p className="eyebrow" style={{ marginBottom: '8px' }}>Expenses by Category</p>
+                              <div className="breakdown-category-list">
+                                {Object.entries(mData.categories)
+                                  .sort(([, a], [, b]) => b - a)
+                                  .map(([cat, amount]) => (
+                                    <div key={cat} className="breakdown-category-row" style={{ padding: '8px 0' }}>
+                                      <span className="category-tag">{cat}</span>
+                                      <span className="breakdown-category-amount" style={{ fontSize: '0.9rem' }}>
+                                        {currency.format(amount)}
+                                      </span>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                            <div>
+                              <p className="eyebrow" style={{ marginBottom: '8px' }}>Projects & Events</p>
+                              <table className="data-table" style={{ fontSize: '0.85rem' }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ padding: '8px' }}>Project</th>
+                                    <th style={{ padding: '8px', textAlign: 'right' }}>Amount</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {mData.items
+                                    .sort((a, b) => new Date(a.approvedAt || a.date || 0) - new Date(b.approvedAt || b.date || 0))
+                                    .map((e) => (
+                                      <tr key={e.id}>
+                                        <td style={{ padding: '8px' }}>{e.event || e.project || 'Untitled'}</td>
+                                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>{currency.format(e.amount || 0)}</td>
+                                      </tr>
+                                    ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {isExpanded && mData.items.length === 0 && (
+                        <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-soft)' }}>
+                           <p className="empty-state">No expenses recorded in {monthLabels[m]}.</p>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
-            ) : null}
+            </div>
+
+
           </div>
         </div>
       </section>

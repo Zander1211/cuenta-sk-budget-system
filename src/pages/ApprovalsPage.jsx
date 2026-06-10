@@ -13,6 +13,7 @@ function ApprovalsPage() {
     requests,
     approveRequest,
     rejectRequest,
+    cancelApproval,
     archiveRequest,
     restoreRequest,
     updateProjectStatus,
@@ -22,6 +23,9 @@ function ApprovalsPage() {
   const [rejectingId, setRejectingId] = useState(null)
   const [rejectNote, setRejectNote] = useState('')
   const [rejectError, setRejectError] = useState('')
+  const [cancellingId, setCancellingId] = useState(null)
+  const [cancelNote, setCancelNote] = useState('')
+  const [cancelError, setCancelError] = useState('')
 
   const getBreakdownTotal = (breakdown = []) =>
     breakdown.reduce((sum, item) => {
@@ -59,11 +63,36 @@ function ApprovalsPage() {
     setRejectError('')
   }
 
+  function startCancel(requestId) {
+    setCancellingId(requestId)
+    setCancelNote('')
+    setCancelError('')
+    setExpanded((prev) => ({
+      ...prev,
+      [requestId]: true,
+    }))
+  }
+
+  function submitCancel(requestId) {
+    if (!cancelNote.trim()) {
+      setCancelError('Please add a cancellation reason.')
+      return
+    }
+
+    cancelApproval(requestId, cancelNote.trim())
+    setCancellingId(null)
+    setCancelNote('')
+    setCancelError('')
+  }
+
   function handleTabChange(nextTab) {
     setActiveTab(nextTab)
     setRejectingId(null)
     setRejectNote('')
     setRejectError('')
+    setCancellingId(null)
+    setCancelNote('')
+    setCancelError('')
   }
 
   function handleArchive(requestId) {
@@ -79,6 +108,7 @@ function ApprovalsPage() {
       allowReject = false,
       allowArchive = false,
       allowRestore = false,
+      allowCancel = false,
     }
   ) {
     const breakdownItems = Array.isArray(request.breakdown)
@@ -147,6 +177,15 @@ function ApprovalsPage() {
             >
               {expanded[request.id] ? 'Hide' : 'View'}
             </button>
+            {allowCancel && isApproved ? (
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => startCancel(request.id)}
+              >
+                Cancel Approval
+              </button>
+            ) : null}
             {allowReject ? (
               <button
                 className="secondary-button"
@@ -320,6 +359,40 @@ function ApprovalsPage() {
                     </div>
                   </div>
                 ) : null}
+
+                {allowCancel && isApproved && cancellingId === request.id ? (
+                  <div className="reject-panel" style={{ backgroundColor: '#fff5f5' }}>
+                    <label className="field">
+                      <span>Cancellation Reason</span>
+                      <textarea
+                        rows="3"
+                        value={cancelNote}
+                        onChange={(event) => setCancelNote(event.target.value)}
+                        placeholder="Explain why this approval is being cancelled"
+                      />
+                    </label>
+                    {cancelError ? (
+                      <p className="form-error">{cancelError}</p>
+                    ) : null}
+                    <div className="content-actions">
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={() => setCancellingId(null)}
+                      >
+                        Keep Approval
+                      </button>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        style={{ backgroundColor: '#e53e3e', color: 'white', borderColor: '#e53e3e' }}
+                        onClick={() => submitCancel(request.id)}
+                      >
+                        Confirm Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </td>
           </tr>
@@ -447,6 +520,7 @@ function ApprovalsPage() {
                   allActiveRequests.map((request) =>
                     renderRequestRow(request, {
                       allowArchive: true,
+                      allowCancel: true,
                     })
                   )
                 ) : (

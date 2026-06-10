@@ -10,6 +10,7 @@ const currency = new Intl.NumberFormat('en-PH', {
 function ProjectsPage() {
   const { expenses, updateProjectStatus } = useBudget()
   const completed = expenses.filter((item) => {
+    if (item.archivedAt || item.status === 'Cancelled') return false;
     const status = item.status || 'Approved'
     return ['Approved', 'Released'].includes(status)
   })

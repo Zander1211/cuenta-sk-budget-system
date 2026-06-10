@@ -19,19 +19,11 @@ const currency = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 0,
 })
 
-const monthOptions = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
+const quarterOptions = [
+  { value: 1, label: 'Quarter 1 (Jan - Mar)' },
+  { value: 2, label: 'Quarter 2 (Apr - Jun)' },
+  { value: 3, label: 'Quarter 3 (Jul - Sep)' },
+  { value: 4, label: 'Quarter 4 (Oct - Dec)' },
 ]
 
 function parseDate(value) {
@@ -44,10 +36,11 @@ function parseDate(value) {
 function MainDashboardPage() {
   const { role } = useAuth()
   const { requests, budgets, expenses } = useBudget()
-  const [viewMode, setViewMode] = useState('monthly')
+  const [viewMode, setViewMode] = useState('quarterly')
   const currentDate = new Date()
   const currentYear = currentDate.getFullYear()
-  const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth())
+  const currentQuarter = Math.floor(currentDate.getMonth() / 3) + 1
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQuarter)
   const [selectedYear, setSelectedYear] = useState(currentYear)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
 
@@ -75,28 +68,29 @@ function MainDashboardPage() {
   }, [availableYears, selectedYear])
 
   const periodLabel =
-    viewMode === 'monthly'
-      ? `${monthOptions[selectedMonth]} ${selectedYear}`
+    viewMode === 'quarterly'
+      ? `Q${selectedQuarter} ${selectedYear}`
       : `${selectedYear}`
-  const periodDescriptor = viewMode === 'monthly' ? 'month' : 'year'
+  const periodDescriptor = viewMode === 'quarterly' ? 'quarter' : 'year'
 
   function isInPeriod(dateValue) {
     const date = parseDate(dateValue)
     if (!date) return false
-    if (viewMode === 'monthly') {
+    if (viewMode === 'quarterly') {
+      const quarter = Math.floor(date.getMonth() / 3) + 1
       return (
-        date.getFullYear() === selectedYear && date.getMonth() === selectedMonth
+        date.getFullYear() === selectedYear && quarter === selectedQuarter
       )
     }
     return date.getFullYear() === selectedYear
   }
 
   function budgetMatchesPeriod(budget) {
-    if (!Number.isFinite(budget.month) || !Number.isFinite(budget.year)) {
+    if (!Number.isFinite(budget.quarter) || !Number.isFinite(budget.year)) {
       return false
     }
-    if (viewMode === 'monthly') {
-      return budget.year === selectedYear && budget.month === selectedMonth
+    if (viewMode === 'quarterly') {
+      return budget.year === selectedYear && budget.quarter === selectedQuarter
     }
     return budget.year === selectedYear
   }
@@ -107,11 +101,12 @@ function MainDashboardPage() {
     0
   )
 
-  const filteredExpenses = expenses.filter((expense) =>
-    isInPeriod(
+  const filteredExpenses = expenses.filter((expense) => {
+    if (expense.archivedAt || expense.status === 'Cancelled') return false
+    return isInPeriod(
       expense.approvedAt || expense.createdAt || expense.eventDate || expense.date
     )
-  )
+  })
   const totalExpenses = filteredExpenses.reduce(
     (sum, item) => sum + Number(item.amount || 0),
     0
@@ -166,8 +161,8 @@ function MainDashboardPage() {
         ? `Allocated for ${periodLabel}`
         : 'No budget entries yet',
       chip: filteredBudgets.length
-        ? viewMode === 'monthly'
-          ? 'Monthly'
+        ? viewMode === 'quarterly'
+          ? 'Quarterly'
           : 'Yearly'
         : 'Empty',
       tone: filteredBudgets.length ? 'positive' : 'neutral',
@@ -259,7 +254,7 @@ function MainDashboardPage() {
             <Search size={16} />
             <input type="button" value="Search projects, categories..." aria-label="Search" style={{ textAlign: 'left', cursor: 'pointer' }} />
           </label>
-          <NotificationBell />
+          {['SK Chairman', 'SK Treasurer'].includes(role) && <NotificationBell />}
           <div className="user-chip">
             <span className="user-avatar">{initials}</span>
             <span className="user-info">
@@ -277,11 +272,11 @@ function MainDashboardPage() {
             <button
               type="button"
               className={`filter-toggle-btn ${
-                viewMode === 'monthly' ? 'is-active' : ''
+                viewMode === 'quarterly' ? 'is-active' : ''
               }`}
-              onClick={() => setViewMode('monthly')}
+              onClick={() => setViewMode('quarterly')}
             >
-              Monthly Budget
+              Quarterly Budget
             </button>
             <button
               type="button"
@@ -295,16 +290,16 @@ function MainDashboardPage() {
           </div>
         </div>
         <div className="filter-group">
-          <span className="filter-label">Month</span>
+          <span className="filter-label">Quarter</span>
           <select
             className="panel-select"
-            value={selectedMonth}
-            onChange={(event) => setSelectedMonth(Number(event.target.value))}
+            value={selectedQuarter}
+            onChange={(event) => setSelectedQuarter(Number(event.target.value))}
             disabled={viewMode === 'yearly'}
           >
-            {monthOptions.map((month, index) => (
-              <option key={month} value={index}>
-                {month}
+            {quarterOptions.map((q) => (
+              <option key={q.value} value={q.value}>
+                {q.label}
               </option>
             ))}
           </select>
@@ -399,7 +394,7 @@ function MainDashboardPage() {
           <div className="panel-header">
             <div>
               <p className="panel-eyebrow">Budget Allocation</p>
-              <h2>{viewMode === 'monthly' ? 'Monthly allocation' : 'Yearly allocation'}</h2>
+              <h2>{viewMode === 'quarterly' ? 'Quarterly allocation' : 'Yearly allocation'}</h2>
             </div>
           </div>
           <div className="allocation-grid">
