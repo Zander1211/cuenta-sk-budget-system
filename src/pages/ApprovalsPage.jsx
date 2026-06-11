@@ -17,6 +17,8 @@ function ApprovalsPage() {
     archiveRequest,
     restoreRequest,
     updateProjectStatus,
+    updateRejectionReason,
+    updateCancellationReason,
   } = useBudget()
   const [expanded, setExpanded] = useState({})
   const [activeTab, setActiveTab] = useState('pending')
@@ -26,6 +28,30 @@ function ApprovalsPage() {
   const [cancellingId, setCancellingId] = useState(null)
   const [cancelNote, setCancelNote] = useState('')
   const [cancelError, setCancelError] = useState('')
+  const [editingRejectReasonId, setEditingRejectReasonId] = useState(null)
+  const [editRejectNote, setEditRejectNote] = useState('')
+  const [editingCancelReasonId, setEditingCancelReasonId] = useState(null)
+  const [editCancelNote, setEditCancelNote] = useState('')
+
+  function startEditRejectReason(requestId, currentReason) {
+    setEditingRejectReasonId(requestId)
+    setEditRejectNote(currentReason || '')
+  }
+
+  function saveRejectReason(requestId) {
+    updateRejectionReason(requestId, editRejectNote.trim())
+    setEditingRejectReasonId(null)
+  }
+
+  function startEditCancelReason(requestId, currentReason) {
+    setEditingCancelReasonId(requestId)
+    setEditCancelNote(currentReason || '')
+  }
+
+  function saveCancelReason(requestId) {
+    updateCancellationReason(requestId, editCancelNote.trim())
+    setEditingCancelReasonId(null)
+  }
 
   const getBreakdownTotal = (breakdown = []) =>
     breakdown.reduce((sum, item) => {
@@ -93,6 +119,8 @@ function ApprovalsPage() {
     setCancellingId(null)
     setCancelNote('')
     setCancelError('')
+    setEditingRejectReasonId(null)
+    setEditingCancelReasonId(null)
   }
 
   function handleArchive(requestId) {
@@ -326,6 +354,58 @@ function ApprovalsPage() {
                     <p className="details-value">No breakdown provided.</p>
                   )}
                 </div>
+
+                {request.status === 'Rejected' ? (
+                  <div className="reject-panel" style={{ marginTop: '12px' }}>
+                    <p className="details-label">Rejection Reason</p>
+                    {editingRejectReasonId === request.id ? (
+                      <div className="field">
+                        <textarea
+                          rows="3"
+                          value={editRejectNote}
+                          onChange={(e) => setEditRejectNote(e.target.value)}
+                        />
+                        <div className="content-actions" style={{ marginTop: '8px' }}>
+                          <button className="secondary-button" type="button" onClick={() => setEditingRejectReasonId(null)}>Cancel</button>
+                          <button className="primary-button" type="button" onClick={() => saveRejectReason(request.id)}>Save Note</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+                        <p className="details-value" style={{ color: '#e53e3e', whiteSpace: 'pre-wrap', flex: 1 }}>
+                          {request.rejectionReason || 'No reason provided.'}
+                        </p>
+                        <button className="secondary-button" type="button" onClick={() => startEditRejectReason(request.id, request.rejectionReason)}>Edit</button>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {request.status === 'Cancelled' ? (
+                  <div className="reject-panel" style={{ marginTop: '12px' }}>
+                    <p className="details-label">Cancellation Reason</p>
+                    {editingCancelReasonId === request.id ? (
+                      <div className="field">
+                        <textarea
+                          rows="3"
+                          value={editCancelNote}
+                          onChange={(e) => setEditCancelNote(e.target.value)}
+                        />
+                        <div className="content-actions" style={{ marginTop: '8px' }}>
+                          <button className="secondary-button" type="button" onClick={() => setEditingCancelReasonId(null)}>Cancel</button>
+                          <button className="primary-button" type="button" style={{ backgroundColor: '#e53e3e', color: 'white', borderColor: '#e53e3e' }} onClick={() => saveCancelReason(request.id)}>Save Note</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+                        <p className="details-value" style={{ color: '#e53e3e', whiteSpace: 'pre-wrap', flex: 1 }}>
+                          {request.cancellationReason || 'No reason provided.'}
+                        </p>
+                        <button className="secondary-button" type="button" onClick={() => startEditCancelReason(request.id, request.cancellationReason)}>Edit</button>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
 
                 {allowReject && rejectingId === request.id ? (
                   <div className="reject-panel">

@@ -230,15 +230,18 @@ function RequestPage() {
               </label>
               <label className="field">
                 <span>Total amount (PHP)</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={amount}
-                  onChange={(eventChange) =>
-                    setAmount(formatNumberInput(eventChange.target.value))
-                  }
-                  placeholder="30,000"
-                />
+                <div className="input-with-symbol">
+                  <span className="currency-symbol">₱</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={amount}
+                    onChange={(eventChange) =>
+                      setAmount(formatNumberInput(eventChange.target.value))
+                    }
+                    placeholder="30,000"
+                  />
+                </div>
               </label>
               <label className="field">
                 <span>Project description</span>
@@ -305,18 +308,21 @@ function RequestPage() {
                         />
                       </td>
                       <td>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={item.unitCost}
-                          onChange={(eventChange) =>
-                            updateBreakdownItem(
-                              index,
-                              'unitCost',
-                              formatNumberInput(eventChange.target.value)
-                            )
-                          }
-                        />
+                        <div className="input-with-symbol">
+                          <span className="currency-symbol">₱</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={item.unitCost}
+                            onChange={(eventChange) =>
+                              updateBreakdownItem(
+                                index,
+                                'unitCost',
+                                formatNumberInput(eventChange.target.value)
+                              )
+                            }
+                          />
+                        </div>
                       </td>
                       <td>
                         {currency.format(

@@ -1,6 +1,22 @@
 import { useState } from 'react'
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
-import { Bell, Menu } from 'lucide-react'
+import {
+  Bell,
+  Menu,
+  LayoutDashboard,
+  Wallet,
+  Briefcase,
+  CheckSquare,
+  Receipt,
+  FileText,
+  Files,
+  ThumbsUp,
+  Bot,
+  ScrollText,
+  Users,
+  UserCircle,
+  LogOut
+} from 'lucide-react'
 import { logoutUser } from '../services/authService'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
@@ -11,66 +27,79 @@ const navItems = [
     path: '/dashboard',
     end: true,
     roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
+    icon: LayoutDashboard
   },
   {
     label: 'Budgets',
     path: '/dashboard/budgets',
     roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
+    icon: Wallet
   },
   {
     label: 'Projects',
     path: '/dashboard/projects',
     roles: ['SK Chairman', 'SK Treasurer'],
+    icon: Briefcase
   },
   {
     label: 'Approved Projects',
     path: '/dashboard/approved-projects',
     roles: ['SK Kagawad', 'Barangay Treasurer'],
+    icon: CheckSquare
   },
   {
     label: 'Expenses',
     path: '/dashboard/expenses',
     roles: ['SK Chairman', 'SK Treasurer'],
+    icon: Receipt
   },
   {
     label: 'Request',
     path: '/dashboard/request',
     roles: ['SK Treasurer'],
+    icon: FileText
   },
   {
     label: 'Documents',
     path: '/dashboard/documents',
     roles: ['SK Chairman', 'SK Treasurer'],
+    icon: Files
   },
   {
     label: 'Approvals',
     path: '/dashboard/approvals',
     roles: ['SK Chairman'],
+    icon: ThumbsUp
   },
   {
     label: 'AI Analysis',
     path: '/dashboard/ai-analysis',
     roles: ['SK Chairman', 'SK Treasurer'],
+    icon: Bot
   },
   {
     label: 'Receipts',
     path: '/dashboard/receipts',
     roles: ['SK Chairman', 'SK Treasurer'],
+    icon: ScrollText
   },
   {
     label: 'Audit Logs',
     path: '/dashboard/audit-logs',
     roles: ['SK Chairman'],
+    icon: FileText
   },
   {
     label: 'User Management',
     path: '/dashboard/user-management',
     roles: ['SK Chairman'],
+    icon: Users
   },
   {
     label: 'Profile',
     path: '/dashboard/profile',
     roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
+    icon: UserCircle
   },
 ]
 
@@ -139,20 +168,20 @@ function DashboardLayout() {
           )}
         </div>
 
-        {isSidebarOpen ? (
+        <div className={`dashboard-layout ${isSidebarOpen ? 'is-sidebar-open' : ''}`}>
           <button
             className="sidebar-scrim"
             type="button"
             onClick={() => setSidebarOpen(false)}
             aria-label="Close menu"
           />
-        ) : null}
-
-        <div className={`dashboard-layout ${isSidebarOpen ? 'is-sidebar-open' : ''}`}>
           <aside className="dashboard-sidebar">
             <div className="sidebar-brand">
-              <span className="brand-chip">Cuenta</span>
-              <span className="sidebar-role">{sidebarRole}</span>
+              <span className="brand-chip">C</span>
+              <div className="sidebar-brand-text">
+                <span style={{ fontWeight: 700, letterSpacing: '0.2rem' }}>CUENTA</span>
+                <span className="sidebar-role">{sidebarRole}</span>
+              </div>
             </div>
             <nav className="sidebar-nav" aria-label="Dashboard sections">
               {visibleItems.map((item) => (
@@ -165,7 +194,8 @@ function DashboardLayout() {
                   }
                   onClick={() => handleNavClick(item.label)}
                 >
-                  {item.label}
+                  <item.icon size={20} className="nav-icon" />
+                  <span className="nav-label">{item.label}</span>
                 </NavLink>
               ))}
             </nav>
@@ -175,7 +205,8 @@ function DashboardLayout() {
                 type="button"
                 onClick={handleLogout}
               >
-                Logout
+                <LogOut size={20} className="nav-icon" />
+                <span className="nav-label">Logout</span>
               </button>
             </div>
           </aside>

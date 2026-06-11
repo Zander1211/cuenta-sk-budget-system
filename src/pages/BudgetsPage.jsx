@@ -77,7 +77,7 @@ function BudgetsPage() {
         </div>
       </header>
 
-      <section className="dashboard-content">
+      <section className="dashboard-content two-column">
         {canEdit ? (
           <div className="overview-card">
             <p className="eyebrow">New budget</p>
@@ -110,16 +110,19 @@ function BudgetsPage() {
                 </label>
                 <label className="field">
                   <span>Total budget (PHP)</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={amount}
-                    onChange={(event) =>
-                      setAmount(formatNumberInput(event.target.value))
-                    }
-                    placeholder="250,000"
-                    required
-                  />
+                  <div className="input-with-symbol">
+                    <span className="currency-symbol">₱</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={amount}
+                      onChange={(event) =>
+                        setAmount(formatNumberInput(event.target.value))
+                      }
+                      placeholder="250,000"
+                      required
+                    />
+                  </div>
                 </label>
               </div>
               <button type="submit" className="primary-button">

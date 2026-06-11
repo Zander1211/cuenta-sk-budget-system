@@ -178,29 +178,27 @@ export default function ChatWidget() {
 
   return (
     <div className={open ? 'chat-widget open' : 'chat-widget'}>
-      <div className="chat-header" onClick={() => setOpen(o => !o)}>
-        <div className="chat-header-main">
-          <div className="chat-title">Cue</div>
-          <div className="chat-sub">Insights, actions, and quick answers</div>
-        </div>
-        {open ? (
-          <button
-            type="button"
-            className="chat-close"
-            aria-label="Close chat"
-            onClick={(event) => {
-              event.stopPropagation()
-              setOpen(false)
-            }}
-          >
-            ×
-          </button>
-        ) : null}
-      </div>
-
       {open ? (
-        <div className="chat-body">
-          <div className="chat-messages">
+        <>
+          <div className="chat-header" onClick={() => setOpen(false)}>
+            <div className="chat-header-main">
+              <div className="chat-title">Cue</div>
+              <div className="chat-sub">Insights, actions, and quick answers</div>
+            </div>
+            <button
+              type="button"
+              className="chat-close"
+              aria-label="Close chat"
+              onClick={(event) => {
+                event.stopPropagation()
+                setOpen(false)
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div className="chat-body">
+            <div className="chat-messages">
             {messages.length ? (
               messages.map((m, i) => (
                 <div key={i} className={m.role === 'user' ? 'msg user' : 'msg assistant'}>
@@ -257,6 +255,7 @@ export default function ChatWidget() {
             </button>
           </form>
         </div>
+        </>
       ) : (
         <button className="chat-toggle" onClick={() => setOpen(true)} aria-label="Open chat">
           💬

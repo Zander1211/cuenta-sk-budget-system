@@ -1,3 +1,4 @@
+// @ts-ignore
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts'
 
 const corsHeaders = {
@@ -5,6 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// @ts-ignore
 const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-pro'
 const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`
 
@@ -105,7 +107,7 @@ ${JSON.stringify(payload)}
 `
 }
 
-serve(async (req) => {
+serve(async (req: any) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -117,6 +119,7 @@ serve(async (req) => {
     })
   }
 
+  // @ts-ignore
   const apiKey = Deno.env.get('GEMINI_API_KEY')
   if (!apiKey) {
     return new Response(JSON.stringify({ error: 'Missing GEMINI_API_KEY' }), {

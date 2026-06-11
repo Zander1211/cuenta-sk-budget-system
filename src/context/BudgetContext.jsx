@@ -428,6 +428,28 @@ function BudgetProvider({ children }) {
     addLog({ action: `Updated project status for ${request.event} to ${newStatus}` })
   }
 
+  function updateRejectionReason(requestId, reason) {
+    setRequests((prev) =>
+      prev.map((item) =>
+        item.id === requestId
+          ? { ...item, rejectionReason: reason }
+          : item
+      )
+    )
+    addLog({ action: `Updated rejection reason for request ${requestId}` })
+  }
+
+  function updateCancellationReason(requestId, reason) {
+    setRequests((prev) =>
+      prev.map((item) =>
+        item.id === requestId
+          ? { ...item, cancellationReason: reason }
+          : item
+      )
+    )
+    addLog({ action: `Updated cancellation reason for request ${requestId}` })
+  }
+
   function addExpense(entry) {
     const id =
       typeof crypto !== 'undefined' && crypto.randomUUID
@@ -525,6 +547,8 @@ function BudgetProvider({ children }) {
       restoreExpense,
       addRequest,
       updateProjectStatus,
+      updateRejectionReason,
+      updateCancellationReason,
       refreshExpensesFromSupabase,
     }),
     [
