@@ -1,14 +1,29 @@
 import { supabase } from '../supabase/supabaseClient'
 
 // LOGIN
-export async function loginUser(email, password) {
-
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
-
-  return { data, error }
+export async function loginUser(email, password, recaptchaToken) {
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, recaptchaToken }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      return { error: new Error(data.error || 'Login failed') }
+    }
+    // Set the session
+    const { error: sessionError } = await supabase.auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    })
+    if (sessionError) {
+      return { error: sessionError }
+    }
+    return { data }
+  } catch (error) {
+    return { error }
+  }
 }
 
 // REGISTER

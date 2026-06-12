@@ -63,6 +63,8 @@ function ProjectsPage() {
                           onChange={(e) =>
                             updateProjectStatus(item.id, e.target.value)
                           }
+                          aria-label="Update Project Status"
+                          title="Update Project Status"
                         >
                           <option value="Ongoing">Ongoing</option>
                           <option value="Completed">Completed</option>

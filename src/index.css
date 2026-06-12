@@ -16,6 +16,11 @@
 	--shadow: 0 4px 12px rgba(24, 51, 39, 0.08);
 }
 
+html {
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+}
+
 * {
 	box-sizing: border-box;
 }
