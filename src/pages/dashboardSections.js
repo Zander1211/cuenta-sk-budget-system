@@ -82,8 +82,8 @@ export const dashboardSections = {
     ],
   },
   approvals: {
-    eyebrow: 'Approvals',
-    title: 'Approvals Desk',
+    eyebrow: 'Request Review',
+    title: 'Request Review',
     description: 'Resolve requests and keep spending on track.',
     overviewTitle: 'Items to approve',
     actions: [
@@ -130,9 +130,9 @@ export const dashboardSections = {
       { label: 'Scheduled', value: '3', meta: 'Next week' },
     ],
   },
-  auditLogs: {
-    eyebrow: 'Audit Logs',
-    title: 'Audit Logs',
+  auditTrail: {
+    eyebrow: 'Audit Trail',
+    title: 'Audit Trail',
     description: 'Review activity trails and compliance checks.',
     overviewTitle: 'Recent checks',
     actions: [
@@ -144,6 +144,22 @@ export const dashboardSections = {
       { label: 'Events', value: '1,248', meta: 'Last 30 days' },
       { label: 'Flags', value: '5', meta: 'Need review' },
       { label: 'Exports', value: '2', meta: 'Completed' },
+    ],
+  },
+  backupRestore: {
+    eyebrow: 'Backup & Restore',
+    title: 'Backup & Restore',
+    description: 'Secure system data and restore from previous snapshots.',
+    overviewTitle: 'Recent activity',
+    actions: [
+      'Create a routine system backup.',
+      'Review the latest restore history.',
+      'Download a backup file for external storage.',
+    ],
+    stats: [
+      { label: 'Storage', value: '1.2GB', meta: 'Total size' },
+      { label: 'Backups', value: '12', meta: 'This month' },
+      { label: 'Restores', value: '1', meta: 'Last 90 days' },
     ],
   },
   profile: {

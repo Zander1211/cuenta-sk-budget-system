@@ -15,7 +15,8 @@ import {
   ScrollText,
   Users,
   UserCircle,
-  LogOut
+  LogOut,
+  DatabaseBackup
 } from 'lucide-react'
 import { logoutUser } from '../services/authService'
 import { useAuditLog } from '../context/AuditLogContext'
@@ -66,7 +67,7 @@ const navItems = [
     icon: Files
   },
   {
-    label: 'Approvals',
+    label: 'Request Review',
     path: '/dashboard/approvals',
     roles: ['SK Chairman'],
     icon: ThumbsUp
@@ -84,10 +85,16 @@ const navItems = [
     icon: ScrollText
   },
   {
-    label: 'Audit Logs',
-    path: '/dashboard/audit-logs',
+    label: 'Audit Trail',
+    path: '/dashboard/audit-trail',
     roles: ['SK Chairman'],
     icon: FileText
+  },
+  {
+    label: 'Backup & Restore',
+    path: '/dashboard/backup-restore',
+    roles: ['SK Chairman'],
+    icon: DatabaseBackup
   },
   {
     label: 'User Management',
@@ -106,12 +113,8 @@ const navItems = [
 function DashboardLayout() {
   const navigate = useNavigate()
   const { addLog } = useAuditLog()
-  const { role, isLoading, isAuthenticated, profileName, profileSurname, refreshSession } = useAuth()
+  const { role, isAuthenticated, profileName, profileSurname, refreshSession } = useAuth()
   const [isSidebarOpen, setSidebarOpen] = useState(false)
-
-  if (isLoading) {
-    return null
-  }
 
   if (!isAuthenticated) {
     return <Navigate to="/" replace />
@@ -137,7 +140,6 @@ function DashboardLayout() {
     await refreshSession()
     addLog({ action: 'Logged out' })
     setSidebarOpen(false)
-    navigate('/')
   }
 
   return (

@@ -134,7 +134,7 @@ function PurchaseRequestPreview({ data, onClose }) {
               <p className="doc-sig-title">Approved for Issuance:</p>
               <p className="doc-sig-name">{approvedByName}</p>
               <p className="doc-sig-line">Signature over Printed Name</p>
-              <p className="doc-sig-role">Punong Barangay</p>
+              <p className="doc-sig-role">SK Chairman</p>
               <p className="doc-sig-date">Date: {approvedByDate}</p>
             </div>
           </div>

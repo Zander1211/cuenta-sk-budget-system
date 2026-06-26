@@ -31,7 +31,7 @@ function DocumentsPage() {
             onClick={() => navigate('/dashboard/narrative-report')}
           >
             <FileText size={16} />
-            Narrative Report
+            Narrative & Photo Doc
           </button>
         </div>
       </header>

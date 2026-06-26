@@ -11,11 +11,18 @@ function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [captchaToken, setCaptchaToken] = useState('')
+  const [captchaError, setCaptchaError] = useState('')
   const recaptchaRef = useRef(null)
-  
+
   const navigate = useNavigate()
   const { addLog } = useAuditLog()
-  const { refreshSession } = useAuth()
+  const { refreshSession, isAuthenticated } = useAuth()
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [isAuthenticated, navigate])
 
   // Workaround for Google reCAPTCHA accessibility warnings
   useEffect(() => {
@@ -34,9 +41,10 @@ function LoginPage() {
     e.preventDefault()
 
     if (!captchaToken) {
-      alert("Please complete the CAPTCHA verification")
+      setCaptchaError("Please complete the CAPTCHA verification before logging in.")
       return
     }
+    setCaptchaError('')
 
     const { error } = await loginUser(email, password, captchaToken)
 
@@ -46,12 +54,12 @@ function LoginPage() {
         recaptchaRef.current.reset()
         setCaptchaToken('')
       }
+      setCaptchaError(error.message)
       return
     }
 
     await refreshSession()
     addLog({ action: 'Logged in', actor: email || 'SK Chairman' })
-    navigate('/dashboard')
   }
 
   return (
@@ -99,16 +107,30 @@ function LoginPage() {
               </div>
             </label>
 
-            <div className="captcha-container" style={{ margin: '16px 0', display: 'flex', justifyContent: 'center' }}>
+            <div className="captcha-instruction" style={{ marginTop: '24px', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--ink-soft)', textAlign: 'center' }}>
+              Please complete the CAPTCHA verification before logging in.
+            </div>
+            <div className="captcha-container" style={{ margin: '8px 0 16px 0', display: 'flex', justifyContent: 'center' }}>
               <ReCAPTCHA
                 ref={recaptchaRef}
                 sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || 'dummy_key'}
-                onChange={(token) => setCaptchaToken(token)}
-                onExpired={() => setCaptchaToken('')}
+                onChange={(token) => {
+                  setCaptchaToken(token)
+                  setCaptchaError('')
+                }}
+                onExpired={() => {
+                  setCaptchaToken('')
+                  setCaptchaError('CAPTCHA expired. Please verify again.')
+                }}
               />
             </div>
+            {captchaError && (
+              <div style={{ color: '#b91c1c', fontSize: '0.85rem', textAlign: 'center', marginBottom: '16px' }}>
+                {captchaError}
+              </div>
+            )}
 
-            <button type="submit" className="primary-button" disabled={!captchaToken}>
+            <button type="submit" className="primary-button">
               Login
             </button>
           </form>

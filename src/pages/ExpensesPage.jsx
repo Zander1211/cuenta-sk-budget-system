@@ -378,22 +378,23 @@ function ExpensesPage() {
                 <p className="details-label">Project Description</p>
                 <p className="details-value">{expense.description || '—'}</p>
               </div>
-              <div>
-                <p className="details-label">Notes / Supporting Info</p>
-                <p className="details-value">{expense.notes || '—'}</p>
-              </div>
+
             </div>
 
             <div className="details-breakdown">
-              <p className="details-label">Budget Breakdown</p>
               {breakdownItems.length ? (
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Item</th>
-                      <th>Quantity</th>
-                      <th>Unit Cost</th>
-                      <th>Total Cost</th>
+                      <th colSpan="4" style={{ backgroundColor: '#111827', color: 'white', padding: '8px 12px', textAlign: 'center' }}>
+                        <span style={{ fontWeight: 600, letterSpacing: '0.05em' }}>BUDGET BREAKDOWN</span>
+                      </th>
+                    </tr>
+                    <tr>
+                      <th style={{ textTransform: 'uppercase' }}>ITEM</th>
+                      <th style={{ textTransform: 'uppercase' }}>QUANTITY</th>
+                      <th style={{ textTransform: 'uppercase' }}>UNIT COST</th>
+                      <th style={{ textTransform: 'uppercase' }}>TOTAL COST</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -415,6 +416,52 @@ function ExpensesPage() {
                       <th colSpan="3">Total Cost</th>
                       <th>{currency.format(breakdownTotal)}</th>
                     </tr>
+                  </tfoot>
+                </table>
+              ) : (
+                <p className="details-value">No requisition provided.</p>
+              )}
+            </div>
+
+            <div className="details-breakdown" style={{ marginTop: '16px' }}>
+              {Array.isArray(expense.expensesBreakdown) && expense.expensesBreakdown.length ? (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th colSpan="4" style={{ backgroundColor: '#111827', color: 'white', padding: '8px 12px', textAlign: 'center' }}>
+                        <span style={{ fontWeight: 600, letterSpacing: '0.05em' }}>ACTUAL EXPENSES</span>
+                      </th>
+                    </tr>
+                    <tr>
+                      <th style={{ textTransform: 'uppercase' }}>ITEM</th>
+                      <th style={{ textTransform: 'uppercase' }}>QUANTITY</th>
+                      <th style={{ textTransform: 'uppercase' }}>UNIT COST</th>
+                      <th style={{ textTransform: 'uppercase' }}>TOTAL COST</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expense.expensesBreakdown.map((item, index) => (
+                      <tr key={`${expense.id}-expense-${index}`}>
+                        <td>{item.itemName || '—'}</td>
+                        <td>{item.quantity || 0}</td>
+                        <td>{currency.format(item.unitCost || 0)}</td>
+                        <td>
+                          {currency.format(
+                            (item.quantity || 0) * (item.unitCost || 0)
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <th colSpan="3">Total Expenses</th>
+                      <th>{currency.format(getBreakdownTotal(expense.expensesBreakdown))}</th>
+                    </tr>
+                    <tr>
+                      <th colSpan="3">Combined Total Cost</th>
+                      <th>{currency.format(breakdownTotal + getBreakdownTotal(expense.expensesBreakdown))}</th>
+                    </tr>
                     <tr>
                       <th colSpan="3">Total Amount</th>
                       <th>{currency.format(totalAmount)}</th>
@@ -422,7 +469,7 @@ function ExpensesPage() {
                   </tfoot>
                 </table>
               ) : (
-                <p className="details-value">No breakdown provided.</p>
+                <p className="details-value">No expenses provided.</p>
               )}
             </div>
 
@@ -526,8 +573,6 @@ function ExpensesPage() {
 
         {/* Filters */}
         <div className="overview-card">
-          <p className="eyebrow">Filters</p>
-          <h2>Expense filters</h2>
           <div className="form-grid">
             <label className="field">
               <span>Search by project</span>
@@ -872,23 +917,31 @@ function ExpensesPage() {
                               </div>
                             </div>
                             <div>
-                              <p className="eyebrow" style={{ marginBottom: '8px' }}>Projects & Events</p>
                               <table className="data-table" style={{ fontSize: '0.85rem' }}>
                                 <thead>
                                   <tr>
-                                    <th style={{ padding: '8px' }}>Project</th>
-                                    <th style={{ padding: '8px', textAlign: 'right' }}>Amount</th>
+                                    <th style={{ padding: '8px', textTransform: 'uppercase' }}>Event</th>
+                                    <th style={{ padding: '8px', textAlign: 'right', textTransform: 'uppercase' }}>Budget</th>
+                                    <th style={{ padding: '8px', textAlign: 'right', textTransform: 'uppercase' }}>Expenses</th>
+                                    <th style={{ padding: '8px', textAlign: 'right', textTransform: 'uppercase' }}>Remaining Balance</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {mData.items
                                     .sort((a, b) => new Date(a.approvedAt || a.date || 0) - new Date(b.approvedAt || b.date || 0))
-                                    .map((e) => (
-                                      <tr key={e.id}>
-                                        <td style={{ padding: '8px' }}>{e.event || e.project || 'Untitled'}</td>
-                                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>{currency.format(e.amount || 0)}</td>
-                                      </tr>
-                                    ))}
+                                    .map((e) => {
+                                      const approvedBudget = Number(e.amount) || 0;
+                                      const expenses = getBreakdownTotal(e.breakdown) + getBreakdownTotal(e.expensesBreakdown);
+                                      const remaining = approvedBudget - expenses;
+                                      return (
+                                        <tr key={e.id}>
+                                          <td style={{ padding: '8px' }}>{e.event || e.project || 'Untitled'}</td>
+                                          <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>{currency.format(approvedBudget)}</td>
+                                          <td style={{ padding: '8px', textAlign: 'right' }}>{currency.format(expenses)}</td>
+                                          <td style={{ padding: '8px', textAlign: 'right', color: remaining < 0 ? '#e53e3e' : 'inherit', fontWeight: 600 }}>{currency.format(remaining)}</td>
+                                        </tr>
+                                      )
+                                    })}
                                 </tbody>
                               </table>
                             </div>

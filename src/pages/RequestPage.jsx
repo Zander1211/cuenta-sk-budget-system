@@ -45,13 +45,21 @@ function RequestPage() {
   const [eventDate, setEventDate] = useState('')
   const [venue, setVenue] = useState('')
   const [description, setDescription] = useState('')
-  const [notes, setNotes] = useState('')
   const [breakdownItems, setBreakdownItems] = useState([
+    { itemName: '', quantity: 1, unitCost: 0 },
+  ])
+  const [expensesItems, setExpensesItems] = useState([
     { itemName: '', quantity: 1, unitCost: 0 },
   ])
   const [formError, setFormError] = useState('')
 
   const totalFromBreakdown = breakdownItems.reduce((sum, item) => {
+    const qty = parseNumberInput(item.quantity)
+    const unit = parseNumberInput(item.unitCost)
+    return sum + qty * unit
+  }, 0)
+
+  const totalFromExpenses = expensesItems.reduce((sum, item) => {
     const qty = parseNumberInput(item.quantity)
     const unit = parseNumberInput(item.unitCost)
     return sum + qty * unit
@@ -84,6 +92,30 @@ function RequestPage() {
     setBreakdownItems((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
   }
 
+  function updateExpenseItem(index, field, value) {
+    setExpensesItems((prev) =>
+      prev.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              [field]: value,
+            }
+          : item
+      )
+    )
+  }
+
+  function addExpenseRow() {
+    setExpensesItems((prev) => [
+      ...prev,
+      { itemName: '', quantity: 1, unitCost: 0 },
+    ])
+  }
+
+  function removeExpenseRow(index) {
+    setExpensesItems((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
+  }
+
   function handleSubmit(eventSubmit) {
     eventSubmit.preventDefault()
     setFormError('')
@@ -92,7 +124,7 @@ function RequestPage() {
     const hasBreakdown = breakdownItems.some(
       (item) => item.itemName.trim() && parseNumberInput(item.quantity) > 0
     )
-    const finalAmount = cleanedAmount > 0 ? cleanedAmount : totalFromBreakdown
+    const finalAmount = cleanedAmount > 0 ? cleanedAmount : (totalFromBreakdown + totalFromExpenses)
 
     if (!event.trim() || !category || !eventDate || !venue.trim()) {
       setFormError('Please complete event, date, venue, and category.')
@@ -114,6 +146,16 @@ function RequestPage() {
         (item) => item.itemName || item.quantity > 0 || item.unitCost > 0
       )
 
+    const normalizedExpenses = expensesItems
+      .map((item) => ({
+        itemName: item.itemName.trim(),
+        quantity: parseNumberInput(item.quantity),
+        unitCost: parseNumberInput(item.unitCost),
+      }))
+      .filter(
+        (item) => item.itemName || item.quantity > 0 || item.unitCost > 0
+      )
+
     addRequest({
       event: event.trim(),
       category,
@@ -121,8 +163,8 @@ function RequestPage() {
       eventDate,
       venue: venue.trim(),
       description: description.trim(),
-      notes: notes.trim(),
       breakdown: normalizedBreakdown,
+      expensesBreakdown: normalizedExpenses,
     })
 
     setEvent('')
@@ -131,8 +173,8 @@ function RequestPage() {
     setEventDate('')
     setVenue('')
     setDescription('')
-    setNotes('')
     setBreakdownItems([{ itemName: '', quantity: 1, unitCost: 0 }])
+    setExpensesItems([{ itemName: '', quantity: 1, unitCost: 0 }])
   }
 
   function handleArchive(requestId) {
@@ -252,15 +294,6 @@ function RequestPage() {
                   placeholder="Describe the project goals and outcomes"
                 />
               </label>
-              <label className="field">
-                <span>Notes / supporting info</span>
-                <textarea
-                  rows="3"
-                  value={notes}
-                  onChange={(eventChange) => setNotes(eventChange.target.value)}
-                  placeholder="Add supporting details for the request"
-                />
-              </label>
             </div>
 
             <div className="overview-card">
@@ -353,6 +386,100 @@ function RequestPage() {
                 </button>
                 <div className="form-note">
                   Total cost from breakdown: {currency.format(totalFromBreakdown)}
+                </div>
+              </div>
+            </div>
+
+            <div className="overview-card">
+              <p className="eyebrow">Actual expenditures</p>
+              <h2>Expenses</h2>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Expense item</th>
+                    <th>Quantity</th>
+                    <th>Unit cost</th>
+                    <th>Total cost</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expensesItems.map((item, index) => (
+                    <tr key={`expense-row-${index}`}>
+                      <td>
+                        <input
+                          type="text"
+                          value={item.itemName}
+                          onChange={(eventChange) =>
+                            updateExpenseItem(
+                              index,
+                              'itemName',
+                              eventChange.target.value
+                            )
+                          }
+                          placeholder="Expense detail"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          value={item.quantity}
+                          onChange={(eventChange) =>
+                            updateExpenseItem(
+                              index,
+                              'quantity',
+                              eventChange.target.value
+                            )
+                          }
+                        />
+                      </td>
+                      <td>
+                        <div className="input-with-symbol">
+                          <span className="currency-symbol">₱</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={item.unitCost}
+                            onChange={(eventChange) =>
+                              updateExpenseItem(
+                                index,
+                                'unitCost',
+                                formatNumberInput(eventChange.target.value)
+                              )
+                            }
+                          />
+                        </div>
+                      </td>
+                      <td>
+                        {currency.format(
+                          (item.quantity || 0) * (item.unitCost || 0)
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={() => removeExpenseRow(index)}
+                          disabled={expensesItems.length === 1}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="content-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={addExpenseRow}
+                >
+                  Add expense
+                </button>
+                <div className="form-note">
+                  Total cost from expenses: {currency.format(totalFromExpenses)}
                 </div>
               </div>
             </div>

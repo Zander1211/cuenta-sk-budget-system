@@ -5,6 +5,7 @@ import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import { useAuth } from '../context/AuthContext'
 import NarrativeReportPreview from '../components/documents/NarrativeReportPreview'
+import { savePhoto, getPhotosByProject, deletePhoto } from '../utils/photoDB'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -68,6 +69,12 @@ function NarrativeReportPage() {
 
   // ── 6. Appendices ──
   const [photos, setPhotos] = useState([])
+  const [isLoadingPhotos, setIsLoadingPhotos] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+
+  // ── Print Options ──
+  const [printMode, setPrintMode] = useState('both') // 'both', 'narrative', 'photos'
+  const [includeCoverPage, setIncludeCoverPage] = useState(true)
 
   // ── Request selection ──
   const eligibleRequests = useMemo(
@@ -108,21 +115,49 @@ function NarrativeReportPage() {
     }
   }, [selectedRequest, expenses])
 
-  function handleSelectRequest(e) {
+  async function handleSelectRequest(e) {
     const id = e.target.value
     setSelectedRequestId(id)
 
-    if (!id) return
+    if (!id) {
+      setPhotos([])
+      return
+    }
 
     const request = requests.find((r) => r.id === id)
     if (!request) return
 
+    // Populate data from request
     setProjectTitle(request.event || '')
     setActivityDate(request.eventDate || '')
     setVenue(request.venue || '')
     setRationale(request.description || '')
-    if (request.notes) {
-      setTargetParticipants(request.notes)
+    setTargetParticipants(request.notes || '')
+    
+    // Reset manual fields so they don't bleed into the newly selected project
+    setAcknowledgment('')
+    setObjectives([''])
+    setTotalParticipants('')
+    setActivityFlow([{ time: '', activity: '' }])
+    setResourceSpeakers('')
+    setFacilitators('')
+    setGuests('')
+    setChallenges('')
+    setActionsTaken('')
+    setBeneficiariesReached('')
+    setSkillsLearned('')
+    setCommunityImpact('')
+    setAccomplishments('')
+    setRecommendations('')
+    // Fetch photos from IndexedDB
+    setIsLoadingPhotos(true)
+    try {
+      const storedPhotos = await getPhotosByProject(id)
+      setPhotos(storedPhotos.sort((a, b) => a.timestamp - b.timestamp))
+    } catch (err) {
+      console.error('Failed to load photos:', err)
+    } finally {
+      setIsLoadingPhotos(false)
     }
   }
 
@@ -151,25 +186,85 @@ function NarrativeReportPage() {
   }
 
   // ── Photo helpers ──
-  function handlePhotoUpload(e) {
+  const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+
+  async function handlePhotoUpload(e) {
     const files = Array.from(e.target.files || [])
-    files.forEach((file) => {
-      const reader = new FileReader()
-      reader.onload = (ev) => {
-        setPhotos((prev) => [
-          ...prev,
-          { src: ev.target.result, caption: file.name, fileName: file.name },
-        ])
+    if (!files.length || !selectedRequestId) return
+    
+    // Validation
+    const validFiles = []
+    for (const file of files) {
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        alert(`Invalid format: ${file.name}. Only JPG, PNG, and WEBP are supported.`)
+        continue
       }
-      reader.readAsDataURL(file)
-    })
-    e.target.value = ''
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`File too large: ${file.name}. Maximum size is 5MB.`)
+        continue
+      }
+      validFiles.push(file)
+    }
+
+    if (!validFiles.length) {
+      e.target.value = ''
+      return
+    }
+
+    setIsUploading(true)
+    
+    try {
+      for (const file of validFiles) {
+        const id = `${selectedRequestId}-${Date.now()}-${Math.random().toString(36).substring(7)}`
+        
+        // Convert to Base64
+        const reader = new FileReader()
+        const base64Src = await new Promise((resolve, reject) => {
+          reader.onload = (ev) => resolve(ev.target.result)
+          reader.onerror = (err) => reject(err)
+          reader.readAsDataURL(file)
+        })
+
+        const photoObj = {
+          id,
+          project_id: selectedRequestId,
+          src: base64Src,
+          caption: file.name,
+          fileName: file.name,
+          timestamp: Date.now()
+        }
+        
+        // Insert to DB
+        await savePhoto(photoObj)
+        
+        setPhotos((prev) => [...prev, photoObj])
+      }
+    } catch (err) {
+      console.error("Upload error:", err)
+      alert("An error occurred while saving the photo to the local database. Please try again.")
+    } finally {
+      setIsUploading(false)
+      e.target.value = ''
+    }
   }
-  function updatePhotoCaption(index, caption) {
-    setPhotos((prev) => prev.map((p, i) => (i === index ? { ...p, caption } : p)))
+  
+  async function updatePhotoCaption(index, caption) {
+    const photo = photos[index]
+    const updatedPhoto = { ...photo, caption }
+    
+    setPhotos((prev) => prev.map((p, i) => (i === index ? updatedPhoto : p)))
+    if (photo && photo.id) {
+       await savePhoto(updatedPhoto)
+    }
   }
-  function removePhoto(index) {
+  
+  async function removePhoto(index) {
+    const photo = photos[index]
     setPhotos((prev) => prev.filter((_, i) => i !== index))
+    if (photo && photo.id) {
+      await deletePhoto(photo.id)
+    }
   }
 
   // ── Preview ──
@@ -209,6 +304,8 @@ function NarrativeReportPage() {
       // Appendices
       photos,
       financialData,
+      printMode,
+      includeCoverPage,
     })
   }
 
@@ -218,8 +315,8 @@ function NarrativeReportPage() {
         <div className="header-left">
           <div>
             <p className="eyebrow">Documents</p>
-            <h1>Narrative Report</h1>
-            <p>Generate a professional narrative report for a project or event.</p>
+            <h1>Narrative Report &amp; Photo Documentation</h1>
+            <p>Generate a professional narrative report and photo documentation for a project or event.</p>
           </div>
         </div>
         <div className="header-actions">
@@ -610,17 +707,20 @@ function NarrativeReportPage() {
             </p>
             <label className="nr-upload-area">
               <Upload size={20} />
-              <span>Click to upload photos</span>
+              <span>{isUploading ? 'Uploading...' : 'Click to upload photos'}</span>
               <input
                 type="file"
                 accept="image/*"
                 multiple
                 onChange={handlePhotoUpload}
                 style={{ display: 'none' }}
+                disabled={isUploading || !selectedRequestId}
               />
             </label>
 
-            {photos.length > 0 ? (
+            {isLoadingPhotos ? (
+              <p style={{ marginTop: '16px', color: 'var(--ink-soft)' }}>Loading photos...</p>
+            ) : photos.length > 0 ? (
               <div className="nr-photo-grid">
                 {photos.map((photo, idx) => (
                   <div className="nr-photo-card" key={idx}>
@@ -646,6 +746,29 @@ function NarrativeReportPage() {
                 ))}
               </div>
             ) : null}
+          </div>
+        </div>
+
+        {/* ═══════ PRINT OPTIONS ═══════ */}
+        <div className="overview-card" style={{ marginBottom: '24px' }}>
+          <p className="eyebrow">Export</p>
+          <h2>Print Options</h2>
+          <div className="form-grid" style={{ marginTop: '16px' }}>
+            <label className="field">
+              <span>Print Mode</span>
+              <select value={printMode} onChange={(e) => setPrintMode(e.target.value)}>
+                <option value="both">Narrative Report + Photo Documentation</option>
+                <option value="narrative">Narrative Report Only</option>
+                <option value="photos">Photo Documentation Only</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Include Cover Page</span>
+              <select value={includeCoverPage ? 'yes' : 'no'} onChange={(e) => setIncludeCoverPage(e.target.value === 'yes')}>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </label>
           </div>
         </div>
 

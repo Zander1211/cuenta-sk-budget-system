@@ -169,12 +169,7 @@ function BudgetRequestsPage() {
                       {request.description || '\u2014'}
                     </p>
                   </div>
-                  <div>
-                    <p className="details-label">Notes / supporting info</p>
-                    <p className="details-value">
-                      {request.notes || '\u2014'}
-                    </p>
-                  </div>
+
                   {request.rejectionReason ? (
                     <div>
                       <p className="details-label">Rejection note</p>

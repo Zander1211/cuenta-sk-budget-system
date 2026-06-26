@@ -157,6 +157,17 @@ function ChangePasswordPage() {
             {error ? <p className="form-error">{error}</p> : null}
             {status ? <p className="form-status">{status}</p> : null}
 
+            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => navigate('/dashboard/profile/update-otp')}
+                style={{ fontSize: '0.9rem', color: 'var(--primary)' }}
+              >
+                Forgot Password?
+              </button>
+            </div>
+
             <div className="content-actions">
               <button
                 type="button"

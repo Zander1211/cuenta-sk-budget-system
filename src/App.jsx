@@ -1,4 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { useAuth, AuthProvider } from './context/AuthContext'
+import LoadingScreen from './components/LoadingScreen'
 import LoginPage from './pages/LoginPage'
 import DashboardLayout from './pages/DashboardLayout'
 import MainDashboardPage from './pages/MainDashboardPage'
@@ -11,7 +13,8 @@ import ApprovalsPage from './pages/ApprovalsPage'
 import AiAnalysisPage from './pages/AiAnalysisPage'
 import ReceiptsPage from './pages/ReceiptsPage'
 import ReceiptDetailsPage from './pages/ReceiptDetailsPage'
-import AuditLogsPage from './pages/AuditLogsPage'
+import AuditTrailPage from './pages/AuditTrailPage'
+import BackupRestorePage from './pages/BackupRestorePage'
 import UserManagementPage from './pages/UserManagementPage'
 import ProfilePage from './pages/ProfilePage'
 import BudgetRequestsPage from './pages/BudgetRequestsPage'
@@ -24,9 +27,53 @@ import UpdateOtpPage from './pages/UpdateOtpPage'
 import UpdateEmailPage from './pages/UpdateEmailPage'
 import { AuditLogProvider } from './context/AuditLogContext'
 import { BudgetProvider } from './context/BudgetContext'
-import { AuthProvider } from './context/AuthContext'
+import { BackupRestoreProvider } from './context/BackupRestoreContext'
 import ChatWidget from './components/ChatWidget'
 import { NotificationProvider } from './context/NotificationContext'
+
+function AppRoutes() {
+  const { isLoading } = useAuth()
+
+  if (isLoading) {
+    return <LoadingScreen />
+  }
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LoginPage />} />
+        <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route index element={<MainDashboardPage />} />
+          <Route path="budgets" element={<BudgetsPage />} />
+          <Route path="projects" element={<ProjectsPage />} />
+          <Route path="expenses" element={<ExpensesPage />} />
+          <Route path="request" element={<RequestPage />} />
+          <Route path="documents" element={<DocumentsPage />} />
+          <Route path="approvals" element={<ApprovalsPage />} />
+          <Route path="ai-analysis" element={<AiAnalysisPage />} />
+          <Route path="receipts" element={<ReceiptsPage />} />
+          <Route path="audit-trail" element={<AuditTrailPage />} />
+          <Route path="backup-restore" element={<BackupRestorePage />} />
+          <Route path="user-management" element={<UserManagementPage />} />
+          <Route path="budget-requests" element={<BudgetRequestsPage />} />
+          <Route path="approved-projects" element={<ApprovedProjectsPage />} />
+          <Route path="receipt-details" element={<ReceiptDetailsPage />} />
+          <Route path="narrative-report" element={<NarrativeReportPage />} />
+          <Route path="annual-report" element={<AnnualReportPage />} />
+          <Route path="profile">
+            <Route index element={<ProfilePage />} />
+            <Route path="update-details" element={<UpdateDetailsPage />} />
+            <Route path="change-password" element={<ChangePasswordPage />} />
+            <Route path="update-otp" element={<UpdateOtpPage />} />
+            <Route path="update-email" element={<UpdateEmailPage />} />
+          </Route>
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <ChatWidget />
+    </BrowserRouter>
+  )
+}
 
 function App() {
   return (
@@ -34,38 +81,9 @@ function App() {
       <AuditLogProvider>
         <NotificationProvider>
           <BudgetProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<LoginPage />} />
-              <Route path="/dashboard" element={<DashboardLayout />}>
-                <Route index element={<MainDashboardPage />} />
-                <Route path="budgets" element={<BudgetsPage />} />
-                <Route path="projects" element={<ProjectsPage />} />
-                <Route path="expenses" element={<ExpensesPage />} />
-                <Route path="request" element={<RequestPage />} />
-                <Route path="documents" element={<DocumentsPage />} />
-                <Route path="approvals" element={<ApprovalsPage />} />
-                <Route path="ai-analysis" element={<AiAnalysisPage />} />
-                <Route path="receipts" element={<ReceiptsPage />} />
-                <Route path="audit-logs" element={<AuditLogsPage />} />
-                <Route path="user-management" element={<UserManagementPage />} />
-                <Route path="budget-requests" element={<BudgetRequestsPage />} />
-                <Route path="approved-projects" element={<ApprovedProjectsPage />} />
-                <Route path="receipt-details" element={<ReceiptDetailsPage />} />
-                <Route path="narrative-report" element={<NarrativeReportPage />} />
-                <Route path="annual-report" element={<AnnualReportPage />} />
-                <Route path="profile">
-                  <Route index element={<ProfilePage />} />
-                  <Route path="update-details" element={<UpdateDetailsPage />} />
-                  <Route path="change-password" element={<ChangePasswordPage />} />
-                  <Route path="update-otp" element={<UpdateOtpPage />} />
-                  <Route path="update-email" element={<UpdateEmailPage />} />
-                </Route>
-              </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-            <ChatWidget />
-          </BrowserRouter>
+            <BackupRestoreProvider>
+              <AppRoutes />
+            </BackupRestoreProvider>
           </BudgetProvider>
         </NotificationProvider>
       </AuditLogProvider>

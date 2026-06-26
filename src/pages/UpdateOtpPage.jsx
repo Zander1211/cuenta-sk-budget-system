@@ -136,15 +136,15 @@ function UpdateOtpPage() {
         <div className="header-left">
           <div>
             <p className="eyebrow">Profile</p>
-            <h1>Update via email OTP</h1>
-            <p>Update your password using a one-time passcode sent to your email.</p>
+            <h1>Update Password via OTP Verification</h1>
+            <p>Reset your password using a one-time passcode sent to your email.</p>
           </div>
         </div>
       </header>
 
       <section className="dashboard-content">
         <div className="overview-card">
-          <p className="eyebrow">Update password</p>
+          <p className="eyebrow">Reset password</p>
           <h2>Email Verification</h2>
           <form className="user-form" onSubmit={handleSendOtp}>
             <label className="field">

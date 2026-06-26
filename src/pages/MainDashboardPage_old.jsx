@@ -19,19 +19,11 @@ const currency = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 0,
 })
 
-const monthOptions = [
-  { value: 1, label: 'January' },
-  { value: 2, label: 'February' },
-  { value: 3, label: 'March' },
-  { value: 4, label: 'April' },
-  { value: 5, label: 'May' },
-  { value: 6, label: 'June' },
-  { value: 7, label: 'July' },
-  { value: 8, label: 'August' },
-  { value: 9, label: 'September' },
-  { value: 10, label: 'October' },
-  { value: 11, label: 'November' },
-  { value: 12, label: 'December' },
+const quarterOptions = [
+  { value: 1, label: 'Quarter 1 (Jan - Mar)' },
+  { value: 2, label: 'Quarter 2 (Apr - Jun)' },
+  { value: 3, label: 'Quarter 3 (Jul - Sep)' },
+  { value: 4, label: 'Quarter 4 (Oct - Dec)' },
 ]
 
 function parseDate(value) {
@@ -44,11 +36,11 @@ function parseDate(value) {
 function MainDashboardPage() {
   const { role } = useAuth()
   const { requests, budgets, expenses } = useBudget()
-  const [viewMode, setViewMode] = useState('monthly')
+  const [viewMode, setViewMode] = useState('quarterly')
   const currentDate = new Date()
   const currentYear = currentDate.getFullYear()
-  const currentMonth = currentDate.getMonth() + 1
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
+  const currentQuarter = Math.floor(currentDate.getMonth() / 3) + 1
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQuarter)
   const [selectedYear, setSelectedYear] = useState(currentYear)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
 
@@ -75,27 +67,30 @@ function MainDashboardPage() {
     }
   }, [availableYears, selectedYear])
 
-  const periodLabel = viewMode === 'monthly' ? `${monthOptions.find(m => m.value === selectedMonth)?.label} ${selectedYear}` : `${selectedYear}`
-  const periodDescriptor = viewMode === 'monthly' ? 'month' : 'year'
+  const periodLabel =
+    viewMode === 'quarterly'
+      ? `Q${selectedQuarter} ${selectedYear}`
+      : `${selectedYear}`
+  const periodDescriptor = viewMode === 'quarterly' ? 'quarter' : 'year'
 
   function isInPeriod(dateValue) {
     const date = parseDate(dateValue)
     if (!date) return false
-    if (viewMode === 'monthly') {
-      const month = date.getMonth() + 1
+    if (viewMode === 'quarterly') {
+      const quarter = Math.floor(date.getMonth() / 3) + 1
       return (
-        date.getFullYear() === selectedYear && month === selectedMonth
+        date.getFullYear() === selectedYear && quarter === selectedQuarter
       )
     }
     return date.getFullYear() === selectedYear
   }
 
   function budgetMatchesPeriod(budget) {
-    if (!Number.isFinite(budget.month) || !Number.isFinite(budget.year)) {
+    if (!Number.isFinite(budget.quarter) || !Number.isFinite(budget.year)) {
       return false
     }
-    if (viewMode === 'monthly') {
-      return budget.year === selectedYear && budget.month === selectedMonth
+    if (viewMode === 'quarterly') {
+      return budget.year === selectedYear && budget.quarter === selectedQuarter
     }
     return budget.year === selectedYear
   }
@@ -130,11 +125,11 @@ function MainDashboardPage() {
   const greetingRole = role?.replace('SK ', '') || 'Team'
   const initials = role
     ? role
-      .split(' ')
-      .map((word) => word[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase()
+        .split(' ')
+        .map((word) => word[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
     : 'U'
 
   const filteredRequests = requests.filter((request) =>
@@ -166,8 +161,8 @@ function MainDashboardPage() {
         ? `Allocated for ${periodLabel}`
         : 'No budget entries yet',
       chip: filteredBudgets.length
-        ? viewMode === 'monthly'
-          ? 'Monthly'
+        ? viewMode === 'quarterly'
+          ? 'Quarterly'
           : 'Yearly'
         : 'Empty',
       tone: filteredBudgets.length ? 'positive' : 'neutral',
@@ -203,15 +198,15 @@ function MainDashboardPage() {
 
   const categoryShare = hasBudgetData
     ? [
-      { label: 'Operations', percent: 50, tone: 'blue' },
-      { label: 'Events', percent: 30, tone: 'mint' },
-      { label: 'Programs', percent: 20, tone: 'sun' },
-    ]
+        { label: 'Operations', percent: 50, tone: 'blue' },
+        { label: 'Events', percent: 30, tone: 'mint' },
+        { label: 'Programs', percent: 20, tone: 'sun' },
+      ]
     : [
-      { label: 'Operations', percent: 0, tone: 'blue' },
-      { label: 'Events', percent: 0, tone: 'mint' },
-      { label: 'Programs', percent: 0, tone: 'sun' },
-    ]
+        { label: 'Operations', percent: 0, tone: 'blue' },
+        { label: 'Events', percent: 0, tone: 'mint' },
+        { label: 'Programs', percent: 0, tone: 'sun' },
+      ]
 
   const trendValues = hasBudgetData
     ? [0.18, 0.28, 0.24, 0.42, 0.6, 0.78]
@@ -270,20 +265,24 @@ function MainDashboardPage() {
         </div>
       </section>
 
-      <section className="dashboard-filters" aria-label="Dashboard filters" style={{ marginBottom: '24px' }}>
+      <section className="dashboard-filters" aria-label="Budget filters">
         <div className="filter-group">
           <span className="filter-label">View</span>
           <div className="filter-toggle">
             <button
               type="button"
-              className={`filter-toggle-btn ${viewMode === 'monthly' ? 'is-active' : ''}`}
-              onClick={() => setViewMode('monthly')}
+              className={`filter-toggle-btn ${
+                viewMode === 'quarterly' ? 'is-active' : ''
+              }`}
+              onClick={() => setViewMode('quarterly')}
             >
-              Monthly Budget
+              Quarterly Budget
             </button>
             <button
               type="button"
-              className={`filter-toggle-btn ${viewMode === 'yearly' ? 'is-active' : ''}`}
+              className={`filter-toggle-btn ${
+                viewMode === 'yearly' ? 'is-active' : ''
+              }`}
               onClick={() => setViewMode('yearly')}
             >
               Yearly Budget
@@ -291,15 +290,17 @@ function MainDashboardPage() {
           </div>
         </div>
         <div className="filter-group">
-          <span className="filter-label">Month</span>
+          <span className="filter-label">Quarter</span>
           <select
             className="panel-select"
-            value={selectedMonth}
-            onChange={(event) => setSelectedMonth(Number(event.target.value))}
+            value={selectedQuarter}
+            onChange={(event) => setSelectedQuarter(Number(event.target.value))}
             disabled={viewMode === 'yearly'}
           >
-            {monthOptions.map((m) => (
-              <option key={m.value} value={m.value}>{m.label}</option>
+            {quarterOptions.map((q) => (
+              <option key={q.value} value={q.value}>
+                {q.label}
+              </option>
             ))}
           </select>
         </div>
@@ -328,6 +329,120 @@ function MainDashboardPage() {
             </div>
           )
         })}
+      </section>
+
+      <section className="dashboard-panels">
+        <div className="panel-card">
+          <div className="panel-header">
+            <div>
+              <p className="panel-eyebrow">Spending Overview</p>
+              <h2>Category share</h2>
+            </div>
+            <span className="panel-period">{periodLabel}</span>
+          </div>
+          <div className="spending-grid">
+            <div className="donut-wrap">
+              <div
+                className={`donut ${hasBudgetData ? '' : 'is-empty'}`}
+                style={{ '--donut-value': usedPercent }}
+              >
+                <div className="donut-center">
+                  <span className="donut-value">{usedPercent}%</span>
+                  <span className="donut-label">used</span>
+                </div>
+              </div>
+              <div className="category-list">
+                {categoryShare.map((item) => (
+                  <div key={item.label} className="category-row">
+                    <span className={`category-dot ${item.tone}`} />
+                    <span className="category-name">{item.label}</span>
+                    <span className="category-value">{item.percent}%</span>
+                  </div>
+                ))}
+                <p className="category-meta">
+                  Total Expenses ({periodLabel}): {currency.format(totalExpenses)}
+                </p>
+              </div>
+            </div>
+            <div className="trend-wrap">
+              <div className="trend-header">
+                <span>Monthly Trend</span>
+                <span className={`trend-badge ${hasBudgetData ? 'positive' : 'neutral'}`}>
+                  {hasBudgetData ? 'Updated' : 'Awaiting data'}
+                </span>
+              </div>
+              <div className={`trend-chart ${hasBudgetData ? '' : 'is-empty'}`}>
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <polyline
+                    points={trendPoints}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+              <div className="trend-foot">
+                <span>Jan</span>
+                <span>Jun</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="panel-card">
+          <div className="panel-header">
+            <div>
+              <p className="panel-eyebrow">Budget Allocation</p>
+              <h2>{viewMode === 'quarterly' ? 'Quarterly allocation' : 'Yearly allocation'}</h2>
+            </div>
+          </div>
+          <div className="allocation-grid">
+            <div>
+              <span className="allocation-label">Total Budget</span>
+              <span className="allocation-value">{currency.format(totalBudget)}</span>
+            </div>
+            <div>
+              <span className="allocation-label">Allocated</span>
+              <span className="allocation-value">
+                {currency.format(totalExpenses)} ({allocationPercent}%)
+              </span>
+            </div>
+          </div>
+          <div className="allocation-bar">
+            <div
+              className="allocation-fill"
+              style={{ width: `${allocationPercent}%` }}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="dashboard-panels single">
+        <div className="panel-card">
+          <div className="panel-header">
+            <div className="panel-title-row">
+              <TriangleAlert size={18} />
+              <h2>Recent Alerts</h2>
+            </div>
+            <button className="ghost-button" type="button">View all</button>
+          </div>
+          <div className="alert-list">
+            {alerts.length ? (
+              alerts.map((item) => (
+                <div key={item.title} className="alert-item">
+                  <div>
+                    <span className="alert-title">{item.title}</span>
+                    <p className="alert-detail">{item.detail}</p>
+                  </div>
+                  <span className={`alert-pill ${item.tone}`}>{item.tone}</span>
+                </div>
+              ))
+            ) : (
+              <p className="empty-state">No alerts yet.</p>
+            )}
+          </div>
+        </div>
       </section>
 
       <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />

@@ -1,30 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Wallet, Receipt, PieChart, ClipboardCheck } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import { supabase } from '../supabase/supabaseClient'
-
-
-const monthOptions = [
-  { value: 1, label: 'January' },
-  { value: 2, label: 'February' },
-  { value: 3, label: 'March' },
-  { value: 4, label: 'April' },
-  { value: 5, label: 'May' },
-  { value: 6, label: 'June' },
-  { value: 7, label: 'July' },
-  { value: 8, label: 'August' },
-  { value: 9, label: 'September' },
-  { value: 10, label: 'October' },
-  { value: 11, label: 'November' },
-  { value: 12, label: 'December' },
-]
-function parseDate(value) {
-  if (!value) return null
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return null
-  return parsed
-}
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -100,122 +77,6 @@ function AiAnalysisPage() {
     updatedAt: null,
   })
   const [aiError, setAiError] = useState('')
-
-
-  const [viewMode, setViewMode] = useState('monthly')
-  const currentDate = new Date()
-  const currentYear = currentDate.getFullYear()
-  const currentMonth = currentDate.getMonth() + 1
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
-  const [selectedYear, setSelectedYear] = useState(currentYear)
-
-  const availableYears = useMemo(() => {
-    const years = new Set([currentYear])
-    budgets.forEach((budget) => {
-      if (Number.isFinite(budget.year)) {
-        years.add(budget.year)
-        return
-      }
-      const createdDate = parseDate(budget.createdAt)
-      if (createdDate) years.add(createdDate.getFullYear())
-    })
-    return Array.from(years).sort((a, b) => a - b)
-  }, [budgets, currentYear])
-
-  useEffect(() => {
-    if (!availableYears.length) return
-    if (!availableYears.includes(selectedYear)) {
-      setSelectedYear(availableYears[availableYears.length - 1])
-    }
-  }, [availableYears, selectedYear])
-
-  const periodLabel = viewMode === 'monthly' ? `${monthOptions.find(m => m.value === selectedMonth)?.label} ${selectedYear}` : `${selectedYear}`
-  const periodDescriptor = viewMode === 'monthly' ? 'month' : 'year'
-
-  function isInPeriod(dateValue) {
-    const date = parseDate(dateValue)
-    if (!date) return false
-    if (viewMode === 'monthly') {
-      const month = date.getMonth() + 1
-      return date.getFullYear() === selectedYear && month === selectedMonth
-    }
-    return date.getFullYear() === selectedYear
-  }
-
-  function budgetMatchesPeriod(budget) {
-    if (!Number.isFinite(budget.month) || !Number.isFinite(budget.year)) return false
-    if (viewMode === 'monthly') {
-      return budget.year === selectedYear && budget.month === selectedMonth
-    }
-    return budget.year === selectedYear
-  }
-
-  const filteredBudgets = budgets.filter(budgetMatchesPeriod)
-  const totalBudget = filteredBudgets.reduce((sum, budget) => sum + Number(budget.amount || 0), 0)
-
-  const filteredExpenses = expenses.filter((expense) => {
-    if (expense.archivedAt || expense.status === 'Cancelled') return false
-    return isInPeriod(expense.approvedAt || expense.createdAt || expense.eventDate || expense.date)
-  })
-  const totalExpenses = filteredExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0)
-
-  const remainingBudget = totalBudget - totalExpenses
-  const usedPercentOld = totalBudget > 0 ? Math.min(100, Math.round((totalExpenses / totalBudget) * 100)) : 0
-  const remainingPercent = totalBudget > 0 ? Math.max(0, 100 - usedPercentOld) : 0
-  const hasBudgetData = totalBudget > 0
-
-  const filteredRequests = requests.filter((request) => isInPeriod(request.submittedAt || request.createdAt || request.eventDate))
-  const pendingCount = filteredRequests.filter(req => (!req.status || req.status === 'Pending') && !req.archivedAt).length
-
-  const summaryCards = [
-    {
-      label: 'Total Budget',
-      value: currency.format(totalBudget),
-      meta: filteredBudgets.length ? `Allocated for ${periodLabel}` : 'No budget entries yet',
-      chip: filteredBudgets.length ? (viewMode === 'monthly' ? 'Monthly' : 'Yearly') : 'Empty',
-      tone: filteredBudgets.length ? 'positive' : 'neutral',
-    },
-    {
-      label: 'Total Expenses',
-      value: currency.format(totalExpenses),
-      meta: totalExpenses ? `Approved requests in ${periodLabel}` : 'No expenses recorded',
-      chip: hasBudgetData ? `${usedPercentOld}% used` : 'Awaiting data',
-      tone: usedPercentOld > 80 ? 'warning' : 'positive',
-    },
-    {
-      label: 'Remaining Budget',
-      value: currency.format(remainingBudget),
-      meta: hasBudgetData ? 'Updated from approvals' : 'Add a budget to start',
-      chip: hasBudgetData ? `${remainingPercent}% left` : 'Not started',
-      tone: remainingPercent < 20 ? 'warning' : 'neutral',
-    },
-    {
-      label: 'Pending Approvals',
-      value: String(pendingCount),
-      meta: pendingCount ? 'Awaiting review' : 'No pending requests',
-      chip: pendingCount ? 'Action needed' : 'Clear',
-      tone: pendingCount ? 'warning' : 'positive',
-    },
-  ]
-
-  const categoryShare = hasBudgetData
-    ? [
-      { label: 'Operations', percent: 50, tone: 'blue' },
-      { label: 'Events', percent: 30, tone: 'mint' },
-      { label: 'Programs', percent: 20, tone: 'sun' },
-    ]
-    : [
-      { label: 'Operations', percent: 0, tone: 'blue' },
-      { label: 'Events', percent: 0, tone: 'mint' },
-      { label: 'Programs', percent: 0, tone: 'sun' },
-    ]
-
-  const trendValues = hasBudgetData ? [0.18, 0.28, 0.24, 0.42, 0.6, 0.78] : [0, 0, 0, 0, 0, 0]
-  const trendPoints = trendValues.map((value, index) => {
-    const x = (index / (trendValues.length - 1)) * 100
-    const y = 100 - value * 100
-    return `${x},${y}`
-  }).join(' ')
 
   const pendingRequests = useMemo(
     () =>
@@ -562,129 +423,95 @@ function AiAnalysisPage() {
       </header>
 
       <section className="dashboard-content ai-dashboard">
-
-        <section className="dashboard-filters" aria-label="Budget filters" style={{ marginBottom: '24px' }}>
-          <div className="filter-group">
-            <span className="filter-label">View</span>
-            <div className="filter-toggle">
-              <button
-                type="button"
-                className={`filter-toggle-btn ${viewMode === 'monthly' ? 'is-active' : ''}`}
-                onClick={() => setViewMode('monthly')}
-              >
-                Monthly Budget
-              </button>
-              <button
-                type="button"
-                className={`filter-toggle-btn ${viewMode === 'yearly' ? 'is-active' : ''}`}
-                onClick={() => setViewMode('yearly')}
-              >
-                Yearly Budget
-              </button>
-            </div>
+        <div className="stat-grid">
+          <div className="stat-card">
+            <span className="stat-title">Total Budget</span>
+            <span className="stat-value">
+              {currency.format(totals.totalBudget)}
+            </span>
+            <span className="stat-meta">Allocated for all projects</span>
           </div>
-          <div className="filter-group">
-            <span className="filter-label">Month</span>
-            <select
-              className="panel-select"
-              value={selectedMonth}
-              onChange={(event) => setSelectedMonth(Number(event.target.value))}
-              disabled={viewMode === 'yearly'}
-            >
-              {monthOptions.map((m) => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
+          <div className="stat-card">
+            <span className="stat-title">Total Expenses</span>
+            <span className="stat-value">
+              {currency.format(totals.totalExpenses)}
+            </span>
+            <span className="stat-meta">
+              {usedPercent}% of total budget used
+            </span>
           </div>
-          <div className="filter-group">
-            <span className="filter-label">Year</span>
-            <span className="filter-year">{selectedYear}</span>
+          <div className="stat-card">
+            <span className="stat-title">Remaining Balance</span>
+            <span className="stat-value">
+              {currency.format(totals.remaining)}
+            </span>
+            <span className="stat-meta">Updated from approvals</span>
           </div>
-        </section>
+          <div className="stat-card">
+            <span className="stat-title">Pending Approvals</span>
+            <span className="stat-value">{pendingRequests.length}</span>
+            <span className="stat-meta">Awaiting review</span>
+          </div>
+        </div>
 
-        <section className="summary-grid" style={{ marginBottom: '24px' }}>
-          {summaryCards.map((card) => {
-            const Icon = card.label === 'Total Budget' ? Wallet : card.label === 'Total Expenses' ? Receipt : card.label === 'Remaining Budget' ? PieChart : ClipboardCheck
-            return (
-              <div key={card.label} className="summary-card">
-                <div className="summary-header">
-                  <div className="summary-icon"><Icon size={18} /></div>
-                  <span className={`summary-chip ${card.tone}`}>{card.chip}</span>
-                </div>
-                <div className="summary-body">
-                  <span className="summary-label">{card.label}</span>
-                  <span className="summary-value">{card.value}</span>
-                </div>
-                <span className="summary-meta">{card.meta}</span>
-              </div>
-            )
-          })}
-        </section>
-
-        <section className="dashboard-panels single" style={{ marginBottom: '24px' }}>
-          <div className="panel-card">
-            <div className="panel-header">
+        <div className="ai-main-grid">
+          <div className="overview-card">
+            <div className="ai-card-header">
               <div>
-                <p className="panel-eyebrow">Spending Overview</p>
+                <p className="eyebrow">Spending Overview</p>
                 <h2>Category share</h2>
               </div>
-              <span className="panel-period">{periodLabel}</span>
+              <span className="ai-chip">Live</span>
             </div>
-            <div className="spending-grid">
-              <div className="donut-wrap">
-                <div className={`donut ${hasBudgetData ? '' : 'is-empty'}`} style={{ '--donut-value': usedPercentOld }}>
-                  <div className="donut-center">
-                    <span className="donut-value">{usedPercentOld}%</span>
-                    <span className="donut-label">used</span>
-                  </div>
+            <div className="ai-spending-body">
+              <div
+                className="ai-donut"
+                style={{ '--used-angle': `${usedPercent * 3.6}deg` }}
+              >
+                <div className="ai-donut-label">
+                  <span className="ai-donut-percent">{usedPercent}%</span>
+                  <span className="ai-donut-caption">Used</span>
                 </div>
-                <div className="category-list">
-                  {categoryShare.map((item) => (
-                    <div key={item.label} className="category-row">
-                      <span className={`category-dot ${item.tone}`} />
-                      <span className="category-name">{item.label}</span>
-                      <span className="category-value">{item.percent}%</span>
+              </div>
+              <div className="ai-legend">
+                {categoryTotals.length ? (
+                  categoryTotals.map((category, index) => (
+                    <div className="ai-legend-item" key={category.name}>
+                      <div className="ai-legend-left">
+                        <span
+                          className="ai-legend-dot"
+                          style={{
+                            backgroundColor:
+                              categoryPalette[index % categoryPalette.length],
+                          }}
+                        />
+                        <span>{category.name}</span>
+                      </div>
+                      <span>{currency.format(category.value)}</span>
                     </div>
-                  ))}
-                  <p className="category-meta">
-                    Total Expenses ({periodLabel}): {currency.format(totalExpenses)}
-                  </p>
-                </div>
-              </div>
-              <div className="trend-wrap">
-                <div className="trend-header">
-                  <span>Monthly Trend</span>
-                  <span className={`trend-badge ${hasBudgetData ? 'positive' : 'neutral'}`}>
-                    {hasBudgetData ? 'Updated' : 'Awaiting data'}
-                  </span>
-                </div>
-                <div className={`trend-chart ${hasBudgetData ? '' : 'is-empty'}`}>
-                  <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-                    <polyline points={trendPoints} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <div className="trend-foot">
-                  <span>Jan</span>
-                  <span>Jun</span>
-                </div>
+                  ))
+                ) : (
+                  <p className="ai-empty">No expenses recorded yet.</p>
+                )}
               </div>
             </div>
+            <p className="ai-card-foot">
+              Total Expenses: {currency.format(totals.totalExpenses)}
+            </p>
           </div>
-        </section>
-        <div className="ai-main-grid">
 
-
-          <div className="overview-card" style={{ gridColumn: "1 / -1" }}>            <div className="ai-card-header">
-            <div>
-              <p className="eyebrow">AI Insights</p>
-              <h2>Risk and recommendations</h2>
-              <p className="ai-status">{aiStatusLabel}</p>
-              {aiState.summary ? (
-                <p className="ai-summary">{aiState.summary}</p>
-              ) : null}
+          <div className="overview-card">
+            <div className="ai-card-header">
+              <div>
+                <p className="eyebrow">AI Insights</p>
+                <h2>Risk and recommendations</h2>
+                <p className="ai-status">{aiStatusLabel}</p>
+                {aiState.summary ? (
+                  <p className="ai-summary">{aiState.summary}</p>
+                ) : null}
+              </div>
+              <span className="ai-chip ai-chip-accent">Powered by AI</span>
             </div>
-            <span className="ai-chip ai-chip-accent">Powered by AI</span>
-          </div>
             <div className="ai-insight-list">
               {insights.map((item, index) => (
                 <div
@@ -715,7 +542,7 @@ function AiAnalysisPage() {
               {aiError ? <span className="ai-status error">{aiError}</span> : null}
             </div>
           </div>
-
+          
           <div className="overview-card" style={{ gridColumn: '1 / -1' }}>
             <div className="ai-card-header">
               <div>

@@ -19,10 +19,6 @@ export default function ChatWidget() {
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef(null)
 
-  if (location.pathname === '/') {
-    return null
-  }
-
   function normalizeAuditAction(action = '') {
     const lowered = action.toLowerCase()
     if (lowered.includes('approved')) return 'approved request'
@@ -174,6 +170,10 @@ export default function ChatWidget() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (location.pathname === '/') {
+    return null
   }
 
   return (

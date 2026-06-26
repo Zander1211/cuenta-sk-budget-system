@@ -36,6 +36,14 @@ function NarrativeReportPreview({ data, onClose }) {
     data.financialData &&
     (data.financialData.approved > 0 || data.financialData.breakdown?.length > 0)
 
+  const printMode = data.printMode || 'both'
+  const showNarrative = printMode === 'both' || printMode === 'narrative'
+  const showPhotos = printMode === 'both' || printMode === 'photos'
+  const showCoverPage = data.includeCoverPage !== false
+
+  const reportMainTitle = printMode === 'photos' ? 'PHOTO DOCUMENTATION' : printMode === 'both' ? 'NARRATIVE REPORT & PHOTO DOCUMENTATION' : 'NARRATIVE REPORT'
+
+
   return (
     <div className="print-preview-overlay">
       <div className="print-preview-container" style={{ maxWidth: '900px' }}>
@@ -51,7 +59,8 @@ function NarrativeReportPreview({ data, onClose }) {
         {/* ════════════════════════════════════════════════ */}
         {/*  PAGE 1 — TITLE PAGE                            */}
         {/* ════════════════════════════════════════════════ */}
-        <div className="print-page nr-print-page">
+        {showCoverPage && (
+          <div className="print-page nr-print-page">
           <div className="nr-title-page">
             <div className="nr-logo-area">
               <div className="nr-logo-placeholder">SK</div>
@@ -66,7 +75,7 @@ function NarrativeReportPreview({ data, onClose }) {
             </div>
 
             <div className="nr-title-main">
-              <h1>NARRATIVE REPORT</h1>
+              <h1>{reportMainTitle}</h1>
               <div className="nr-title-divider" />
               <h2>{data.projectTitle || 'Untitled Project'}</h2>
             </div>
@@ -92,11 +101,13 @@ function NarrativeReportPreview({ data, onClose }) {
             </div>
           </div>
         </div>
+        )}
 
         {/* ════════════════════════════════════════════════ */}
         {/*  PAGE 2 — ACKNOWLEDGMENT & TOC                  */}
         {/* ════════════════════════════════════════════════ */}
-        <div className="print-page nr-print-page" style={{ marginTop: '24px' }}>
+        {(showNarrative || showCoverPage) && (
+          <div className="print-page nr-print-page" style={{ marginTop: showCoverPage ? '24px' : '0' }}>
           {/* Acknowledgment */}
           <div className="nr-section">
             <h2 className="nr-section-heading">ACKNOWLEDGMENT AND APPROVAL</h2>
@@ -126,33 +137,41 @@ function NarrativeReportPreview({ data, onClose }) {
           </div>
 
           {/* Table of Contents */}
-          <div className="nr-section" style={{ marginTop: '40px' }}>
-            <h2 className="nr-section-heading">TABLE OF CONTENTS</h2>
-            <table className="nr-toc-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '50px' }}>No.</th>
-                  <th>Section</th>
-                  <th style={{ width: '60px', textAlign: 'right' }}>Page</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tocSections.map((s) => (
-                  <tr key={s.num}>
-                    <td>{s.num}</td>
-                    <td>{s.title}</td>
-                    <td style={{ textAlign: 'right' }}>{s.page}</td>
+          {showNarrative && (
+            <div className="nr-section" style={{ marginTop: '40px' }}>
+              <h2 className="nr-section-heading">TABLE OF CONTENTS</h2>
+              <table className="nr-toc-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '50px' }}>No.</th>
+                    <th>Section</th>
+                    <th style={{ width: '60px', textAlign: 'right' }}>Page</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {tocSections.map((s) => (
+                    <tr key={s.num}>
+                      <td>{s.num}</td>
+                      <td>{s.title}</td>
+                      <td style={{ textAlign: 'right' }}>{s.page}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
+        )}
 
         {/* ════════════════════════════════════════════════ */}
-        {/*  PAGE 3 — INTRODUCTION                          */}
+        {/*  NARRATIVE SECTIONS (Conditional)               */}
         {/* ════════════════════════════════════════════════ */}
-        <div className="print-page nr-print-page" style={{ marginTop: '24px' }}>
+        {showNarrative && (
+          <>
+            {/* ════════════════════════════════════════════════ */}
+            {/*  PAGE 3 — INTRODUCTION                          */}
+            {/* ════════════════════════════════════════════════ */}
+            <div className="print-page nr-print-page" style={{ marginTop: '24px' }}>
           <div className="nr-page-header">
             <span>Narrative Report — {data.projectTitle}</span>
             <span>Section II</span>
@@ -327,21 +346,25 @@ function NarrativeReportPreview({ data, onClose }) {
             </p>
           </div>
         </div>
+        </>
+        )}
 
         {/* ════════════════════════════════════════════════ */}
-        {/*  PAGE 7 — APPENDICES                            */}
+        {/*  PAGE 7 — APPENDICES / PHOTO DOC                 */}
         {/* ════════════════════════════════════════════════ */}
-        <div className="print-page nr-print-page" style={{ marginTop: '24px' }}>
-          <div className="nr-page-header">
-            <span>Narrative Report — {data.projectTitle}</span>
-            <span>Section VI</span>
-          </div>
+        {(showNarrative || showPhotos) && (
+          <div className="print-page nr-print-page" style={{ marginTop: '24px' }}>
+            <div className="nr-page-header">
+              <span>{reportMainTitle} — {data.projectTitle}</span>
+              <span>{showNarrative ? 'Section VI' : 'Documentation'}</span>
+            </div>
 
-          <div className="nr-section">
-            <h2 className="nr-section-heading">VI. APPENDICES AND ATTACHMENTS</h2>
+            <div className="nr-section">
+              {showNarrative && <h2 className="nr-section-heading">VI. APPENDICES AND ATTACHMENTS</h2>}
 
-            {/* Financial Summary */}
-            {hasFinancial ? (
+              {/* Financial Summary */}
+              {showNarrative && (
+                hasFinancial ? (
               <>
                 <h3 className="nr-sub-heading">A. Financial Summary</h3>
                 <table className="nr-finance-table">
@@ -388,12 +411,15 @@ function NarrativeReportPreview({ data, onClose }) {
                 <h3 className="nr-sub-heading">A. Financial Summary</h3>
                 <p className="nr-body-text nr-empty">No financial data available.</p>
               </>
-            )}
+            )
+          )}
 
             {/* Photo Documentation */}
-            <h3 className="nr-sub-heading">
-              {hasFinancial ? 'B' : 'A'}. Photo Documentation
-            </h3>
+            {showPhotos && (
+              <>
+                <h3 className="nr-sub-heading">
+                  {showNarrative ? (hasFinancial ? 'B. Photo Documentation' : 'A. Photo Documentation') : 'Photo Documentation'}
+                </h3>
             {data.photos.length > 0 ? (
               <div className="nr-photo-doc-grid">
                 {data.photos.map((photo, idx) => (
@@ -407,13 +433,15 @@ function NarrativeReportPreview({ data, onClose }) {
               </div>
             ) : (
               <p className="nr-body-text nr-empty">No photos attached.</p>
+                )}
+              </>
             )}
           </div>
 
           {/* Footer */}
           <div className="nr-report-footer">
             <p>
-              This narrative report is submitted in compliance with the documentation
+              This {printMode === 'photos' ? 'photo documentation' : 'narrative report'} is submitted in compliance with the documentation
               requirements of the Commission on Audit (COA) and the Department of the
               Interior and Local Government (DILG).
             </p>
@@ -422,6 +450,7 @@ function NarrativeReportPreview({ data, onClose }) {
             </p>
           </div>
         </div>
+        )}
       </div>
     </div>
   )

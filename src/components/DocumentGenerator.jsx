@@ -107,7 +107,7 @@ function DocumentGenerator() {
   const [prNumber, setPrNumber] = useState('')
   const [docDate, setDocDate] = useState(todayISO())
   const [requestedByName, setRequestedByName] = useState('')
-  const [approvedByName, setApprovedByName] = useState(DEFAULTS.punongBarangay)
+  const [approvedByName, setApprovedByName] = useState('')
   const [items, setItems] = useState([])
 
   // PO-only fields
@@ -350,17 +350,17 @@ function DocumentGenerator() {
   return (
     <div className="doc-gen-section">
       {/* Document type toggle */}
-      <div className="doc-type-toggle">
-        {DOC_TYPES.map((dt) => (
-          <button
-            key={dt.id}
-            type="button"
-            className={`doc-type-btn ${docType === dt.id ? 'is-active' : ''}`}
-            onClick={() => setDocType(dt.id)}
-          >
-            {dt.label}
-          </button>
-        ))}
+      <div className="doc-type-toggle" style={{ marginBottom: '16px', display: 'block' }}>
+        <label className="field">
+          <span>Select Document Type</span>
+          <select className="panel-select" style={{ width: '100%', maxWidth: '400px' }} value={docType} onChange={(e) => setDocType(e.target.value)}>
+            {DOC_TYPES.map((dt) => (
+              <option key={dt.id} value={dt.id}>
+                {dt.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {/* Select existing request — only for request-linked docs */}
@@ -442,7 +442,7 @@ function DocumentGenerator() {
                 />
               </label>
               <label className="field">
-                <span>Approved By (Punong Barangay)</span>
+                <span>Approved By (SK Chairman)</span>
                 <input
                   type="text"
                   value={approvedByName}

@@ -191,12 +191,6 @@ function ProfilePage() {
             >
               Change Password
             </button>
-            <button
-              className="secondary-button"
-              onClick={() => navigate('/dashboard/profile/update-otp')}
-            >
-              Update Account via Email OTP Verification
-            </button>
             {role === 'SK Chairman' ? (
               <button
                 className="secondary-button"

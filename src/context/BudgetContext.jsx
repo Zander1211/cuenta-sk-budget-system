@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useAuditLog } from './AuditLogContext'
 import { useNotifications } from './NotificationContext'
+import { useAuth } from './AuthContext'
 import { supabase } from '../supabase/supabaseClient'
 
 const BudgetContext = createContext(null)
-const STORAGE_KEY = 'cuenta.budgetData.v2'
+const STORAGE_KEY = 'cuenta.budgetData.v3'
 
 const defaultRequests = []
 const monthLabels = [
@@ -72,10 +73,12 @@ function getInitialState() {
     const parsed = JSON.parse(stored)
     const budgets = (parsed.budgets ?? [])
       .map((item) => {
-        // Support migration from month to quarter
         let quarter = Number(item.quarter)
-        if (!Number.isFinite(quarter) && Number.isFinite(Number(item.month))) {
-          quarter = Math.floor(Number(item.month) / 3) + 1
+        let month = Number(item.month)
+        if (!Number.isFinite(quarter) && Number.isFinite(month)) {
+          quarter = Math.floor((month - 1) / 3) + 1
+        } else if (!Number.isFinite(month) && Number.isFinite(quarter)) {
+          month = (quarter - 1) * 3 + 1 // Default to first month of quarter if missing
         }
         const year = Number(item.year)
         if (!Number.isFinite(quarter) || !Number.isFinite(year)) {
@@ -87,6 +90,7 @@ function getInitialState() {
 
         return {
           id: item.id || `${Date.now()}-${Math.random()}`,
+          month,
           quarter,
           year,
           amount: Number(item.amount) || 0,
@@ -96,10 +100,16 @@ function getInitialState() {
       .filter(Boolean)
     const requests = (parsed.requests ?? defaultRequests).map((item) => {
         const breakdown = Array.isArray(item.breakdown) ? item.breakdown : []
+        const expensesBreakdown = Array.isArray(item.expensesBreakdown) ? item.expensesBreakdown : []
         return {
           ...item,
           amount: Number(item.amount) || 0,
           breakdown: breakdown.map((entry) => ({
+            ...entry,
+            quantity: Number(entry.quantity) || 0,
+            unitCost: Number(entry.unitCost) || 0,
+          })),
+          expensesBreakdown: expensesBreakdown.map((entry) => ({
             ...entry,
             quantity: Number(entry.quantity) || 0,
             unitCost: Number(entry.unitCost) || 0,
@@ -125,6 +135,7 @@ function getInitialState() {
 function BudgetProvider({ children }) {
   const { addLog } = useAuditLog()
   const { addNotification } = useNotifications()
+  const { isAuthenticated } = useAuth()
   const [budgets, setBudgets] = useState(() => getInitialState().budgets)
   const [requests, setRequests] = useState(() => getInitialState().requests)
   const [expenses, setExpenses] = useState(() => getInitialState().expenses)
@@ -171,21 +182,25 @@ function BudgetProvider({ children }) {
   }
 
 
-  // Attempt to sync expenses from Supabase (read-only) on mount
+  // Attempt to sync expenses from Supabase (read-only) when authenticated
   useEffect(() => {
-    loadExpensesFromSupabase()
-  }, [])
+    if (isAuthenticated) {
+      loadExpensesFromSupabase()
+    }
+  }, [isAuthenticated])
 
-  function addQuarterlyBudget({ quarter, year, amount }) {
-    const normalizedQuarter = Number(quarter)
+  function addMonthlyBudget({ month, year, amount }) {
+    const normalizedMonth = Number(month)
     const normalizedYear = Number(year)
 
-    if (!Number.isFinite(normalizedQuarter) || !Number.isFinite(normalizedYear)) {
+    if (!Number.isFinite(normalizedMonth) || !Number.isFinite(normalizedYear)) {
       return
     }
-    if (normalizedQuarter < 1 || normalizedQuarter > 4) {
+    if (normalizedMonth < 1 || normalizedMonth > 12) {
       return
     }
+
+    const quarter = Math.floor((normalizedMonth - 1) / 3) + 1;
 
     const id =
       typeof crypto !== 'undefined' && crypto.randomUUID
@@ -195,7 +210,8 @@ function BudgetProvider({ children }) {
     setBudgets((prev) => [
       {
         id,
-        quarter: normalizedQuarter,
+        month: normalizedMonth,
+        quarter,
         year: normalizedYear,
         amount: Number(amount) || 0,
         createdAt: new Date().toISOString(),
@@ -204,7 +220,7 @@ function BudgetProvider({ children }) {
     ])
 
     addLog({
-      action: `Added quarterly budget: Q${normalizedQuarter} ${normalizedYear} (${amount})`,
+      action: `Added monthly budget: ${monthLabels[normalizedMonth - 1]} ${normalizedYear} (${amount})`,
     })
   }
 
@@ -239,6 +255,7 @@ function BudgetProvider({ children }) {
         description: request.description,
         notes: request.notes,
         breakdown: request.breakdown,
+        expensesBreakdown: request.expensesBreakdown || [],
         status: 'Approved',
         projectStatus: 'Ongoing',
         approvedAt: new Date().toISOString(),
@@ -261,6 +278,7 @@ function BudgetProvider({ children }) {
           ? {
               ...item,
               status: 'Rejected',
+              projectStatus: 'Rejected',
               rejectedAt: new Date().toISOString(),
               rejectionReason: reason,
             }
@@ -276,6 +294,27 @@ function BudgetProvider({ children }) {
       title: 'Budget Request Rejected',
       message: request ? `"${request.event}" was rejected. Reason: ${reason}` : `Request ${requestId} was rejected.`,
     })
+  }
+
+  function undoRejectRequest(requestId) {
+    const request = requests.find((item) => item.id === requestId)
+    if (!request) return
+
+    setRequests((prev) =>
+      prev.map((item) =>
+        item.id === requestId
+          ? {
+              ...item,
+              status: 'Pending',
+              projectStatus: 'Pending',
+              rejectedAt: null,
+              rejectionReason: null,
+            }
+          : item
+      )
+    )
+
+    addLog({ action: `Restored rejected budget request ${requestId} to Pending` })
   }
 
   function cancelApproval(requestId, reason) {
@@ -362,6 +401,7 @@ function BudgetProvider({ children }) {
     description,
     notes,
     breakdown = [],
+    expensesBreakdown = [],
   }) {
     const id =
       typeof crypto !== 'undefined' && crypto.randomUUID
@@ -381,6 +421,13 @@ function BudgetProvider({ children }) {
         archivedAt: null,
         breakdown: Array.isArray(breakdown)
           ? breakdown.map((entry) => ({
+              ...entry,
+              quantity: Number(entry.quantity) || 0,
+              unitCost: Number(entry.unitCost) || 0,
+            }))
+          : [],
+        expensesBreakdown: Array.isArray(expensesBreakdown)
+          ? expensesBreakdown.map((entry) => ({
               ...entry,
               quantity: Number(entry.quantity) || 0,
               unitCost: Number(entry.unitCost) || 0,
@@ -536,9 +583,10 @@ function BudgetProvider({ children }) {
       expenses,
       expensesSyncStatus,
       totals,
-      addQuarterlyBudget,
+      addMonthlyBudget,
       approveRequest,
       rejectRequest,
+      undoRejectRequest,
       cancelApproval,
       archiveRequest,
       restoreRequest,

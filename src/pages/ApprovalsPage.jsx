@@ -16,6 +16,7 @@ function ApprovalsPage() {
     cancelApproval,
     archiveRequest,
     restoreRequest,
+    undoRejectRequest,
     updateProjectStatus,
     updateRejectionReason,
     updateCancellationReason,
@@ -83,6 +84,10 @@ function ApprovalsPage() {
       return
     }
 
+    if (!window.confirm("Are you sure you want to reject this budget request? This action will update the request status to Rejected.")) {
+      return
+    }
+
     rejectRequest(requestId, rejectNote.trim())
     setRejectingId(null)
     setRejectNote('')
@@ -102,6 +107,10 @@ function ApprovalsPage() {
   function submitCancel(requestId) {
     if (!cancelNote.trim()) {
       setCancelError('Please add a cancellation reason.')
+      return
+    }
+
+    if (!window.confirm("Are you sure you want to cancel the approval of this project or event? This action will reverse the approved budget allocation and update all related budget calculations.")) {
       return
     }
 
@@ -142,13 +151,25 @@ function ApprovalsPage() {
     const breakdownItems = Array.isArray(request.breakdown)
       ? request.breakdown
       : []
+    const expensesItems = Array.isArray(request.expensesBreakdown)
+      ? request.expensesBreakdown
+      : []
     const breakdownTotal = getBreakdownTotal(breakdownItems)
+    const expensesTotal = getBreakdownTotal(expensesItems)
+    const combinedTotalCost = breakdownTotal + expensesTotal
     const requestedAmount = Number(request.amount) || 0
-    const totalAmount = requestedAmount > 0 ? requestedAmount : breakdownTotal
-    const hasBreakdown = breakdownItems.length > 0
-    const projectStatus = request.projectStatus || 'Pending'
+    const totalAmount = requestedAmount > 0 ? requestedAmount : combinedTotalCost
+    const hasBreakdown = breakdownItems.length > 0 || expensesItems.length > 0
     const isApproved = request.status === 'Approved'
-    const columnCount = showArchivedAt ? 10 : 9
+    const isRejected = request.status === 'Rejected'
+    const isCancelled = request.status === 'Cancelled'
+    
+    let displayProjectStatus = request.projectStatus || 'Pending'
+    if (isRejected) displayProjectStatus = 'Rejected'
+    if (isCancelled) displayProjectStatus = 'Cancelled'
+    if (displayProjectStatus === 'Pending' && isApproved) displayProjectStatus = 'Ongoing' // Fallback for old approved data
+
+    const columnCount = showArchivedAt ? 8 : 7
 
     return (
       <Fragment key={request.id}>
@@ -162,19 +183,11 @@ function ApprovalsPage() {
               : '—'}
           </td>
           <td>{request.venue || '—'}</td>
-          <td>{request.requestedBy}</td>
-          <td>
-            <span
-              className={`status-pill status-${(request.status || 'Pending').toLowerCase()}`}
-            >
-              {request.status || 'Pending'}
-            </span>
-          </td>
           <td>
             {isApproved ? (
               <select
                 className="project-status-select"
-                value={projectStatus}
+                value={displayProjectStatus}
                 onChange={(e) =>
                   updateProjectStatus(request.id, e.target.value)
                 }
@@ -184,9 +197,9 @@ function ApprovalsPage() {
               </select>
             ) : (
               <span
-                className={`status-pill status-${projectStatus.toLowerCase()}`}
+                className={`status-pill status-${displayProjectStatus.toLowerCase()}`}
               >
-                {projectStatus}
+                {displayProjectStatus}
               </span>
             )}
           </td>
@@ -205,33 +218,6 @@ function ApprovalsPage() {
             >
               {expanded[request.id] ? 'Hide' : 'View'}
             </button>
-            {allowCancel && isApproved ? (
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => startCancel(request.id)}
-              >
-                Cancel Approval
-              </button>
-            ) : null}
-            {allowReject ? (
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => startReject(request.id)}
-              >
-                Reject
-              </button>
-            ) : null}
-            {allowApprove ? (
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => approveRequest(request.id)}
-              >
-                Approve
-              </button>
-            ) : null}
             {allowArchive ? (
               <button
                 className="secondary-button"
@@ -274,7 +260,7 @@ function ApprovalsPage() {
                   <div>
                     <p className="details-label">Total cost</p>
                     <p className="details-value">
-                      {hasBreakdown ? currency.format(breakdownTotal) : '—'}
+                      {hasBreakdown ? currency.format(combinedTotalCost) : '—'}
                     </p>
                   </div>
                   <div>
@@ -283,12 +269,7 @@ function ApprovalsPage() {
                       {request.description || '—'}
                     </p>
                   </div>
-                  <div>
-                    <p className="details-label">Notes / supporting info</p>
-                    <p className="details-value">
-                      {request.notes || '—'}
-                    </p>
-                  </div>
+
                   <div>
                     <p className="details-label">Event date</p>
                     <p className="details-value">
@@ -300,10 +281,6 @@ function ApprovalsPage() {
                   <div>
                     <p className="details-label">Venue</p>
                     <p className="details-value">{request.venue || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="details-label">Requested by</p>
-                    <p className="details-value">{request.requestedBy}</p>
                   </div>
                   <div>
                     <p className="details-label">Submitted</p>
@@ -344,14 +321,56 @@ function ApprovalsPage() {
                           <th colSpan="3">Total cost</th>
                           <th>{currency.format(breakdownTotal)}</th>
                         </tr>
+                      </tfoot>
+                    </table>
+                  ) : (
+                    <p className="details-value">No requisition provided.</p>
+                  )}
+                </div>
+
+                <div className="details-breakdown" style={{ marginTop: '16px' }}>
+                  <p className="details-label">Actual Expenses</p>
+                  {expensesItems.length ? (
+                    <table className="data-table">
+                      <thead>
                         <tr>
-                          <th colSpan="3">Total amount</th>
+                          <th>Expense item</th>
+                          <th>Quantity</th>
+                          <th>Unit cost</th>
+                          <th>Total cost</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expensesItems.map((item, index) => (
+                          <tr key={`${request.id}-expense-${index}`}>
+                            <td>{item.itemName || '—'}</td>
+                            <td>{item.quantity || 0}</td>
+                            <td>{currency.format(item.unitCost || 0)}</td>
+                            <td>
+                              {currency.format(
+                                (item.quantity || 0) * (item.unitCost || 0)
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <th colSpan="3">Total expenses</th>
+                          <th>{currency.format(expensesTotal)}</th>
+                        </tr>
+                        <tr>
+                          <th colSpan="3">Combined total cost</th>
+                          <th>{currency.format(combinedTotalCost)}</th>
+                        </tr>
+                        <tr>
+                          <th colSpan="3">Total requested amount</th>
                           <th>{currency.format(totalAmount)}</th>
                         </tr>
                       </tfoot>
                     </table>
                   ) : (
-                    <p className="details-value">No breakdown provided.</p>
+                    <p className="details-value">No expenses provided.</p>
                   )}
                 </div>
 
@@ -410,7 +429,7 @@ function ApprovalsPage() {
                 {allowReject && rejectingId === request.id ? (
                   <div className="reject-panel">
                     <label className="field">
-                      <span>Rejection note</span>
+                      <span>Rejection Reason</span>
                       <textarea
                         rows="3"
                         value={rejectNote}
@@ -473,6 +492,27 @@ function ApprovalsPage() {
                     </div>
                   </div>
                 ) : null}
+
+                {!rejectingId && !cancellingId && (allowApprove || allowReject || (allowCancel && isApproved) || (request.status === 'Rejected' && !request.archivedAt)) && (
+                  <div className="details-actions" style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-light)', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    {request.status === 'Rejected' && !request.archivedAt ? (
+                      <button className="secondary-button" type="button" onClick={() => {
+                        if (window.confirm("Are you sure you want to undo the rejection? This will move the request back to Pending.")) {
+                          undoRejectRequest(request.id)
+                        }
+                      }}>Undo Reject</button>
+                    ) : null}
+                    {allowCancel && isApproved ? (
+                      <button className="secondary-button" type="button" onClick={() => startCancel(request.id)}>Cancel Approval</button>
+                    ) : null}
+                    {allowReject ? (
+                      <button className="secondary-button" type="button" style={{ color: '#e53e3e', borderColor: '#e53e3e' }} onClick={() => startReject(request.id)}>Reject</button>
+                    ) : null}
+                    {allowApprove ? (
+                      <button className="primary-button" type="button" onClick={() => approveRequest(request.id)}>Approve</button>
+                    ) : null}
+                  </div>
+                )}
               </div>
             </td>
           </tr>
@@ -493,7 +533,7 @@ function ApprovalsPage() {
       <header className="dashboard-header">
         <div className="header-left">
           <div>
-            <p className="eyebrow">Approvals</p>
+            <p className="eyebrow">Request Review</p>
             <h1>Budget requests</h1>
             <p>Requests submitted by the SK Treasurer appear here.</p>
           </div>
@@ -501,7 +541,7 @@ function ApprovalsPage() {
         <div
           className="header-actions page-tabs"
           role="tablist"
-          aria-label="Approvals views"
+          aria-label="Request Review views"
         >
           <button
             className={`page-tab ${
@@ -543,7 +583,7 @@ function ApprovalsPage() {
         {activeTab === 'pending' ? (
           <div className="overview-card">
             <p className="eyebrow">Pending requests</p>
-            <h2>Awaiting SK Chairman approval</h2>
+            <h2>Awaiting SK Chairman review</h2>
             <table className="data-table">
               <thead>
                 <tr>
@@ -552,8 +592,6 @@ function ApprovalsPage() {
                   <th>Total amount</th>
                   <th>Event Date</th>
                   <th>Venue</th>
-                  <th>Requested by</th>
-                  <th>Status</th>
                   <th>Project Status</th>
                   <th></th>
                 </tr>
@@ -569,7 +607,7 @@ function ApprovalsPage() {
                   )
                 ) : (
                   <tr>
-                    <td colSpan="9" className="empty-state">
+                    <td colSpan="7" className="empty-state">
                       No pending requests right now.
                     </td>
                   </tr>
@@ -589,8 +627,6 @@ function ApprovalsPage() {
                   <th>Total amount</th>
                   <th>Event Date</th>
                   <th>Venue</th>
-                  <th>Requested by</th>
-                  <th>Status</th>
                   <th>Project Status</th>
                   <th></th>
                 </tr>
@@ -605,7 +641,7 @@ function ApprovalsPage() {
                   )
                 ) : (
                   <tr>
-                    <td colSpan="9" className="empty-state">
+                    <td colSpan="7" className="empty-state">
                       No requests yet.
                     </td>
                   </tr>
@@ -625,8 +661,6 @@ function ApprovalsPage() {
                   <th>Total amount</th>
                   <th>Event Date</th>
                   <th>Venue</th>
-                  <th>Requested by</th>
-                  <th>Status</th>
                   <th>Project Status</th>
                   <th>Archived</th>
                   <th></th>
@@ -642,7 +676,7 @@ function ApprovalsPage() {
                   )
                 ) : (
                   <tr>
-                    <td colSpan="10" className="empty-state">
+                    <td colSpan="8" className="empty-state">
                       No archived requests yet.
                     </td>
                   </tr>

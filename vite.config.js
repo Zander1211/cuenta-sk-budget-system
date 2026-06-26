@@ -20,7 +20,7 @@ function localRecaptchaMock(env) {
                 return
               }
 
-              const secret = env.RECAPTCHA_SECRET_KEY
+              const secret = env.RECAPTCHA_SECRET_KEY?.trim()
               if (!secret) {
                 res.statusCode = 500
                 res.end(JSON.stringify({ error: 'Server configuration missing RECAPTCHA_SECRET_KEY locally' }))
