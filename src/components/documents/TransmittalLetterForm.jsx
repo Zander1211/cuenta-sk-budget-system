@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import CurrencyInput from '../CurrencyInput';
 import { PlusCircle, Trash2 } from 'lucide-react'
 
 const currency = new Intl.NumberFormat('en-PH', {
@@ -191,7 +192,7 @@ function TransmittalLetterForm({ profileName, role, onPreview }) {
                     <input type="text" value={row.payee} onChange={(e) => updateDvRow(idx, 'payee', e.target.value)} placeholder="Payee name" />
                   </td>
                   <td>
-                    <input type="number" min="0" step="0.01" value={row.amount} onChange={(e) => updateDvRow(idx, 'amount', e.target.value)} placeholder="0.00" />
+                    <CurrencyInput value={row.amount} onValueChange={(val) => updateDvRow(idx, 'amount', Number(val))} placeholder="0.00" />
                   </td>
                   <td>
                     <input type="date" value={row.skcDate} onChange={(e) => updateDvRow(idx, 'skcDate', e.target.value)} />
@@ -244,7 +245,7 @@ function TransmittalLetterForm({ profileName, role, onPreview }) {
                     <input type="text" value={row.no} onChange={(e) => updateRcdRow(idx, 'no', e.target.value)} />
                   </td>
                   <td>
-                    <input type="number" min="0" step="0.01" value={row.amount} onChange={(e) => updateRcdRow(idx, 'amount', e.target.value)} placeholder="0.00" />
+                    <CurrencyInput value={row.amount} onValueChange={(val) => updateRcdRow(idx, 'amount', Number(val))} placeholder="0.00" />
                   </td>
                   <td>
                     <button type="button" className="remove-row-btn" onClick={() => removeRcdRow(idx)} title="Remove">

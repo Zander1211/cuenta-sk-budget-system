@@ -20,7 +20,10 @@ import ProfilePage from './pages/ProfilePage'
 import BudgetRequestsPage from './pages/BudgetRequestsPage'
 import NarrativeReportPage from './pages/NarrativeReportPage'
 import AnnualReportPage from './pages/AnnualReportPage'
-import ApprovedProjectsPage from './pages/ApprovedProjectsPage'
+import ExpenseSummaryPage from './pages/ExpenseSummaryPage'
+import NewRequestPage from './pages/NewRequestPage'
+import EventsPage from './pages/EventsPage'
+import PayrollPage from './pages/PayrollPage'
 import UpdateDetailsPage from './pages/UpdateDetailsPage'
 import ChangePasswordPage from './pages/ChangePasswordPage'
 import UpdateOtpPage from './pages/UpdateOtpPage'
@@ -28,6 +31,7 @@ import UpdateEmailPage from './pages/UpdateEmailPage'
 import { AuditLogProvider } from './context/AuditLogContext'
 import { BudgetProvider } from './context/BudgetContext'
 import { BackupRestoreProvider } from './context/BackupRestoreContext'
+import { DocumentProvider } from './context/DocumentContext'
 import ChatWidget from './components/ChatWidget'
 import { NotificationProvider } from './context/NotificationContext'
 
@@ -48,6 +52,7 @@ function AppRoutes() {
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="expenses" element={<ExpensesPage />} />
           <Route path="request" element={<RequestPage />} />
+          <Route path="request/new" element={<NewRequestPage />} />
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="approvals" element={<ApprovalsPage />} />
           <Route path="ai-analysis" element={<AiAnalysisPage />} />
@@ -56,7 +61,9 @@ function AppRoutes() {
           <Route path="backup-restore" element={<BackupRestorePage />} />
           <Route path="user-management" element={<UserManagementPage />} />
           <Route path="budget-requests" element={<BudgetRequestsPage />} />
-          <Route path="approved-projects" element={<ApprovedProjectsPage />} />
+          <Route path="events" element={<EventsPage />} />
+          <Route path="payroll" element={<PayrollPage />} />
+          <Route path="expense-summary" element={<ExpenseSummaryPage />} />
           <Route path="receipt-details" element={<ReceiptDetailsPage />} />
           <Route path="narrative-report" element={<NarrativeReportPage />} />
           <Route path="annual-report" element={<AnnualReportPage />} />
@@ -82,7 +89,9 @@ function App() {
         <NotificationProvider>
           <BudgetProvider>
             <BackupRestoreProvider>
-              <AppRoutes />
+              <DocumentProvider>
+                <AppRoutes />
+              </DocumentProvider>
             </BackupRestoreProvider>
           </BudgetProvider>
         </NotificationProvider>

@@ -115,6 +115,7 @@ function AuditLogProvider({ children }) {
   // ── Clear all logs (SK Chairman only) ────────────────────────
   async function clearLogs() {
     try {
+      const STORAGE_KEY = 'cuenta.auditLogData.v4'
       const { error } = await supabase
         .from('audit_trail')
         .delete()

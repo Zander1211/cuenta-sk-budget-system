@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Wallet, Receipt, PieChart, ClipboardCheck } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
-import { useBudget } from '../context/BudgetContext'
+import { useBudget, useBudgetCalculations } from '../context/BudgetContext'
 import { supabase } from '../supabase/supabaseClient'
 
 
@@ -142,27 +142,10 @@ function AiAnalysisPage() {
     return date.getFullYear() === selectedYear
   }
 
-  function budgetMatchesPeriod(budget) {
-    if (!Number.isFinite(budget.month) || !Number.isFinite(budget.year)) return false
-    if (viewMode === 'monthly') {
-      return budget.year === selectedYear && budget.month === selectedMonth
-    }
-    return budget.year === selectedYear
-  }
-
-  const filteredBudgets = budgets.filter(budgetMatchesPeriod)
-  const totalBudget = filteredBudgets.reduce((sum, budget) => sum + Number(budget.amount || 0), 0)
-
-  const filteredExpenses = expenses.filter((expense) => {
-    if (expense.archivedAt || expense.status === 'Cancelled') return false
-    return isInPeriod(expense.approvedAt || expense.createdAt || expense.eventDate || expense.date)
-  })
-  const totalExpenses = filteredExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0)
-
-  const remainingBudget = totalBudget - totalExpenses
+  const targetMonth = viewMode === 'monthly' ? selectedMonth : null
+  const { totalBudget, totalExpenses, remainingBalance: remainingBudget, hasBudgetData } = useBudgetCalculations(targetMonth, selectedYear)
   const usedPercentOld = totalBudget > 0 ? Math.min(100, Math.round((totalExpenses / totalBudget) * 100)) : 0
   const remainingPercent = totalBudget > 0 ? Math.max(0, 100 - usedPercentOld) : 0
-  const hasBudgetData = totalBudget > 0
 
   const filteredRequests = requests.filter((request) => isInPeriod(request.submittedAt || request.createdAt || request.eventDate))
   const pendingCount = filteredRequests.filter(req => (!req.status || req.status === 'Pending') && !req.archivedAt).length
@@ -171,9 +154,9 @@ function AiAnalysisPage() {
     {
       label: 'Total Budget',
       value: currency.format(totalBudget),
-      meta: filteredBudgets.length ? `Allocated for ${periodLabel}` : 'No budget entries yet',
-      chip: filteredBudgets.length ? (viewMode === 'monthly' ? 'Monthly' : 'Yearly') : 'Empty',
-      tone: filteredBudgets.length ? 'positive' : 'neutral',
+      meta: hasBudgetData ? `Allocated for ${periodLabel}` : 'No budget entries yet',
+      chip: hasBudgetData ? (viewMode === 'monthly' ? 'Monthly' : 'Yearly') : 'Empty',
+      tone: hasBudgetData ? 'positive' : 'neutral',
     },
     {
       label: 'Total Expenses',
@@ -685,6 +668,32 @@ function AiAnalysisPage() {
             </div>
             <span className="ai-chip ai-chip-accent">Powered by AI</span>
           </div>
+            <div style={{ marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>Risk Level Guide</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '4px solid #ef4444', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#ef4444' }}></span>
+                    <strong style={{ fontSize: '13px', color: '#b91c1c' }}>High Risk</strong>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event has a high likelihood of exceeding its allocated budget or experiencing significant financial issues.</p>
+                </div>
+                <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '4px solid #f59e0b', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#f59e0b' }}></span>
+                    <strong style={{ fontSize: '13px', color: '#b45309' }}>Medium Risk</strong>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event is currently within an acceptable budget range but requires close monitoring.</p>
+                </div>
+                <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '4px solid #10b981', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#10b981' }}></span>
+                    <strong style={{ fontSize: '13px', color: '#047857' }}>Low Risk</strong>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event is being managed efficiently and is well within its allocated budget.</p>
+                </div>
+              </div>
+            </div>
             <div className="ai-insight-list">
               {insights.map((item, index) => (
                 <div
@@ -778,15 +787,6 @@ function AiAnalysisPage() {
                 ? `${Math.abs(Math.round(spendingTrend.delta))}% from last month`
                 : 'Flat vs last month'}
             </span>
-          </div>
-          <div className="stat-card ai-mini-card">
-            <span className="ai-mini-title">Budget Prediction</span>
-            <span className="ai-mini-value">
-              {runwayMonths === null
-                ? 'N/A'
-                : `${Math.max(0, runwayMonths).toFixed(1)} months`}
-            </span>
-            <span className="ai-mini-meta">Remaining budget runway</span>
           </div>
         </div>
 

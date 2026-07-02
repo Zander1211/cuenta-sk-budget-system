@@ -88,3 +88,14 @@ export async function verifyEmailOtp(email, token) {
 
   return { data, error }
 }
+
+// VERIFY EMAIL UPDATE OTP
+export async function verifyEmailUpdateOtp(email, token) {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: 'email_change',
+  })
+
+  return { data, error }
+}

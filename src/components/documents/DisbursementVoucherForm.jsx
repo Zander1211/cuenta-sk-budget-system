@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import CurrencyInput from '../CurrencyInput'
 import { PlusCircle, Trash2 } from 'lucide-react'
 import { supabase } from '../../supabase/supabaseClient'
 
@@ -155,12 +156,9 @@ function DisbursementVoucherForm({ profileName, role, selectedRequest, onPreview
         </label>
         <label className="field">
           <span>Amount</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
+          <CurrencyInput
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onValueChange={(val) => setAmount(Number(val))}
             placeholder="0.00"
           />
         </label>

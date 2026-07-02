@@ -27,25 +27,39 @@ function UserManagementPage() {
   const [formStatus, setFormStatus] = useState('')
   const { addLog } = useAuditLog()
 
+  // Edit state
+  const [editingRoleId, setEditingRoleId] = useState(null)
+  const [editRoleValue, setEditRoleValue] = useState('')
+  const [updatingId, setUpdatingId] = useState(null)
+
+  // Deactivate confirmation modal
+  const [deactivateModal, setDeactivateModal] = useState({ open: false, account: null, action: '' })
+
   useEffect(() => {
-    async function loadAccounts() {
-      const { data, error } = await supabase
-        .from('created_accounts')
-        .select('id, full_name, email, role, created_at')
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        setFormError('Create the created_accounts table to load users.')
-        setIsLoading(false)
-        return
-      }
-
-      setAccounts(data ?? [])
-      setIsLoading(false)
-    }
-
     loadAccounts()
   }, [])
+
+  async function loadAccounts() {
+    const { data, error } = await supabase
+      .from('created_accounts')
+      .select('id, full_name, email, role, created_at')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      setFormError('Create the created_accounts table to load users.')
+      setIsLoading(false)
+      return
+    }
+
+    // Normalize is_active — default to true if column doesn't exist yet
+    const normalized = (data ?? []).map((account) => ({
+      ...account,
+      is_active: account.is_active !== false,
+    }))
+
+    setAccounts(normalized)
+    setIsLoading(false)
+  }
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -106,7 +120,11 @@ function UserManagementPage() {
       return
     }
 
-    addLog({ action: `Created account for ${name} (${formState.role})` })
+    addLog({
+      action: `Created account for ${name} (${formState.role})`,
+      module: 'User Management',
+      description: `Email: ${email}, Role: ${formState.role}`,
+    })
     setFormStatus('Account created. The user can log in after email verification.')
 
     setFormState({
@@ -116,12 +134,91 @@ function UserManagementPage() {
       role: roles[0],
     })
 
-    const { data: refreshed } = await supabase
-      .from('created_accounts')
-      .select('id, full_name, email, role, created_at')
-      .order('created_at', { ascending: false })
-    setAccounts(refreshed ?? [])
+    await loadAccounts()
     setIsSubmitting(false)
+  }
+
+  // ── Edit Role ─────────────────────────────────────────────────
+  function startEditRole(account) {
+    setEditingRoleId(account.id)
+    setEditRoleValue(account.role)
+  }
+
+  function cancelEditRole() {
+    setEditingRoleId(null)
+    setEditRoleValue('')
+  }
+
+  async function saveRole(account) {
+    if (editRoleValue === account.role) {
+      cancelEditRole()
+      return
+    }
+
+    setUpdatingId(account.id)
+
+    const { error } = await supabase
+      .from('created_accounts')
+      .update({ role: editRoleValue })
+      .eq('id', account.id)
+
+    if (error) {
+      console.warn('Failed to update role:', error.message)
+      setUpdatingId(null)
+      return
+    }
+
+    addLog({
+      action: `Changed role for ${account.full_name} from ${account.role} to ${editRoleValue}`,
+      module: 'User Management',
+      description: `Email: ${account.email}`,
+    })
+
+    setEditingRoleId(null)
+    setEditRoleValue('')
+    setUpdatingId(null)
+    await loadAccounts()
+  }
+
+  // ── Deactivate / Reactivate ──────────────────────────────────
+  function openDeactivateModal(account) {
+    const action = account.is_active ? 'deactivate' : 'reactivate'
+    setDeactivateModal({ open: true, account, action })
+  }
+
+  function closeDeactivateModal() {
+    setDeactivateModal({ open: false, account: null, action: '' })
+  }
+
+  async function confirmToggleActive() {
+    const { account, action } = deactivateModal
+    if (!account) return
+
+    setUpdatingId(account.id)
+    closeDeactivateModal()
+
+    const newStatus = action === 'deactivate' ? false : true
+
+    const { error } = await supabase
+      .from('created_accounts')
+      .update({ is_active: newStatus })
+      .eq('id', account.id)
+
+    if (error) {
+      console.warn(`Failed to ${action} account:`, error.message)
+      setUpdatingId(null)
+      return
+    }
+
+    const actionLabel = action === 'deactivate' ? 'Deactivated' : 'Reactivated'
+    addLog({
+      action: `${actionLabel} account for ${account.full_name}`,
+      module: 'User Management',
+      description: `Email: ${account.email}, Role: ${account.role}`,
+    })
+
+    setUpdatingId(null)
+    await loadAccounts()
   }
 
   return (
@@ -132,8 +229,8 @@ function UserManagementPage() {
             <p className="eyebrow">User Management</p>
             <h1>Create and assign user accounts</h1>
             <p>
-              The SK Chairman can create accounts and assign roles for SK
-              Treasurer, SK Kagawad, or Barangay Treasurer.
+              The SK Chairman can create accounts, assign roles, edit roles, and
+              deactivate or reactivate user accounts.
             </p>
           </div>
         </div>
@@ -222,28 +319,77 @@ function UserManagementPage() {
                   <th>Name</th>
                   <th>Email</th>
                   <th>Role</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan="3" className="empty-state">
+                    <td colSpan="5" className="empty-state">
                       Loading accounts...
                     </td>
                   </tr>
                 ) : accounts.length ? (
                   accounts.map((user) => (
-                    <tr key={user.id}>
+                    <tr key={user.id} style={{ opacity: user.is_active ? 1 : 0.55 }}>
                       <td>{user.full_name}</td>
                       <td>{user.email}</td>
                       <td>
-                        <span className="role-pill">{user.role}</span>
+                        {editingRoleId === user.id ? (
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <select
+                              className="panel-select"
+                              value={editRoleValue}
+                              onChange={(e) => setEditRoleValue(e.target.value)}
+                              style={{ minWidth: '140px', fontSize: '0.85rem' }}
+                            >
+                              {roles.map((r) => (
+                                <option key={r} value={r}>{r}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              className="text-button"
+                              style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '0.8rem' }}
+                              onClick={() => saveRole(user)}
+                              disabled={updatingId === user.id}
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              className="text-button"
+                              style={{ fontSize: '0.8rem' }}
+                              onClick={cancelEditRole}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="role-pill">{user.role}</span>
+                        )}
+                      </td>
+
+                      <td style={{ textAlign: 'right' }}>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                          {editingRoleId !== user.id && (
+                            <button
+                              type="button"
+                              className="text-button"
+                              style={{ fontSize: '0.8rem' }}
+                              onClick={() => startEditRole(user)}
+                              disabled={updatingId === user.id}
+                            >
+                              Edit Role
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="3" className="empty-state">
+                    <td colSpan="4" className="empty-state">
                       No accounts yet. Create the first user.
                     </td>
                   </tr>
@@ -253,6 +399,62 @@ function UserManagementPage() {
           </div>
         </div>
       </section>
+
+      {/* Deactivate / Reactivate Confirmation Modal */}
+      {deactivateModal.open && deactivateModal.account && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <h2>
+                {deactivateModal.action === 'deactivate'
+                  ? 'Deactivate Account'
+                  : 'Reactivate Account'}
+              </h2>
+            </div>
+            <div className="modal-body" style={{ margin: '16px 0' }}>
+              <p>
+                {deactivateModal.action === 'deactivate' ? (
+                  <>
+                    Are you sure you want to deactivate the account for{' '}
+                    <strong>{deactivateModal.account.full_name}</strong>? The
+                    user will no longer be able to access the system.
+                  </>
+                ) : (
+                  <>
+                    Reactivate the account for{' '}
+                    <strong>{deactivateModal.account.full_name}</strong>? The
+                    user will regain access to the system.
+                  </>
+                )}
+              </p>
+            </div>
+            <div
+              className="modal-footer"
+              style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}
+            >
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={closeDeactivateModal}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                style={
+                  deactivateModal.action === 'deactivate'
+                    ? { backgroundColor: '#ef4444', color: 'white', borderColor: '#ef4444' }
+                    : {}
+                }
+                onClick={confirmToggleActive}
+              >
+                {deactivateModal.action === 'deactivate' ? 'Deactivate' : 'Reactivate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </RoleGate>
   )
 }

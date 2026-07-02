@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useAuth } from './AuthContext'
 
 const NotificationContext = createContext(null)
-const STORAGE_KEY = 'cuenta.notifications'
+const STORAGE_KEY = 'cuenta.notifications.v2'
 
 function getStoredNotifications() {
   if (typeof window === 'undefined') return []

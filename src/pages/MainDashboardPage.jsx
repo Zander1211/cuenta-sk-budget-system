@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import NotificationBell from '../components/NotificationBell'
 import { useAuth } from '../context/AuthContext'
-import { useBudget } from '../context/BudgetContext'
+import { useBudget, useBudgetCalculations } from '../context/BudgetContext'
 import GlobalSearch from '../components/GlobalSearch'
 
 const currency = new Intl.NumberFormat('en-PH', {
@@ -90,33 +90,8 @@ function MainDashboardPage() {
     return date.getFullYear() === selectedYear
   }
 
-  function budgetMatchesPeriod(budget) {
-    if (!Number.isFinite(budget.month) || !Number.isFinite(budget.year)) {
-      return false
-    }
-    if (viewMode === 'monthly') {
-      return budget.year === selectedYear && budget.month === selectedMonth
-    }
-    return budget.year === selectedYear
-  }
-
-  const filteredBudgets = budgets.filter(budgetMatchesPeriod)
-  const totalBudget = filteredBudgets.reduce(
-    (sum, budget) => sum + Number(budget.amount || 0),
-    0
-  )
-
-  const filteredExpenses = expenses.filter((expense) => {
-    if (expense.archivedAt || expense.status === 'Cancelled') return false
-    return isInPeriod(
-      expense.approvedAt || expense.createdAt || expense.eventDate || expense.date
-    )
-  })
-  const totalExpenses = filteredExpenses.reduce(
-    (sum, item) => sum + Number(item.amount || 0),
-    0
-  )
-  const remainingBudget = totalBudget - totalExpenses
+  const targetMonth = viewMode === 'monthly' ? selectedMonth : null
+  const { totalBudget, totalExpenses, remainingBalance: remainingBudget, hasBudgetData } = useBudgetCalculations(targetMonth, selectedYear)
   const usedPercent = totalBudget > 0
     ? Math.min(100, Math.round((totalExpenses / totalBudget) * 100))
     : 0
@@ -126,7 +101,6 @@ function MainDashboardPage() {
   const allocationPercent = totalBudget > 0
     ? Math.min(100, Math.round((totalExpenses / totalBudget) * 100))
     : 0
-  const hasBudgetData = totalBudget > 0
   const greetingRole = role?.replace('SK ', '') || 'Team'
   const initials = role
     ? role
@@ -154,23 +128,28 @@ function MainDashboardPage() {
       (!request.status || request.status === 'Pending') && !request.archivedAt
   )
   const pendingCount = pendingRequests.length
-  const missingDocsCount = filteredExpenses.filter(
-    (expense) => !expense.receiptUrl && !expense.receiptName
-  ).length
+  
+  // To replace filteredExpenses, we can filter directly on validExpenses from useBudgetCalculations, 
+  // but since useBudgetCalculations doesn't export validExpenses, we can just filter from expenses directly.
+  const missingDocsCount = expenses.filter((expense) => {
+    if (expense.archivedAt || expense.status === 'Cancelled') return false
+    if (!isInPeriod(expense.approvedAt || expense.createdAt || expense.eventDate || expense.date)) return false
+    return !expense.receiptUrl && !expense.receiptName
+  }).length
 
   const summaryCards = [
     {
       label: 'Total Budget',
       value: currency.format(totalBudget),
-      meta: filteredBudgets.length
+      meta: hasBudgetData
         ? `Allocated for ${periodLabel}`
         : 'No budget entries yet',
-      chip: filteredBudgets.length
+      chip: hasBudgetData
         ? viewMode === 'monthly'
           ? 'Monthly'
           : 'Yearly'
         : 'Empty',
-      tone: filteredBudgets.length ? 'positive' : 'neutral',
+      tone: hasBudgetData ? 'positive' : 'neutral',
       icon: Wallet,
     },
     {
@@ -310,6 +289,12 @@ function MainDashboardPage() {
       </section>
 
       <section className="summary-grid">
+        {!hasBudgetData && pendingCount === 0 && missingDocsCount === 0 && totalExpenses === 0 ? (
+          <div className="empty-state" style={{ gridColumn: '1 / -1', padding: '48px', textAlign: 'center', background: '#fff', borderRadius: '12px', border: '1px dashed #d1d5db' }}>
+            <h3 style={{ color: '#4b5563', marginBottom: '8px' }}>No data available</h3>
+            <p style={{ color: '#6b7280' }}>There are no budget allocations, pending requests, or expenses recorded for {periodLabel}.</p>
+          </div>
+        ) : null}
         {summaryCards.map((card) => {
           const Icon = card.icon
           return (

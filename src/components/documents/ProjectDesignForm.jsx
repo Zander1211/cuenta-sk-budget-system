@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
+import CurrencyInput from '../CurrencyInput'
 import { PlusCircle, Trash2 } from 'lucide-react'
 
 const currency = new Intl.NumberFormat('en-PH', {
@@ -140,12 +141,9 @@ function ProjectDesignForm({ profileName, role, selectedRequest, onPreview }) {
         </label>
         <label className="field">
           <span>II. Cost</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
+          <CurrencyInput
             value={cost}
-            onChange={(e) => setCost(e.target.value)}
+            onValueChange={(val) => setCost(Number(val))}
             placeholder="0.00"
           />
         </label>
@@ -296,12 +294,9 @@ function ProjectDesignForm({ profileName, role, selectedRequest, onPreview }) {
                     />
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                    <CurrencyInput
                       value={item.unitCost}
-                      onChange={(e) => updateBudgetItem(idx, 'unitCost', e.target.value)}
+                      onValueChange={(val) => updateBudgetItem(idx, 'unitCost', Number(val))}
                     />
                   </td>
                   <td className="computed-cell">{currency.format(item.amount || 0)}</td>

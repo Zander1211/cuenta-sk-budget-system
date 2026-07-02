@@ -39,14 +39,26 @@ const navItems = [
   {
     label: 'Projects',
     path: '/dashboard/projects',
-    roles: ['SK Chairman', 'SK Treasurer'],
+    roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
     icon: Briefcase
   },
   {
-    label: 'Approved Projects',
-    path: '/dashboard/approved-projects',
-    roles: ['SK Kagawad', 'Barangay Treasurer'],
+    label: 'Events',
+    path: '/dashboard/events',
+    roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
     icon: CheckSquare
+  },
+  {
+    label: 'Payroll',
+    path: '/dashboard/payroll',
+    roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
+    icon: CheckSquare
+  },
+  {
+    label: 'Expense Summary',
+    path: '/dashboard/expense-summary',
+    roles: ['SK Kagawad', 'Barangay Treasurer'],
+    icon: Receipt
   },
   {
     label: 'Expenses',
@@ -63,7 +75,7 @@ const navItems = [
   {
     label: 'Documents',
     path: '/dashboard/documents',
-    roles: ['SK Chairman', 'SK Treasurer'],
+    roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
     icon: Files
   },
   {
@@ -115,6 +127,7 @@ function DashboardLayout() {
   const { addLog } = useAuditLog()
   const { role, isAuthenticated, profileName, profileSurname, refreshSession } = useAuth()
   const [isSidebarOpen, setSidebarOpen] = useState(false)
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
 
   if (!isAuthenticated) {
     return <Navigate to="/" replace />
@@ -135,7 +148,12 @@ function DashboardLayout() {
     addLog({ action: 'Opened notifications' })
   }
 
+  function confirmLogout() {
+    setIsLogoutModalOpen(true)
+  }
+
   async function handleLogout() {
+    setIsLogoutModalOpen(false)
     await logoutUser()
     await refreshSession()
     addLog({ action: 'Logged out' })
@@ -205,7 +223,7 @@ function DashboardLayout() {
               <button
                 className="logout-button"
                 type="button"
-                onClick={handleLogout}
+                onClick={confirmLogout}
               >
                 <LogOut size={20} className="nav-icon" />
                 <span className="nav-label">Logout</span>
@@ -218,6 +236,36 @@ function DashboardLayout() {
           </main>
         </div>
       </div>
+
+      {isLogoutModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2>Confirm Logout</h2>
+            </div>
+            <div className="modal-body" style={{ margin: '16px 0' }}>
+              <p>Are you sure you want to log out?</p>
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setIsLogoutModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                style={{ backgroundColor: '#ef4444', color: 'white', borderColor: '#ef4444' }}
+                onClick={handleLogout}
+              >
+                Log Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -191,15 +191,14 @@ function ProfilePage() {
             >
               Change Password
             </button>
-            {role === 'SK Chairman' ? (
-              <button
-                className="secondary-button"
-                onClick={() => navigate('/dashboard/profile/update-email')}
-              >
-                Update Email Address
-              </button>
-            ) : null}
+            <button
+              className="secondary-button"
+              onClick={() => navigate('/dashboard/profile/update-email')}
+            >
+              Update Email Address
+            </button>
           </div>
+
         </div>
       </section>
     </RoleGate>

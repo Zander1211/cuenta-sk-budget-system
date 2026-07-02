@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
+import CurrencyInput from '../components/CurrencyInput';
 import { useNavigate } from 'react-router-dom'
 import { FileText, Printer, ArrowLeft } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
@@ -253,35 +254,35 @@ function AnnualReportPage() {
             <div className="form-grid">
               <label className="field">
                 <span>Subsidy from Barangay</span>
-                <input type="number" min="0" value={subsidyBarangay} onChange={(e) => setSubsidyBarangay(Number(e.target.value))} />
+                <CurrencyInput value={subsidyBarangay} onValueChange={(val) => setSubsidyBarangay(Number(val))} />
               </label>
               <label className="field">
                 <span>Subsidy from Other LGUs</span>
-                <input type="number" min="0" value={subsidyOtherLGU} onChange={(e) => setSubsidyOtherLGU(Number(e.target.value))} />
+                <CurrencyInput value={subsidyOtherLGU} onValueChange={(val) => setSubsidyOtherLGU(Number(val))} />
               </label>
               <label className="field">
                 <span>Subsidy from Nat. Gov Agencies</span>
-                <input type="number" min="0" value={subsidyNGA} onChange={(e) => setSubsidyNGA(Number(e.target.value))} />
+                <CurrencyInput value={subsidyNGA} onValueChange={(val) => setSubsidyNGA(Number(val))} />
               </label>
               <label className="field">
                 <span>Subsidy from GOCCs</span>
-                <input type="number" min="0" value={subsidyGOCC} onChange={(e) => setSubsidyGOCC(Number(e.target.value))} />
+                <CurrencyInput value={subsidyGOCC} onValueChange={(val) => setSubsidyGOCC(Number(val))} />
               </label>
               <label className="field">
                 <span>Grants/Donations (With Specific Purpose)</span>
-                <input type="number" min="0" value={grantsSpecific} onChange={(e) => setGrantsSpecific(Number(e.target.value))} />
+                <CurrencyInput value={grantsSpecific} onValueChange={(val) => setGrantsSpecific(Number(val))} />
               </label>
               <label className="field">
                 <span>Grants/Donations (Without Specific Purpose)</span>
-                <input type="number" min="0" value={grantsWithoutSpecific} onChange={(e) => setGrantsWithoutSpecific(Number(e.target.value))} />
+                <CurrencyInput value={grantsWithoutSpecific} onValueChange={(val) => setGrantsWithoutSpecific(Number(val))} />
               </label>
               <label className="field">
                 <span>Miscellaneous Income</span>
-                <input type="number" min="0" value={miscIncome} onChange={(e) => setMiscIncome(Number(e.target.value))} />
+                <CurrencyInput value={miscIncome} onValueChange={(val) => setMiscIncome(Number(val))} />
               </label>
               <label className="field">
                 <span>Other Receipts</span>
-                <input type="number" min="0" value={otherReceipts} onChange={(e) => setOtherReceipts(Number(e.target.value))} />
+                <CurrencyInput value={otherReceipts} onValueChange={(val) => setOtherReceipts(Number(val))} />
               </label>
             </div>
             <div className="form-note" style={{ marginTop: '16px', fontWeight: 700, fontSize: '1.1rem' }}>
@@ -383,22 +384,22 @@ function AnnualReportPage() {
             <div className="form-grid">
               <label className="field">
                 <span>Cash Advances, Net</span>
-                <input type="number" value={cashAdvancesNet} onChange={(e) => setCashAdvancesNet(Number(e.target.value))} />
+                <CurrencyInput value={cashAdvancesNet} onValueChange={(val) => setCashAdvancesNet(Number(val))} />
               </label>
               <label className="field">
                 <span>Add/Less: Others</span>
-                <input type="number" value={addLessOthers} onChange={(e) => setAddLessOthers(Number(e.target.value))} />
+                <CurrencyInput value={addLessOthers} onValueChange={(val) => setAddLessOthers(Number(val))} />
               </label>
             </div>
             <h3 style={{ marginTop: '24px', marginBottom: '8px' }}>Cash at beginning of year</h3>
             <div className="form-grid">
               <label className="field">
                 <span>Cash on Hand</span>
-                <input type="number" value={cashBeginningHand} onChange={(e) => setCashBeginningHand(Number(e.target.value))} />
+                <CurrencyInput value={cashBeginningHand} onValueChange={(val) => setCashBeginningHand(Number(val))} />
               </label>
               <label className="field">
                 <span>Cash in Bank</span>
-                <input type="number" value={cashBeginningBank} onChange={(e) => setCashBeginningBank(Number(e.target.value))} />
+                <CurrencyInput value={cashBeginningBank} onValueChange={(val) => setCashBeginningBank(Number(val))} />
               </label>
             </div>
             
@@ -407,11 +408,11 @@ function AnnualReportPage() {
             <div className="form-grid">
               <label className="field">
                 <span>Cash on Hand</span>
-                <input type="number" value={cashEndHand} onChange={(e) => setCashEndHand(Number(e.target.value))} />
+                <CurrencyInput value={cashEndHand} onValueChange={(val) => setCashEndHand(Number(val))} />
               </label>
               <label className="field">
                 <span>Cash in Bank</span>
-                <input type="number" value={cashEndBank} onChange={(e) => setCashEndBank(Number(e.target.value))} />
+                <CurrencyInput value={cashEndBank} onValueChange={(val) => setCashEndBank(Number(val))} />
               </label>
             </div>
           </div>

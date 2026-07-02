@@ -1,8 +1,11 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import { AlertCircle, FileText, CheckCircle, ChevronDown, Plus, CreditCard, ChevronRight, Calculator, Archive, ArchiveRestore } from 'lucide-react'
 import { useBudget } from '../context/BudgetContext'
 import { useAuditLog } from '../context/AuditLogContext'
+import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
 import ReceiptPrintPreview from '../components/ReceiptPrintPreview'
+import CurrencyInput from '../components/CurrencyInput'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -31,8 +34,11 @@ function ExpensesPage() {
     refreshExpensesFromSupabase,
     archiveExpense,
     restoreExpense,
+    addExpense,
   } = useBudget()
   const { addLog } = useAuditLog()
+  const { role } = useAuth()
+  const isTreasurer = role === 'SK Treasurer'
 
   const [activeTab, setActiveTab] = useState('active')
   const [projectFilter, setProjectFilter] = useState('')
@@ -40,6 +46,15 @@ function ExpensesPage() {
   const [categoryFilter, setCategoryFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState('All')
   const [expanded, setExpanded] = useState({})
+
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [addExpenseForm, setAddExpenseForm] = useState({
+    parentProjectId: '',
+    description: '',
+    amount: '',
+    date: '',
+    remarks: '',
+  })
 
   // Receipt upload state
   const [filesById, setFilesById] = useState({})
@@ -75,6 +90,33 @@ function ExpensesPage() {
     'Environment',
     'Other',
   ]
+
+  function handleAddExpenseSubmit(e) {
+    e.preventDefault()
+    
+    const parentExpense = expenses.find(ex => ex.id === addExpenseForm.parentProjectId)
+    if (!parentExpense) return
+    
+    addExpense({
+      isAdditional: true,
+      parentProjectId: parentExpense.id,
+      project: parentExpense.project || parentExpense.event,
+      category: parentExpense.category || 'Other',
+      description: addExpenseForm.description,
+      amount: Number(addExpenseForm.amount) || 0,
+      date: addExpenseForm.date,
+      remarks: addExpenseForm.remarks,
+    })
+    
+    setIsAddModalOpen(false)
+    setAddExpenseForm({
+      parentProjectId: '',
+      description: '',
+      amount: '',
+      date: '',
+      remarks: '',
+    })
+  }
 
   // Generate signed URLs for receipts
   useEffect(() => {
@@ -113,6 +155,7 @@ function ExpensesPage() {
   const activeExpenses = useMemo(() => {
     return expenses.filter((expense) => {
       if (expense.archivedAt) return false
+      if (expense.isAdditional) return false
       const resolvedStatus = expense.status || 'Approved'
       const projectName = (expense.project || expense.event || '').toLowerCase()
       const descName = (expense.description || '').toLowerCase()
@@ -146,6 +189,7 @@ function ExpensesPage() {
   const archivedExpenses = useMemo(() => {
     return expenses.filter((expense) => {
       if (!expense.archivedAt) return false
+      if (expense.isAdditional) return false
       const resolvedStatus = expense.status || 'Approved'
       const projectName = (expense.project || expense.event || '').toLowerCase()
       const descName = (expense.description || '').toLowerCase()
@@ -327,6 +371,9 @@ function ExpensesPage() {
     const totalAmount = requestedAmount > 0 ? requestedAmount : breakdownTotal
     const hasReceipt = expense.receiptUrl || expense.receipt_url || receiptLinks[expense.id]
 
+    const additionalExpenses = expenses.filter(e => e.parentProjectId === expense.id)
+    const additionalTotal = additionalExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+
     return (
       <tr className="details-row">
         <td colSpan={columnCount}>
@@ -424,53 +471,111 @@ function ExpensesPage() {
             </div>
 
             <div className="details-breakdown" style={{ marginTop: '16px' }}>
-              {Array.isArray(expense.expensesBreakdown) && expense.expensesBreakdown.length ? (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th colSpan="4" style={{ backgroundColor: '#111827', color: 'white', padding: '8px 12px', textAlign: 'center' }}>
-                        <span style={{ fontWeight: 600, letterSpacing: '0.05em' }}>ACTUAL EXPENSES</span>
-                      </th>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th colSpan="6" style={{ backgroundColor: '#111827', color: 'white', padding: '8px 12px', textAlign: 'center' }}>
+                      <span style={{ fontWeight: 600, letterSpacing: '0.05em' }}>ADDITIONAL EXPENSES</span>
+                    </th>
+                  </tr>
+                  <tr>
+                    <th style={{ textTransform: 'uppercase' }}>DATE</th>
+                    <th style={{ textTransform: 'uppercase' }}>CATEGORY</th>
+                    <th style={{ textTransform: 'uppercase' }}>DESCRIPTION</th>
+                    <th style={{ textTransform: 'uppercase' }}>REMARKS</th>
+                    <th style={{ textTransform: 'uppercase' }}>AMOUNT</th>
+                    <th style={{ textTransform: 'uppercase' }}>RECEIPT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {additionalExpenses.length ? additionalExpenses.map((addEx, index) => {
+                    const hasAddReceipt = addEx.receiptUrl || addEx.receipt_url || receiptLinks[addEx.id]
+                    return (
+                    <tr key={`${expense.id}-add-${index}`}>
+                      <td>{addEx.date ? new Date(addEx.date).toLocaleDateString() : '—'}</td>
+                      <td>{addEx.category || '—'}</td>
+                      <td>{addEx.description || '—'}</td>
+                      <td>{addEx.remarks || '—'}</td>
+                      <td>{currency.format(Number(addEx.amount) || 0)}</td>
+                      <td>
+                        {hasAddReceipt ? (
+                          <>
+                            {receiptLinks[addEx.id] ? (
+                              <a
+                                className="file-link"
+                                href={receiptLinks[addEx.id]}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                View
+                              </a>
+                            ) : (
+                              <span className="status-pill status-approved">Uploaded</span>
+                            )}
+                          </>
+                        ) : isTreasurer ? (
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <input
+                              type="file"
+                              accept="image/*,application/pdf"
+                              style={{ width: '150px' }}
+                              onChange={(event) =>
+                                handleFileChange(addEx.id, event.target.files?.[0] || null)
+                              }
+                            />
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => handleUpload(addEx)}
+                              disabled={uploadingId === addEx.id}
+                              style={{ padding: '4px 8px', fontSize: '0.85rem' }}
+                            >
+                              {uploadingId === addEx.id ? '...' : 'Upload'}
+                            </button>
+                            {errorsById[addEx.id] ? (
+                               <span className="form-error" style={{ marginLeft: '4px', fontSize: '0.8rem' }}>Error</span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="status-pill status-pending">Missing</span>
+                        )}
+                      </td>
                     </tr>
+                    )
+                  }) : (
                     <tr>
-                      <th style={{ textTransform: 'uppercase' }}>ITEM</th>
-                      <th style={{ textTransform: 'uppercase' }}>QUANTITY</th>
-                      <th style={{ textTransform: 'uppercase' }}>UNIT COST</th>
-                      <th style={{ textTransform: 'uppercase' }}>TOTAL COST</th>
+                      <td colSpan="6" style={{ textAlign: 'center', fontStyle: 'italic', color: '#6b7280' }}>
+                        No additional expenses recorded.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {expense.expensesBreakdown.map((item, index) => (
-                      <tr key={`${expense.id}-expense-${index}`}>
-                        <td>{item.itemName || '—'}</td>
-                        <td>{item.quantity || 0}</td>
-                        <td>{currency.format(item.unitCost || 0)}</td>
-                        <td>
-                          {currency.format(
-                            (item.quantity || 0) * (item.unitCost || 0)
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <th colSpan="3">Total Expenses</th>
-                      <th>{currency.format(getBreakdownTotal(expense.expensesBreakdown))}</th>
-                    </tr>
-                    <tr>
-                      <th colSpan="3">Combined Total Cost</th>
-                      <th>{currency.format(breakdownTotal + getBreakdownTotal(expense.expensesBreakdown))}</th>
-                    </tr>
-                    <tr>
-                      <th colSpan="3">Total Amount</th>
-                      <th>{currency.format(totalAmount)}</th>
-                    </tr>
-                  </tfoot>
-                </table>
-              ) : (
-                <p className="details-value">No expenses provided.</p>
-              )}
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="details-breakdown" style={{ marginTop: '24px', borderTop: '2px solid #e5e7eb', paddingTop: '16px' }}>
+              <table className="data-table" style={{ width: '100%', maxWidth: '600px', marginLeft: 'auto' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ fontWeight: 600 }}>Approved Budget Amount</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{currency.format(totalAmount)}</td>
+                  </tr>
+                  <tr>
+                    <td>Original Requisition Total</td>
+                    <td style={{ textAlign: 'right', color: '#4b5563' }}>- {currency.format(breakdownTotal)}</td>
+                  </tr>
+                  <tr>
+                    <td>Additional Expenses Total</td>
+                    <td style={{ textAlign: 'right', color: '#4b5563' }}>- {currency.format(additionalTotal)}</td>
+                  </tr>
+                  <tr style={{ backgroundColor: '#f9fafb' }}>
+                    <td style={{ fontWeight: 700, fontSize: '1.1em' }}>Remaining Balance</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '1.1em', color: (totalAmount - breakdownTotal - additionalTotal) < 0 ? '#ef4444' : '#10b981' }}>
+                      {currency.format(totalAmount - breakdownTotal - additionalTotal)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
 
             {/* Receipt upload + print section */}
@@ -543,33 +648,116 @@ function ExpensesPage() {
           </div>
         </div>
         <div
-          className="header-actions page-tabs"
-          role="tablist"
+          className="header-actions"
           aria-label="Expense views"
+          style={{ display: 'flex', alignItems: 'center', gap: '16px' }}
         >
-          <button
-            className={`page-tab ${activeTab === 'active' ? 'is-active' : ''}`}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'active'}
-            onClick={() => handleTabChange('active')}
-          >
-            Active
-          </button>
-          <button
-            className={`page-tab ${activeTab === 'archive' ? 'is-active' : ''}`}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'archive'}
-            onClick={() => handleTabChange('archive')}
-          >
-            Archive
-          </button>
+          <div className="page-tabs" role="tablist">
+            <button
+              className={`page-tab ${activeTab === 'active' ? 'is-active' : ''}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'active'}
+              onClick={() => handleTabChange('active')}
+            >
+              Active
+            </button>
+            <button
+              className={`page-tab ${activeTab === 'archive' ? 'is-active' : ''}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'archive'}
+              onClick={() => handleTabChange('archive')}
+            >
+              Archive
+            </button>
+          </div>
+          {isTreasurer && (
+            <button 
+              type="button" 
+              className="primary-button" 
+              onClick={() => setIsAddModalOpen(true)}
+            >
+              Record Additional Expense
+            </button>
+          )}
         </div>
       </header>
 
       <section className="dashboard-content">
 
+      {isAddModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <h2>Record Additional Expense</h2>
+            <p>Log extra costs for an approved project.</p>
+            <form onSubmit={handleAddExpenseSubmit} className="overview-form" style={{ marginTop: '20px' }}>
+              <div className="field-row">
+                <label className="field">
+                  <span>Approved Project</span>
+                  <select 
+                    value={addExpenseForm.parentProjectId} 
+                    onChange={e => setAddExpenseForm({...addExpenseForm, parentProjectId: e.target.value})}
+                    required
+                  >
+                    <option value="">Select a project...</option>
+                    {expenses
+                      .filter(ex => !ex.isAdditional && !ex.archivedAt)
+                      .map(ex => (
+                        <option key={ex.id} value={ex.id}>{ex.project || ex.event || 'Untitled Project'}</option>
+                      ))}
+                  </select>
+                </label>
+              </div>
+              <div className="field-row">
+                <label className="field">
+                  <span>Additional Expense Description</span>
+                  <input 
+                    type="text" 
+                    value={addExpenseForm.description} 
+                    onChange={e => setAddExpenseForm({...addExpenseForm, description: e.target.value})}
+                    required 
+                    placeholder="e.g. Extra transportation, fuel, emergency purchase"
+                  />
+                </label>
+                <label className="field">
+                  <span>Amount (₱)</span>
+                  <CurrencyInput 
+                    value={addExpenseForm.amount} 
+                    onValueChange={(val) => setAddExpenseForm({...addExpenseForm, amount: Number(val)})}
+                    required 
+                  />
+                </label>
+              </div>
+              <div className="field-row">
+                <label className="field">
+                  <span>Date Incurred</span>
+                  <input 
+                    type="date" 
+                    value={addExpenseForm.date} 
+                    onChange={e => setAddExpenseForm({...addExpenseForm, date: e.target.value})}
+                    required 
+                  />
+                </label>
+              </div>
+              <div className="field-row">
+                <label className="field">
+                  <span>Remarks (Optional)</span>
+                  <input 
+                    type="text" 
+                    value={addExpenseForm.remarks} 
+                    onChange={e => setAddExpenseForm({...addExpenseForm, remarks: e.target.value})}
+                  />
+                </label>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
+                <button type="button" className="secondary-button" onClick={() => setIsAddModalOpen(false)}>Cancel</button>
+                <button type="submit" className="primary-button">Add Expense</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
         {/* Filters */}
         <div className="overview-card">
@@ -690,13 +878,15 @@ function ExpensesPage() {
                             >
                               {expanded[expense.id] ? 'Hide' : 'View'}
                             </button>
-                            <button
-                              className="secondary-button"
-                              type="button"
-                              onClick={() => handleArchive(expense.id)}
-                            >
-                              Archive
-                            </button>
+                            {isTreasurer && (
+                              <button
+                                className="secondary-button"
+                                type="button"
+                                onClick={() => handleArchive(expense.id)}
+                              >
+                                Archive
+                              </button>
+                            )}
                           </td>
                         </tr>
                         {renderExpenseDetails(expense, 6)}
@@ -764,13 +954,15 @@ function ExpensesPage() {
                           >
                             {expanded[expense.id] ? 'Hide' : 'View'}
                           </button>
-                          <button
-                            className="secondary-button"
-                            type="button"
-                            onClick={() => restoreExpense(expense.id)}
-                          >
-                            Restore
-                          </button>
+                          {isTreasurer && (
+                            <button
+                              className="secondary-button"
+                              type="button"
+                              onClick={() => restoreExpense(expense.id)}
+                            >
+                              Restore
+                            </button>
+                          )}
                         </td>
                       </tr>
                       {renderExpenseDetails(expense, 6)}
@@ -931,13 +1123,15 @@ function ExpensesPage() {
                                     .sort((a, b) => new Date(a.approvedAt || a.date || 0) - new Date(b.approvedAt || b.date || 0))
                                     .map((e) => {
                                       const approvedBudget = Number(e.amount) || 0;
-                                      const expenses = getBreakdownTotal(e.breakdown) + getBreakdownTotal(e.expensesBreakdown);
-                                      const remaining = approvedBudget - expenses;
+                                      const additionalExps = expenses.filter(ex => ex.parentProjectId === e.id);
+                                      const addTotal = additionalExps.reduce((sum, ex) => sum + (Number(ex.amount) || 0), 0);
+                                      const expensesTotal = getBreakdownTotal(e.breakdown) + addTotal;
+                                      const remaining = approvedBudget - expensesTotal;
                                       return (
                                         <tr key={e.id}>
                                           <td style={{ padding: '8px' }}>{e.event || e.project || 'Untitled'}</td>
                                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>{currency.format(approvedBudget)}</td>
-                                          <td style={{ padding: '8px', textAlign: 'right' }}>{currency.format(expenses)}</td>
+                                          <td style={{ padding: '8px', textAlign: 'right' }}>{currency.format(expensesTotal)}</td>
                                           <td style={{ padding: '8px', textAlign: 'right', color: remaining < 0 ? '#e53e3e' : 'inherit', fontWeight: 600 }}>{currency.format(remaining)}</td>
                                         </tr>
                                       )

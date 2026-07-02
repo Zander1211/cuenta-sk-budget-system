@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import CurrencyInput from '../CurrencyInput';
 import { PlusCircle, Trash2 } from 'lucide-react'
 import { supabase } from '../../supabase/supabaseClient'
 
@@ -212,14 +213,7 @@ function PayrollForm({ profileName, role, onPreview }) {
                     />
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={row.honoraria}
-                      onChange={(e) => updateRow(index, 'honoraria', e.target.value)}
-                      placeholder="0.00"
-                    />
+                    <CurrencyInput value={row.honoraria} onValueChange={(val) => updateRow(index, 'honoraria', Number(val))} placeholder="0.00" />
                   </td>
                   <td>
                     <input
@@ -230,14 +224,7 @@ function PayrollForm({ profileName, role, onPreview }) {
                     />
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={row.cbcLbf}
-                      onChange={(e) => updateRow(index, 'cbcLbf', e.target.value)}
-                      placeholder="0.00"
-                    />
+                    <CurrencyInput value={row.cbcLbf} onValueChange={(val) => updateRow(index, 'cbcLbf', Number(val))} placeholder="0.00" />
                   </td>
                   <td className="computed-cell">{currency.format(getNetAmount(row))}</td>
                   <td>

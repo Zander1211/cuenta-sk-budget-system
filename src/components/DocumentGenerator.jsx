@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useBudget } from '../context/BudgetContext'
 import { useAuth } from '../context/AuthContext'
+import { useDocuments } from '../context/DocumentContext'
 import { supabase } from '../supabase/supabaseClient'
 import PurchaseRequestPreview from './PurchaseRequestPreview'
 import PurchaseOrderPreview from './PurchaseOrderPreview'
@@ -14,6 +15,7 @@ import ItineraryOfTravelForm from './documents/ItineraryOfTravelForm'
 import ItineraryOfTravelPreview from './documents/ItineraryOfTravelPreview'
 import TransmittalLetterForm from './documents/TransmittalLetterForm'
 import TransmittalLetterPreview from './documents/TransmittalLetterPreview'
+import CurrencyInput from './CurrencyInput'
 import './DocumentGenerator.css'
 
 const currency = new Intl.NumberFormat('en-PH', {
@@ -91,11 +93,12 @@ async function getNextPrNumber() {
   }
 }
 
-function DocumentGenerator() {
+function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
   const { requests } = useBudget()
   const { profileName, role } = useAuth()
+  const { addDocument } = useDocuments()
 
-  const [docType, setDocType] = useState('pr')
+  const [docType, setDocType] = useState(initialDocType)
   const [selectedRequestId, setSelectedRequestId] = useState('')
   const [preview, setPreview] = useState(null)
   const [generatingNumber, setGeneratingNumber] = useState(false)
@@ -219,7 +222,7 @@ function DocumentGenerator() {
     const formattedDeliveryDate = formatDateLocal(dateOfDelivery)
 
     if (docType === 'pr') {
-      setPreview({
+      const prData = {
         type: 'pr',
         data: {
           barangay,
@@ -237,9 +240,17 @@ function DocumentGenerator() {
           approvedByName,
           approvedByDate: formattedDate,
         },
+      }
+      setPreview(prData)
+      addDocument({
+        name: `Purchase Request ${number}`,
+        project: selectedRequest ? selectedRequest.event : '',
+        generatedBy: profileName || role,
+        type: 'Purchase Request',
+        data: prData,
       })
     } else {
-      setPreview({
+      const poData = {
         type: 'po',
         data: {
           barangay,
@@ -261,6 +272,14 @@ function DocumentGenerator() {
           })),
           totalAmount,
         },
+      }
+      setPreview(poData)
+      addDocument({
+        name: `Purchase Order ${number}`,
+        project: selectedRequest ? selectedRequest.event : '',
+        generatedBy: profileName || role,
+        type: 'Purchase Order',
+        data: poData,
       })
     }
   }
@@ -268,6 +287,22 @@ function DocumentGenerator() {
   // Handler for new document type previews
   function handleNewDocPreview(previewData) {
     setPreview(previewData)
+    // Extract a nice name based on the type
+    let name = 'Document'
+    const typeLabel = DOC_TYPES.find(d => d.id === docType)?.label || 'Document'
+    
+    // Attempt to extract specific numbers if present
+    if (docType === 'dv' && previewData.data.dvNumber) name = `Disbursement Voucher ${previewData.data.dvNumber}`
+    else if (docType === 'payroll' && previewData.data.payrollNo) name = `Payroll ${previewData.data.payrollNo}`
+    else name = typeLabel
+
+    addDocument({
+      name,
+      project: selectedRequest ? selectedRequest.event : '',
+      generatedBy: profileName || role,
+      type: typeLabel,
+      data: previewData,
+    })
   }
 
   // Render the form for the current doc type
@@ -575,11 +610,9 @@ function DocumentGenerator() {
                         />
                       </td>
                       <td>
-                        <input
-                          type="number"
-                          min="0"
+                        <CurrencyInput
                           value={item.unitCost}
-                          onChange={(e) => updateItem(index, 'unitCost', e.target.value)}
+                          onValueChange={(val) => updateItem(index, 'unitCost', val)}
                           style={{ width: '90px' }}
                         />
                       </td>

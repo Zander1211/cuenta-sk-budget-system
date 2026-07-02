@@ -1,54 +1,187 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText } from 'lucide-react'
+import { FileText, Plus, X, Eye, Download } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import DocumentGenerator from '../components/DocumentGenerator'
+import { useAuth } from '../context/AuthContext'
+import { useDocuments } from '../context/DocumentContext'
+import PurchaseRequestPreview from '../components/PurchaseRequestPreview'
+import PurchaseOrderPreview from '../components/PurchaseOrderPreview'
+import DisbursementVoucherPreview from '../components/documents/DisbursementVoucherPreview'
+import PayrollPreview from '../components/documents/PayrollPreview'
+import ProjectDesignPreview from '../components/documents/ProjectDesignPreview'
+import ItineraryOfTravelPreview from '../components/documents/ItineraryOfTravelPreview'
+import TransmittalLetterPreview from '../components/documents/TransmittalLetterPreview'
 
 function DocumentsPage() {
   const navigate = useNavigate()
+  const { role } = useAuth()
+  const { documents } = useDocuments()
+  
+  const canCreate = ['SK Chairman', 'SK Treasurer'].includes(role)
+  
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [activeGeneratorType, setActiveGeneratorType] = useState(null)
+  
+  const [viewingDoc, setViewingDoc] = useState(null)
+
+  function handleCreateSelect(type) {
+    if (type === 'annual-report') {
+      navigate('/dashboard/annual-report')
+    } else if (type === 'narrative-report') {
+      navigate('/dashboard/narrative-report')
+    } else {
+      setActiveGeneratorType(type)
+    }
+    setIsCreateModalOpen(false)
+  }
+
+  function renderViewingDoc() {
+    if (!viewingDoc) return null
+    const { type, data } = viewingDoc.data
+    const onClose = () => setViewingDoc(null)
+
+    switch (type) {
+      case 'pr': return <PurchaseRequestPreview data={data} onClose={onClose} />
+      case 'po': return <PurchaseOrderPreview data={data} onClose={onClose} />
+      case 'dv': return <DisbursementVoucherPreview data={data} onClose={onClose} />
+      case 'payroll': return <PayrollPreview data={data} onClose={onClose} />
+      case 'project': return <ProjectDesignPreview data={data} onClose={onClose} />
+      case 'itinerary': return <ItineraryOfTravelPreview data={data} onClose={onClose} />
+      case 'transmittal': return <TransmittalLetterPreview data={data} onClose={onClose} />
+      default: return null
+    }
+  }
 
   return (
-    <RoleGate allow={['SK Chairman', 'SK Treasurer']}>
+    <RoleGate allow={['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']}>
       <header className="dashboard-header">
         <div className="header-left">
           <div>
             <p className="eyebrow">Compliance</p>
             <h1>Documents</h1>
-            <p>Generate and print official COA-mandated forms.</p>
+            <p>Generate, view, and print official COA-mandated forms.</p>
           </div>
         </div>
         <div className="header-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => navigate('/dashboard/annual-report')}
-          >
-            <FileText size={16} />
-            Annual Report
-          </button>
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => navigate('/dashboard/narrative-report')}
-          >
-            <FileText size={16} />
-            Narrative & Photo Doc
-          </button>
+          {canCreate && !activeGeneratorType && (
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => setIsCreateModalOpen(true)}
+            >
+              <Plus size={16} />
+              Create Document
+            </button>
+          )}
+          {activeGeneratorType && (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setActiveGeneratorType(null)}
+            >
+              Back to History
+            </button>
+          )}
         </div>
       </header>
 
       <section className="dashboard-content">
-        {/* ── Generate Official Documents ── */}
-        <div className="overview-card">
-          <p className="eyebrow">Generate</p>
-          <h2>Generate official documents</h2>
-          <p style={{ marginBottom: '16px', color: 'var(--ink-soft)', fontSize: '0.9rem' }}>
-            Create Purchase Requests, Purchase Orders, Disbursement Vouchers, Payroll,
-            Project Designs, Itineraries of Travel, and Transmittal Letters.
-            Select a document type, fill in the fields, then preview and print.
-          </p>
-          <DocumentGenerator />
-        </div>
+        {activeGeneratorType ? (
+          <div className="overview-card">
+            <DocumentGenerator initialDocType={activeGeneratorType} />
+          </div>
+        ) : (
+          <div className="overview-card">
+            <h2>Past Generated Documents</h2>
+            <p style={{ marginBottom: '16px', color: 'var(--ink-soft)', fontSize: '0.9rem' }}>
+              View and download previously generated official documents.
+            </p>
+            
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Document Name</th>
+                  <th>Project/Event Name</th>
+                  <th>Date & Time Generated</th>
+                  <th>Generated By</th>
+                  <th>Document Type</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {documents.length > 0 ? (
+                  documents.map((doc) => (
+                    <tr key={doc.id}>
+                      <td style={{ fontWeight: 500 }}>{doc.name}</td>
+                      <td>{doc.project || '—'}</td>
+                      <td>{new Date(doc.dateGenerated).toLocaleString()}</td>
+                      <td>{doc.generatedBy}</td>
+                      <td>
+                        <span className="status-chip is-neutral">{doc.type}</span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <button
+                          className="text-button"
+                          onClick={() => setViewingDoc(doc)}
+                          style={{ marginRight: '8px' }}
+                        >
+                          <Eye size={16} style={{ marginRight: '4px' }}/> View
+                        </button>
+                        <button
+                          className="text-button"
+                          onClick={() => {
+                            // Open preview and immediately trigger print
+                            setViewingDoc(doc)
+                            setTimeout(() => window.print(), 500)
+                          }}
+                        >
+                          <Download size={16} style={{ marginRight: '4px' }}/> Download
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="empty-state">
+                      No documents have been generated yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
+
+      {/* Create Document Modal */}
+      {isCreateModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2>Select Document Type</h2>
+              <button className="icon-button" onClick={() => setIsCreateModalOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ margin: '16px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button className="secondary-button" style={{ justifyContent: 'flex-start' }} onClick={() => handleCreateSelect('pr')}>Purchase Request</button>
+              <button className="secondary-button" style={{ justifyContent: 'flex-start' }} onClick={() => handleCreateSelect('po')}>Purchase Order</button>
+              <button className="secondary-button" style={{ justifyContent: 'flex-start' }} onClick={() => handleCreateSelect('dv')}>Disbursement Voucher</button>
+              <button className="secondary-button" style={{ justifyContent: 'flex-start' }} onClick={() => handleCreateSelect('payroll')}>Payroll</button>
+              <button className="secondary-button" style={{ justifyContent: 'flex-start' }} onClick={() => handleCreateSelect('project')}>Project Design</button>
+              <button className="secondary-button" style={{ justifyContent: 'flex-start' }} onClick={() => handleCreateSelect('itinerary')}>Itinerary of Travel</button>
+              <button className="secondary-button" style={{ justifyContent: 'flex-start' }} onClick={() => handleCreateSelect('transmittal')}>Transmittal Letter</button>
+              <hr style={{ margin: '8px 0', borderColor: 'var(--border)' }} />
+              <button className="secondary-button" style={{ justifyContent: 'flex-start' }} onClick={() => handleCreateSelect('annual-report')}>Annual Report</button>
+              <button className="secondary-button" style={{ justifyContent: 'flex-start' }} onClick={() => handleCreateSelect('narrative-report')}>Narrative & Photo Doc</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Viewing Document Preview */}
+      {renderViewingDoc()}
     </RoleGate>
   )
 }

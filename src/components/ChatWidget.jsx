@@ -139,7 +139,7 @@ export default function ChatWidget() {
     }
 
     return {
-      content: "I'm Cue, your local AI assistant. I can answer questions about your budgets, expenses, pending requests, and missing receipts. What would you like to know?"
+      content: "I'm Cue, your AI-powered financial assistant. I can help you analyze budgets, track expenses, review pending requests, and check receipt compliance. What financial question can I help you with?"
     }
   }
 

@@ -8,16 +8,23 @@ const currency = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 0,
 })
 
-function ProjectsPage() {
+function getPayrollTotal(breakdown = []) {
+  return breakdown.reduce((sum, row) => {
+    const hon = Number(row.honoraria) || 0
+    const cbc = Number(row.cbcLbf) || 0
+    return sum + (hon - cbc)
+  }, 0)
+}
+
+function PayrollPage() {
   const { expenses, updateProjectStatus } = useBudget()
   const [expanded, setExpanded] = useState({})
 
-  // Filter only parent expenses (approved requests) of type 'Project'
-  const parentProjects = useMemo(() => {
+  // Filter only parent expenses (approved requests) of type 'Payroll'
+  const parentPayroll = useMemo(() => {
     return expenses.filter((item) => {
-      const isProject = !item.type || item.type === 'Project'
       const status = item.status || 'Approved'
-      return !item.isAdditional && ['Approved', 'Released'].includes(status) && !item.archivedAt && isProject
+      return !item.isAdditional && ['Approved', 'Released'].includes(status) && !item.archivedAt && item.type === 'Payroll'
     })
   }, [expenses])
 
@@ -25,8 +32,11 @@ function ProjectsPage() {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
-  function renderProjectDetails(project, columnCount) {
+  function renderPayrollDetails(project, columnCount) {
     if (!expanded[project.id]) return null
+
+    const breakdownItems = Array.isArray(project.breakdown) ? project.breakdown : []
+    const breakdownTotal = getPayrollTotal(breakdownItems)
 
     const additionalExpenses = expenses.filter(e => e.isAdditional && e.parentProjectId === project.id && !e.archivedAt)
     const additionalSum = additionalExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
@@ -70,6 +80,49 @@ function ProjectsPage() {
             </div>
 
             <div className="details-breakdown">
+              <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '12px' }}>Payroll Entries</p>
+              {breakdownItems.length ? (
+                <table className="data-table" style={{ marginTop: '0', marginBottom: '24px' }}>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Position</th>
+                      <th>Honoraria</th>
+                      <th>Service</th>
+                      <th>CBC/LBF</th>
+                      <th>Net Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {breakdownItems.map((item, index) => {
+                      const hon = Number(item.honoraria) || 0
+                      const cbc = Number(item.cbcLbf) || 0
+                      const net = hon - cbc
+                      return (
+                        <tr key={`${project.id}-item-${index}`}>
+                          <td>{item.name || '—'}</td>
+                          <td>{item.position || '—'}</td>
+                          <td>{currency.format(hon)}</td>
+                          <td>{item.serviceRendered || '—'}</td>
+                          <td>{currency.format(cbc)}</td>
+                          <td style={{ fontWeight: 600 }}>{currency.format(net)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <th colSpan="5">Total Payroll Net Amount</th>
+                      <th>{currency.format(breakdownTotal)}</th>
+                    </tr>
+                  </tfoot>
+                </table>
+              ) : (
+                <p className="details-value" style={{ color: 'var(--text-secondary)' }}>No breakdown provided.</p>
+              )}
+            </div>
+
+            <div className="details-breakdown">
               <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '12px' }}>Additional Expenses Breakdown</p>
               {additionalExpenses.length > 0 ? (
                 <table className="data-table" style={{ marginTop: '0' }}>
@@ -97,7 +150,7 @@ function ProjectsPage() {
                   </tfoot>
                 </table>
               ) : (
-                <p className="details-value" style={{ color: 'var(--text-secondary)' }}>No additional expenses linked to this project.</p>
+                <p className="details-value" style={{ color: 'var(--text-secondary)' }}>No additional expenses linked to this payroll.</p>
               )}
             </div>
             
@@ -118,9 +171,9 @@ function ProjectsPage() {
       <header className="dashboard-header">
         <div className="header-left">
           <div>
-            <p className="eyebrow">Projects Dashboard</p>
-            <h1>Approved Projects</h1>
-            <p>Monitor budgets, expenses, and completion status of all approved projects.</p>
+            <p className="eyebrow">Payroll Dashboard</p>
+            <h1>Approved Payroll</h1>
+            <p>Monitor budgets, expenses, and status of all approved payroll requests.</p>
           </div>
         </div>
       </header>
@@ -128,12 +181,12 @@ function ProjectsPage() {
       <section className="dashboard-content">
         <div className="overview-card">
           <p className="eyebrow">Overview</p>
-          <h2>All Approved Projects</h2>
+          <h2>All Approved Payroll</h2>
           <table className="data-table">
             <thead>
               <tr>
-                <th>Project Title</th>
-                <th>Category</th>
+                <th>Payroll Title</th>
+                <th>Purpose</th>
                 <th>Total Budget</th>
                 <th>Utilization</th>
                 <th>Status</th>
@@ -141,8 +194,8 @@ function ProjectsPage() {
               </tr>
             </thead>
             <tbody>
-              {parentProjects.length ? (
-                parentProjects.map((project) => {
+              {parentPayroll.length ? (
+                parentPayroll.map((project) => {
                   const additionalExpenses = expenses.filter(e => e.isAdditional && e.parentProjectId === project.id && !e.archivedAt)
                   const additionalSum = additionalExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
                   const approvedBudget = Number(project.amount || 0)
@@ -153,7 +206,7 @@ function ProjectsPage() {
                     <Fragment key={project.id}>
                       <tr>
                         <td><strong>{project.project || project.event || 'Untitled'}</strong></td>
-                        <td>{project.category || '—'}</td>
+                        <td>{project.description || '—'}</td>
                         <td>{currency.format(approvedBudget)}</td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -168,7 +221,7 @@ function ProjectsPage() {
                             className="project-status-select"
                             value={project.projectStatus || 'Ongoing'}
                             onChange={(e) => updateProjectStatus(project.id, e.target.value)}
-                            aria-label="Update Project Status"
+                            aria-label="Update Payroll Status"
                           >
                             <option value="Ongoing">Ongoing</option>
                             <option value="Completed">Completed</option>
@@ -184,14 +237,14 @@ function ProjectsPage() {
                           </button>
                         </td>
                       </tr>
-                      {renderProjectDetails(project, 6)}
+                      {renderPayrollDetails(project, 6)}
                     </Fragment>
                   )
                 })
               ) : (
                 <tr>
                   <td colSpan="6" className="empty-state">
-                    No approved projects yet.
+                    No approved payroll yet.
                   </td>
                 </tr>
               )}
@@ -203,4 +256,4 @@ function ProjectsPage() {
   )
 }
 
-export default ProjectsPage
+export default PayrollPage

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useBudget } from '../context/BudgetContext'
+import CurrencyInput from '../components/CurrencyInput'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -8,23 +9,7 @@ const currency = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 0,
 })
 
-const numberFormatter = new Intl.NumberFormat('en-PH', {
-  maximumFractionDigits: 0,
-})
 
-const parseNumberInput = (value) => {
-  const numeric = String(value).replace(/,/g, '')
-  return numeric ? Number(numeric) : 0
-}
-
-const formatNumberInput = (value) => {
-  const numeric = String(value).replace(/\D/g, '')
-  if (!numeric) {
-    return ''
-  }
-
-  return numberFormatter.format(Number(numeric))
-}
 
 const monthOptions = [
   { value: 1, label: 'January' },
@@ -57,6 +42,9 @@ function BudgetsPage() {
   const [year, setYear] = useState(now.getFullYear())
   const [amount, setAmount] = useState('')
   const [viewMode, setViewMode] = useState('monthly')
+  const [filterMonth, setFilterMonth] = useState(initialMonth)
+  const [filterQuarter, setFilterQuarter] = useState(Math.floor((initialMonth - 1) / 3) + 1)
+  const [filterYear, setFilterYear] = useState(now.getFullYear())
   const canEdit = role === 'SK Treasurer'
 
   function handleSubmit(event) {
@@ -66,7 +54,7 @@ function BudgetsPage() {
       return
     }
 
-    const cleanedAmount = parseNumberInput(amount)
+    const cleanedAmount = Number(amount)
     if (Number.isNaN(cleanedAmount) || cleanedAmount <= 0) {
       return
     }
@@ -81,15 +69,19 @@ function BudgetsPage() {
   }
 
   const displayedBudgets = useMemo(() => {
+    let filtered = budgets.filter(b => b.year === filterYear);
+    
     if (viewMode === 'monthly') {
-      return budgets.map(b => ({
+      filtered = filtered.filter(b => b.month === filterMonth);
+      return filtered.map(b => ({
         ...b,
         periodLabel: monthOptions.find(m => m.value === b.month)?.label || `Month ${b.month}`
       }))
     } else {
+      filtered = filtered.filter(b => b.quarter === filterQuarter);
       // Aggregate by quarter and year
       const aggregated = {};
-      budgets.forEach(b => {
+      filtered.forEach(b => {
         const key = `${b.year}-Q${b.quarter}`;
         if (!aggregated[key]) {
           aggregated[key] = {
@@ -111,7 +103,7 @@ function BudgetsPage() {
         return b.quarter - a.quarter;
       });
     }
-  }, [budgets, viewMode])
+  }, [budgets, viewMode, filterMonth, filterQuarter, filterYear])
 
   return (
     <>
@@ -158,19 +150,12 @@ function BudgetsPage() {
                 </label>
                 <label className="field">
                   <span>Total budget (PHP)</span>
-                  <div className="input-with-symbol">
-                    <span className="currency-symbol">₱</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={amount}
-                      onChange={(event) =>
-                        setAmount(formatNumberInput(event.target.value))
-                      }
-                      placeholder="250,000"
-                      required
-                    />
-                  </div>
+                  <CurrencyInput
+                    value={amount}
+                    onValueChange={(val) => setAmount(val)}
+                    placeholder="250,000"
+                    required
+                  />
                 </label>
               </div>
               <button type="submit" className="primary-button">
@@ -195,25 +180,55 @@ function BudgetsPage() {
               <p className="eyebrow">History</p>
               <h2 style={{ margin: 0 }}>Recorded budgets</h2>
             </div>
-            <div className="page-tabs" role="tablist">
-              <button
-                className={`page-tab ${viewMode === 'monthly' ? 'is-active' : ''}`}
-                type="button"
-                role="tab"
-                aria-selected={viewMode === 'monthly'}
-                onClick={() => setViewMode('monthly')}
-              >
-                Monthly
-              </button>
-              <button
-                className={`page-tab ${viewMode === 'quarterly' ? 'is-active' : ''}`}
-                type="button"
-                role="tab"
-                aria-selected={viewMode === 'quarterly'}
-                onClick={() => setViewMode('quarterly')}
-              >
-                Quarterly
-              </button>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select
+                  value={viewMode === 'monthly' ? filterMonth : filterQuarter}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    if (viewMode === 'monthly') {
+                      setFilterMonth(val);
+                    } else {
+                      setFilterQuarter(val);
+                    }
+                  }}
+                  className="filter-select"
+                  style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d5db' }}
+                >
+                  {viewMode === 'monthly' ? monthOptions.map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  )) : quarterOptions.map(q => (
+                    <option key={q.value} value={q.value}>{q.label}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  value={filterYear}
+                  onChange={(e) => setFilterYear(Number(e.target.value))}
+                  className="filter-input"
+                  style={{ width: '80px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d5db' }}
+                />
+              </div>
+              <div className="page-tabs" role="tablist">
+                <button
+                  className={`page-tab ${viewMode === 'monthly' ? 'is-active' : ''}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'monthly'}
+                  onClick={() => setViewMode('monthly')}
+                >
+                  Monthly
+                </button>
+                <button
+                  className={`page-tab ${viewMode === 'quarterly' ? 'is-active' : ''}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'quarterly'}
+                  onClick={() => setViewMode('quarterly')}
+                >
+                  Quarterly
+                </button>
+              </div>
             </div>
           </div>
           <table className="data-table">

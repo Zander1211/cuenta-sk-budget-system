@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useRef } from 'react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import { supabase } from '../supabase/supabaseClient'
+import CurrencyInput from '../components/CurrencyInput'
 
 function ReceiptsPage() {
   const { expenses, refreshExpensesFromSupabase, expensesSyncStatus } = useBudget()
@@ -396,7 +397,7 @@ function ReceiptsPage() {
                     </div>
                     <div className="field-group">
                       <label>Total Amount (₱)</label>
-                      <input type="number" value={ocrData.amount} onChange={e => setOcrData({...ocrData, amount: e.target.value})} />
+                      <CurrencyInput value={ocrData.amount} onValueChange={val => setOcrData({...ocrData, amount: Number(val)})} />
                     </div>
                   </div>
                   <div className="field-group" style={{ marginTop: '16px' }}>

@@ -8,16 +8,15 @@ const currency = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 0,
 })
 
-function ProjectsPage() {
+function EventsPage() {
   const { expenses, updateProjectStatus } = useBudget()
   const [expanded, setExpanded] = useState({})
 
-  // Filter only parent expenses (approved requests) of type 'Project'
-  const parentProjects = useMemo(() => {
+  // Filter only parent expenses (approved requests) of type 'Event'
+  const parentEvents = useMemo(() => {
     return expenses.filter((item) => {
-      const isProject = !item.type || item.type === 'Project'
       const status = item.status || 'Approved'
-      return !item.isAdditional && ['Approved', 'Released'].includes(status) && !item.archivedAt && isProject
+      return !item.isAdditional && ['Approved', 'Released'].includes(status) && !item.archivedAt && item.type === 'Event'
     })
   }, [expenses])
 
@@ -25,7 +24,7 @@ function ProjectsPage() {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
-  function renderProjectDetails(project, columnCount) {
+  function renderEventDetails(project, columnCount) {
     if (!expanded[project.id]) return null
 
     const additionalExpenses = expenses.filter(e => e.isAdditional && e.parentProjectId === project.id && !e.archivedAt)
@@ -97,7 +96,7 @@ function ProjectsPage() {
                   </tfoot>
                 </table>
               ) : (
-                <p className="details-value" style={{ color: 'var(--text-secondary)' }}>No additional expenses linked to this project.</p>
+                <p className="details-value" style={{ color: 'var(--text-secondary)' }}>No additional expenses linked to this event.</p>
               )}
             </div>
             
@@ -118,9 +117,9 @@ function ProjectsPage() {
       <header className="dashboard-header">
         <div className="header-left">
           <div>
-            <p className="eyebrow">Projects Dashboard</p>
-            <h1>Approved Projects</h1>
-            <p>Monitor budgets, expenses, and completion status of all approved projects.</p>
+            <p className="eyebrow">Events Dashboard</p>
+            <h1>Approved Events</h1>
+            <p>Monitor budgets, expenses, and completion status of all approved events.</p>
           </div>
         </div>
       </header>
@@ -128,11 +127,11 @@ function ProjectsPage() {
       <section className="dashboard-content">
         <div className="overview-card">
           <p className="eyebrow">Overview</p>
-          <h2>All Approved Projects</h2>
+          <h2>All Approved Events</h2>
           <table className="data-table">
             <thead>
               <tr>
-                <th>Project Title</th>
+                <th>Event Title</th>
                 <th>Category</th>
                 <th>Total Budget</th>
                 <th>Utilization</th>
@@ -141,8 +140,8 @@ function ProjectsPage() {
               </tr>
             </thead>
             <tbody>
-              {parentProjects.length ? (
-                parentProjects.map((project) => {
+              {parentEvents.length ? (
+                parentEvents.map((project) => {
                   const additionalExpenses = expenses.filter(e => e.isAdditional && e.parentProjectId === project.id && !e.archivedAt)
                   const additionalSum = additionalExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
                   const approvedBudget = Number(project.amount || 0)
@@ -168,7 +167,7 @@ function ProjectsPage() {
                             className="project-status-select"
                             value={project.projectStatus || 'Ongoing'}
                             onChange={(e) => updateProjectStatus(project.id, e.target.value)}
-                            aria-label="Update Project Status"
+                            aria-label="Update Event Status"
                           >
                             <option value="Ongoing">Ongoing</option>
                             <option value="Completed">Completed</option>
@@ -184,14 +183,14 @@ function ProjectsPage() {
                           </button>
                         </td>
                       </tr>
-                      {renderProjectDetails(project, 6)}
+                      {renderEventDetails(project, 6)}
                     </Fragment>
                   )
                 })
               ) : (
                 <tr>
                   <td colSpan="6" className="empty-state">
-                    No approved projects yet.
+                    No approved events yet.
                   </td>
                 </tr>
               )}
@@ -203,4 +202,4 @@ function ProjectsPage() {
   )
 }
 
-export default ProjectsPage
+export default EventsPage

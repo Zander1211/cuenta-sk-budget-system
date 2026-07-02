@@ -151,15 +151,10 @@ function ApprovalsPage() {
     const breakdownItems = Array.isArray(request.breakdown)
       ? request.breakdown
       : []
-    const expensesItems = Array.isArray(request.expensesBreakdown)
-      ? request.expensesBreakdown
-      : []
     const breakdownTotal = getBreakdownTotal(breakdownItems)
-    const expensesTotal = getBreakdownTotal(expensesItems)
-    const combinedTotalCost = breakdownTotal + expensesTotal
     const requestedAmount = Number(request.amount) || 0
-    const totalAmount = requestedAmount > 0 ? requestedAmount : combinedTotalCost
-    const hasBreakdown = breakdownItems.length > 0 || expensesItems.length > 0
+    const totalAmount = requestedAmount > 0 ? requestedAmount : breakdownTotal
+    const hasBreakdown = breakdownItems.length > 0
     const isApproved = request.status === 'Approved'
     const isRejected = request.status === 'Rejected'
     const isCancelled = request.status === 'Cancelled'
@@ -260,7 +255,7 @@ function ApprovalsPage() {
                   <div>
                     <p className="details-label">Total cost</p>
                     <p className="details-value">
-                      {hasBreakdown ? currency.format(combinedTotalCost) : '—'}
+                      {hasBreakdown ? currency.format(breakdownTotal) : '—'}
                     </p>
                   </div>
                   <div>
@@ -328,51 +323,7 @@ function ApprovalsPage() {
                   )}
                 </div>
 
-                <div className="details-breakdown" style={{ marginTop: '16px' }}>
-                  <p className="details-label">Actual Expenses</p>
-                  {expensesItems.length ? (
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Expense item</th>
-                          <th>Quantity</th>
-                          <th>Unit cost</th>
-                          <th>Total cost</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {expensesItems.map((item, index) => (
-                          <tr key={`${request.id}-expense-${index}`}>
-                            <td>{item.itemName || '—'}</td>
-                            <td>{item.quantity || 0}</td>
-                            <td>{currency.format(item.unitCost || 0)}</td>
-                            <td>
-                              {currency.format(
-                                (item.quantity || 0) * (item.unitCost || 0)
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <th colSpan="3">Total expenses</th>
-                          <th>{currency.format(expensesTotal)}</th>
-                        </tr>
-                        <tr>
-                          <th colSpan="3">Combined total cost</th>
-                          <th>{currency.format(combinedTotalCost)}</th>
-                        </tr>
-                        <tr>
-                          <th colSpan="3">Total requested amount</th>
-                          <th>{currency.format(totalAmount)}</th>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  ) : (
-                    <p className="details-value">No expenses provided.</p>
-                  )}
-                </div>
+
 
                 {request.status === 'Rejected' ? (
                   <div className="reject-panel" style={{ marginTop: '12px' }}>

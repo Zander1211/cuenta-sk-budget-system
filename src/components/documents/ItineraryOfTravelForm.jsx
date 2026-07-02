@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import CurrencyInput from '../CurrencyInput';
 import { PlusCircle, Trash2 } from 'lucide-react'
 import { supabase } from '../../supabase/supabaseClient'
 
@@ -244,24 +245,10 @@ function ItineraryOfTravelForm({ profileName, role, onPreview }) {
                     </select>
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={row.perDiem}
-                      onChange={(e) => updateRow(index, 'perDiem', e.target.value)}
-                      placeholder="0.00"
-                    />
+                    <CurrencyInput value={row.perDiem} onValueChange={(val) => updateRow(index, 'perDiem', Number(val))} placeholder="0.00" />
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={row.others}
-                      onChange={(e) => updateRow(index, 'others', e.target.value)}
-                      placeholder="0.00"
-                    />
+                    <CurrencyInput value={row.others} onValueChange={(val) => updateRow(index, 'others', Number(val))} placeholder="0.00" />
                   </td>
                   <td className="computed-cell">{currency.format(getRowTotal(row))}</td>
                   <td>

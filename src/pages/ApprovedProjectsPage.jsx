@@ -27,7 +27,8 @@ function ApprovedProjectsPage() {
   const approvedProjects = useMemo(() => {
     return expenses.filter((item) => {
       const status = item.status || 'Approved'
-      return ['Approved', 'Released'].includes(status) && !item.archivedAt
+      const isProject = !item.type || item.type === 'Project'
+      return ['Approved', 'Released'].includes(status) && !item.archivedAt && isProject
     })
   }, [expenses])
 
