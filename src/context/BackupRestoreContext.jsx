@@ -51,32 +51,43 @@ export function BackupRestoreProvider({ children }) {
   const { user, profileName, role, isAuthenticated } = useAuth()
   const { addLog } = useAuditLog()
 
+  // ── Fetch backup history from Supabase ───────────────────────
   const fetchBackups = useCallback(async () => {
-    setIsLoading(true)
-    const { data, error } = await supabase
-      .from('backups')
-      .select('*')
-      .order('created_at', { ascending: false })
+    try {
+      const { data, error } = await supabase
+        .from('backups')
+        .select('*')
+        .order('created_at', { ascending: false })
 
-    if (!error && data) {
-      setBackups(data)
+      if (error) {
+        console.error('[BackupRestore] Failed to fetch backups:', error.message)
+      } else {
+        setBackups(data || [])
+      }
+    } catch (err) {
+      console.error('[BackupRestore] Exception fetching backups:', err)
     }
-    setIsLoading(false)
   }, [])
 
+  // ── Fetch restore history from Supabase ──────────────────────
   const fetchRestoreHistory = useCallback(async () => {
-    setIsLoading(true)
-    const { data, error } = await supabase
-      .from('restore_history')
-      .select('*')
-      .order('restored_at', { ascending: false })
+    try {
+      const { data, error } = await supabase
+        .from('restore_history')
+        .select('*')
+        .order('restored_at', { ascending: false })
 
-    if (!error && data) {
-      setRestoreHistory(data)
+      if (error) {
+        console.error('[BackupRestore] Failed to fetch restore history:', error.message)
+      } else {
+        setRestoreHistory(data || [])
+      }
+    } catch (err) {
+      console.error('[BackupRestore] Exception fetching restore history:', err)
     }
-    setIsLoading(false)
   }, [])
 
+  // Load history on mount when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       fetchBackups()
@@ -86,6 +97,78 @@ export function BackupRestoreProvider({ children }) {
       setRestoreHistory([])
     }
   }, [isAuthenticated, fetchBackups, fetchRestoreHistory])
+
+  // ── Helper: insert backup record with FK fallback ────────────
+  // The backups table has created_by_id as a FK to auth.users.
+  // If the user's ID doesn't satisfy the FK constraint, retry without it.
+  async function insertBackupRecord(record) {
+    console.log('[BackupRestore] Inserting backup record:', record)
+
+    const { data, error } = await supabase
+      .from('backups')
+      .insert(record)
+      .select()
+
+    if (error) {
+      console.error('[BackupRestore] Backup insert failed:', error.message, error.details, error.hint)
+
+      // If FK violation on created_by_id, retry without it
+      if (error.message?.includes('foreign key') || error.code === '23503') {
+        console.warn('[BackupRestore] FK constraint on created_by_id — retrying without user ID')
+        const { created_by_id, ...rest } = record
+        const { data: d2, error: e2 } = await supabase
+          .from('backups')
+          .insert(rest)
+          .select()
+
+        if (e2) {
+          console.error('[BackupRestore] Backup insert retry also failed:', e2.message, e2.details, e2.hint)
+          return { data: null, error: e2 }
+        }
+        console.log('[BackupRestore] Backup record inserted (without user ID):', d2)
+        return { data: d2, error: null }
+      }
+      return { data: null, error }
+    }
+
+    console.log('[BackupRestore] Backup record inserted:', data)
+    return { data, error: null }
+  }
+
+  // ── Helper: insert restore history record with FK fallback ───
+  async function insertRestoreRecord(record) {
+    console.log('[BackupRestore] Inserting restore history record:', record)
+
+    const { data, error } = await supabase
+      .from('restore_history')
+      .insert(record)
+      .select()
+
+    if (error) {
+      console.error('[BackupRestore] Restore history insert failed:', error.message, error.details, error.hint)
+
+      // If FK violation on restored_by_id, retry without it
+      if (error.message?.includes('foreign key') || error.code === '23503') {
+        console.warn('[BackupRestore] FK constraint on restored_by_id — retrying without user ID')
+        const { restored_by_id, ...rest } = record
+        const { data: d2, error: e2 } = await supabase
+          .from('restore_history')
+          .insert(rest)
+          .select()
+
+        if (e2) {
+          console.error('[BackupRestore] Restore history insert retry also failed:', e2.message, e2.details, e2.hint)
+          return { data: null, error: e2 }
+        }
+        console.log('[BackupRestore] Restore history record inserted (without user ID):', d2)
+        return { data: d2, error: null }
+      }
+      return { data: null, error }
+    }
+
+    console.log('[BackupRestore] Restore history record inserted:', data)
+    return { data, error: null }
+  }
 
   // ── Export: fetch ALL data from Supabase + localStorage ──────
   const exportAllData = async () => {
@@ -153,22 +236,26 @@ export function BackupRestoreProvider({ children }) {
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
 
-      // Record backup metadata
-      const { error } = await supabase.from('backups').insert({
+      // Record backup metadata in Supabase
+      const { error } = await insertBackupRecord({
         filename,
         backup_size: sizeBytes,
-        created_by_id: user?.id,
+        created_by_id: user?.id || null,
         created_by_name: profileName || role || 'System',
       })
 
-      if (!error) {
-        addLog({
-          action: 'Created system backup',
-          module: 'Backup & Restore',
-          description: `File: ${filename}, Size: ${(sizeBytes / 1024).toFixed(1)} KB`
-        })
-        fetchBackups()
+      if (error) {
+        console.error('[BackupRestore] Could not record backup metadata:', error.message)
       }
+
+      // Always log to audit trail and refresh list, even if metadata insert had issues
+      addLog({
+        action: 'Created system backup',
+        module: 'Backup & Restore',
+        description: `File: ${filename}, Size: ${(sizeBytes / 1024).toFixed(1)} KB`
+      })
+
+      await fetchBackups()
     } catch (err) {
       console.error('Backup creation failed', err)
       throw err
@@ -251,12 +338,10 @@ export function BackupRestoreProvider({ children }) {
       }
 
       // 2. Restore localStorage data
-      let localStorageRestored = 0
       for (const key of LOCAL_STORAGE_KEYS) {
         if (localStoragePayload[key] !== undefined) {
           try {
             window.localStorage.setItem(key, JSON.stringify(localStoragePayload[key]))
-            localStorageRestored++
             tableResults.push(`localStorage[${key}]: restored`)
           } catch (err) {
             console.warn(`[Restore] Failed to write localStorage key "${key}":`, err)
@@ -279,15 +364,20 @@ export function BackupRestoreProvider({ children }) {
       console.error('Restore failed', err)
       throw err
     } finally {
-      // Record restore history
-      await supabase.from('restore_history').insert({
+      // Record restore history — always runs even if restore threw
+      const { error: histError } = await insertRestoreRecord({
         filename: fileObj.name,
-        restored_by_id: user?.id,
+        restored_by_id: user?.id || null,
         restored_by_name: profileName || role || 'System',
         restore_status: status,
         details: details
       })
-      fetchRestoreHistory()
+
+      if (histError) {
+        console.error('[BackupRestore] Could not record restore history:', histError.message)
+      }
+
+      await fetchRestoreHistory()
       setIsLoading(false)
     }
   }
