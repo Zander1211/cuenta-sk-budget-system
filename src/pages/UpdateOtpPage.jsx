@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import RoleGate from '../components/RoleGate'
 import { useAuditLog } from '../context/AuditLogContext'
@@ -31,6 +31,24 @@ function UpdateOtpPage() {
   const [isResetting, setIsResetting] = useState(false)
   const [showResetNew, setShowResetNew] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [isOtpSent, setIsOtpSent] = useState(() => !!localStorage.getItem('cuenta_otp_password_sent'))
+  const [countdown, setCountdown] = useState(() => {
+    const sentAt = localStorage.getItem('cuenta_otp_password_sent')
+    if (sentAt) {
+      const elapsed = Math.floor((Date.now() - parseInt(sentAt)) / 1000)
+      return elapsed < 60 ? 60 - elapsed : 0
+    }
+    return 0
+  })
+
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
+      return () => clearTimeout(timer)
+    } else if (countdown === 0 && isOtpSent) {
+      localStorage.removeItem('cuenta_otp_password_sent')
+    }
+  }, [countdown, isOtpSent])
 
   async function sendOtp() {
     setResetStatus('')
@@ -62,6 +80,9 @@ function UpdateOtpPage() {
       return
     }
 
+    localStorage.setItem('cuenta_otp_password_sent', Date.now().toString())
+    setCountdown(60)
+    setIsOtpSent(true)
     setResetStatus('Check your email for the OTP code.')
     setIsSending(false)
   }
@@ -78,6 +99,13 @@ function UpdateOtpPage() {
 
     const signedInEmail = normalizeEmail(user?.email)
     const requestedEmail = normalizeEmail(resetEmail)
+
+    // Frontend Expiration Check
+    const sentAt = localStorage.getItem('cuenta_otp_password_sent')
+    if (!sentAt || Date.now() - parseInt(sentAt) > 60000) {
+      setResetError('OTP has expired. Please request a new one.')
+      return
+    }
 
     if (!signedInEmail) {
       setResetError('No signed-in email found. Please log in again.')
@@ -128,6 +156,9 @@ function UpdateOtpPage() {
     setResetPassword('')
     setResetConfirm('')
     setIsResetting(false)
+    setIsOtpSent(false)
+    setCountdown(0)
+    localStorage.removeItem('cuenta_otp_password_sent')
   }
 
   return (
@@ -163,7 +194,7 @@ function UpdateOtpPage() {
               <button
                 type="submit"
                 className="secondary-button"
-                disabled={isSending}
+                disabled={isSending || countdown > 0}
               >
                 Send OTP
               </button>
@@ -171,9 +202,9 @@ function UpdateOtpPage() {
                 type="button"
                 className="text-button"
                 onClick={sendOtp}
-                disabled={isSending}
+                disabled={isSending || countdown > 0}
               >
-                Resend OTP
+                {countdown > 0 ? `Resend OTP in ${countdown}s` : 'Resend OTP'}
               </button>
             </div>
           </form>
@@ -239,9 +270,9 @@ function UpdateOtpPage() {
               <button
                 type="submit"
                 className="primary-button"
-                disabled={isResetting}
+                disabled={isResetting || (isOtpSent && countdown === 0)}
               >
-                Update Password
+                {isOtpSent && countdown === 0 ? 'OTP Expired' : 'Update Password'}
               </button>
             </div>
           </form>

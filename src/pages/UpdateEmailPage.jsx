@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
@@ -19,7 +19,24 @@ function UpdateEmailPage() {
   const [emailStatus, setEmailStatus] = useState('')
   const [emailError, setEmailError] = useState('')
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false)
-  const [isOtpSent, setIsOtpSent] = useState(false)
+  const [isOtpSent, setIsOtpSent] = useState(() => !!localStorage.getItem('cuenta_otp_email_sent'))
+  const [countdown, setCountdown] = useState(() => {
+    const sentAt = localStorage.getItem('cuenta_otp_email_sent')
+    if (sentAt) {
+      const elapsed = Math.floor((Date.now() - parseInt(sentAt)) / 1000)
+      return elapsed < 60 ? 60 - elapsed : 0
+    }
+    return 0
+  })
+
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
+      return () => clearTimeout(timer)
+    } else if (countdown === 0 && isOtpSent) {
+      localStorage.removeItem('cuenta_otp_email_sent')
+    }
+  }, [countdown, isOtpSent])
 
   async function handleSendOtp(event) {
     event.preventDefault()
@@ -49,6 +66,8 @@ function UpdateEmailPage() {
     }
 
     setIsOtpSent(true)
+    localStorage.setItem('cuenta_otp_email_sent', Date.now().toString())
+    setCountdown(60)
     setEmailStatus(`An OTP has been sent to ${normalizedNewEmail}. Please check your inbox.`)
     setIsUpdatingEmail(false)
   }
@@ -60,6 +79,13 @@ function UpdateEmailPage() {
 
     if (!otp) {
       setEmailError('Please enter the OTP sent to your new email.')
+      return
+    }
+
+    // Frontend Expiration Check
+    const sentAt = localStorage.getItem('cuenta_otp_email_sent')
+    if (!sentAt || Date.now() - parseInt(sentAt) > 60000) {
+      setEmailError('OTP has expired. Please request a new one.')
       return
     }
 
@@ -83,6 +109,8 @@ function UpdateEmailPage() {
     addLog({ action: 'Successfully updated email address', actor: normalizedNewEmail })
     setNewEmail('')
     setOtp('')
+    localStorage.removeItem('cuenta_otp_email_sent')
+    setCountdown(0)
     
     setTimeout(() => {
       navigate('/dashboard/profile')
@@ -166,17 +194,27 @@ function UpdateEmailPage() {
                     setOtp('')
                     setEmailError('')
                     setEmailStatus('')
+                    setCountdown(0)
+                    localStorage.removeItem('cuenta_otp_email_sent')
                   }}
                   disabled={isUpdatingEmail}
                 >
                   Back
                 </button>
                 <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={handleSendOtp}
+                  disabled={isUpdatingEmail || countdown > 0}
+                >
+                  {countdown > 0 ? `Resend OTP in ${countdown}s` : 'Resend OTP'}
+                </button>
+                <button
                   type="submit"
                   className="primary-button"
-                  disabled={isUpdatingEmail}
+                  disabled={isUpdatingEmail || countdown === 0}
                 >
-                  {isUpdatingEmail ? 'Verifying...' : 'Verify and Update'}
+                  {countdown === 0 ? 'OTP Expired' : (isUpdatingEmail ? 'Verifying...' : 'Verify and Update')}
                 </button>
               </div>
             </form>
