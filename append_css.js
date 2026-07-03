@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const cssContent = \`
+const cssContent = `
 /* ═══════════════════════════════════════════════════════ */
 /*  AUDIT TRAIL                                            */
 /* ═══════════════════════════════════════════════════════ */
@@ -266,7 +266,7 @@ const cssContent = \`
 		grid-template-columns: 1fr;
 	}
 }
-\`;
+`;
 
 const cssPath = path.join(__dirname, 'src', 'index.css');
 if (fs.existsSync(cssPath)) {

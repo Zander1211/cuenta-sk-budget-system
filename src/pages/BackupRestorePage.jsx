@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { DatabaseBackup, HardDriveDownload, HardDriveUpload, Clock, FileJson, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { useState, useRef, useMemo } from 'react'
+import { DatabaseBackup, HardDriveDownload, HardDriveUpload, Clock, FileJson, CheckCircle2, XCircle, Loader2, Database, HardDrive } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBackupRestore } from '../context/BackupRestoreContext'
 
@@ -59,10 +59,16 @@ function BackupRestorePage() {
         if (typeof json !== 'object' || Array.isArray(json)) {
           throw new Error('Invalid backup format. Expected an object containing tables.')
         }
+        // Validate: must be new format (has meta.version + supabase) or old flat format
+        const isNewFmt = json.meta && json.meta.version && (json.supabase || json.localStorage)
+        const isOldFmt = !isNewFmt && Object.values(json).some(v => Array.isArray(v))
+        if (!isNewFmt && !isOldFmt) {
+          throw new Error('Unrecognized backup format. The file does not contain valid Cuenta backup data.')
+        }
         setParsedData(json)
         setSelectedFile(file)
       } catch (err) {
-        setPreviewError('Failed to parse the backup file. It may be corrupted or invalid.')
+        setPreviewError(err.message || 'Failed to parse the backup file. It may be corrupted or invalid.')
       }
     }
     reader.onerror = () => setPreviewError('Failed to read the file.')
@@ -94,10 +100,16 @@ function BackupRestorePage() {
 
     try {
       await restoreFromBackup(selectedFile, parsedData)
+      // Check if localStorage data was part of the backup — if so, reload
+      const hasLocalStorage = parsedData.localStorage && Object.keys(parsedData.localStorage).length > 0
+      alert('System successfully restored!' + (hasLocalStorage ? ' The page will now reload to apply all changes.' : ''))
+      if (hasLocalStorage) {
+        window.location.reload()
+        return
+      }
       setSelectedFile(null)
       setParsedData(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
-      alert('System successfully restored!')
     } catch (err) {
       alert('Restore failed. See console for details.')
     }
@@ -235,7 +247,18 @@ function BackupRestorePage() {
             </div>
           )}
 
-          {selectedFile && parsedData && (
+          {selectedFile && parsedData && (() => {
+            // Normalize for preview: detect new vs old format
+            const isNewFmt = parsedData.meta && parsedData.meta.version && (parsedData.supabase || parsedData.localStorage)
+            const supabaseTables = isNewFmt ? (parsedData.supabase || {}) : parsedData
+            const localStorageEntries = isNewFmt ? (parsedData.localStorage || {}) : {}
+            const backupMeta = isNewFmt ? parsedData.meta : null
+
+            const supabaseEntries = Object.entries(supabaseTables).filter(([, v]) => Array.isArray(v))
+            const localEntries = Object.entries(localStorageEntries)
+            const totalRows = supabaseEntries.reduce((sum, [, arr]) => sum + arr.length, 0)
+
+            return (
             <div className="restore-preview">
               <div className="restore-preview-header">
                 <CheckCircle2 size={20} style={{ color: '#15803d', marginTop: '2px' }} />
@@ -243,23 +266,66 @@ function BackupRestorePage() {
                   <h3 style={{ margin: '0 0 4px 0', fontSize: '1.05rem', color: '#15803d' }}>Ready to Restore</h3>
                   <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--ink-soft)' }}>
                     <strong>File:</strong> {selectedFile.name} ({formatBytes(selectedFile.size)})
+                    {backupMeta && <> · <strong>Format:</strong> v{backupMeta.version}</>}
+                    {backupMeta && <> · <strong>Created:</strong> {formatDate(backupMeta.createdAt)}</>}
                   </p>
                 </div>
               </div>
               
+              {/* Supabase Tables */}
+              {supabaseEntries.length > 0 && (
               <div className="restore-preview-tables">
-                <p className="eyebrow">Tables to be restored:</p>
+                <p className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Database size={14} /> Supabase Tables ({totalRows} total rows)
+                </p>
                 <div className="restore-table-list">
-                  {Object.entries(parsedData).map(([tableName, dataArr]) => (
+                  {supabaseEntries.map(([tableName, dataArr]) => (
                     <div key={tableName} className="restore-table-item">
                       <span className="restore-table-name">{tableName}</span>
                       <span className="restore-table-count">
-                        {Array.isArray(dataArr) ? `${dataArr.length} rows` : 'Unknown'}
+                        {dataArr.length} rows
                       </span>
                     </div>
                   ))}
                 </div>
               </div>
+              )}
+
+              {/* localStorage Data */}
+              {localEntries.length > 0 && (
+              <div className="restore-preview-tables">
+                <p className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <HardDrive size={14} /> Local Storage Data
+                </p>
+                <div className="restore-table-list">
+                  {localEntries.map(([key, value]) => {
+                    let label = key
+                    let detail = 'object'
+                    if (key === 'cuenta.budgetData.v4') {
+                      label = 'Budget Data (Requests, Expenses, Budgets)'
+                      const v = value || {}
+                      const parts = []
+                      if (Array.isArray(v.requests)) parts.push(`${v.requests.length} requests`)
+                      if (Array.isArray(v.expenses)) parts.push(`${v.expenses.length} expenses`)
+                      if (Array.isArray(v.budgets)) parts.push(`${v.budgets.length} budgets`)
+                      detail = parts.join(', ') || 'empty'
+                    } else if (key === 'cuenta.documentHistory.v2') {
+                      label = 'Document History'
+                      detail = Array.isArray(value) ? `${value.length} documents` : 'object'
+                    } else if (key === 'cuenta.notifications.v2') {
+                      label = 'Notifications'
+                      detail = Array.isArray(value) ? `${value.length} notifications` : 'object'
+                    }
+                    return (
+                      <div key={key} className="restore-table-item">
+                        <span className="restore-table-name">{label}</span>
+                        <span className="restore-table-count">{detail}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              )}
 
               <div className="restore-preview-actions" style={{ marginTop: '12px' }}>
                 <button 
@@ -286,7 +352,8 @@ function BackupRestorePage() {
                 </button>
               </div>
             </div>
-          )}
+            )
+          })()}
 
           <p className="eyebrow" style={{ marginTop: '32px' }}>Restore History</p>
           <table className="data-table">

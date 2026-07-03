@@ -6,6 +6,44 @@ import { useAuditLog } from './AuditLogContext'
 
 const BackupRestoreContext = createContext(null)
 
+// ── Constants ──────────────────────────────────────────────────
+const BACKUP_FORMAT_VERSION = '2.0'
+
+// All Supabase tables the system uses
+const SUPABASE_TABLES = [
+  'created_accounts',
+  'projects',
+  'budgets',
+  'expenses',
+  'document_counters',
+  'report_summaries',
+  'project_photos',
+  'audit_trail',
+  'backups',
+  'restore_history',
+]
+
+// localStorage keys that hold operational data
+const LOCAL_STORAGE_KEYS = [
+  'cuenta.budgetData.v4',       // requests, expenses, budgets (BudgetContext)
+  'cuenta.documentHistory.v2',  // generated documents (DocumentContext)
+  'cuenta.notifications.v2',    // notifications (NotificationContext)
+]
+
+// Restore order for Supabase tables (FK-safe: parents before children)
+const RESTORE_TABLE_ORDER = [
+  'created_accounts',
+  'projects',
+  'budgets',
+  'document_counters',
+  'report_summaries',
+  'project_photos',
+  'expenses',
+  'audit_trail',
+  'backups',
+  'restore_history',
+]
+
 export function BackupRestoreProvider({ children }) {
   const [backups, setBackups] = useState([])
   const [restoreHistory, setRestoreHistory] = useState([])
@@ -49,41 +87,63 @@ export function BackupRestoreProvider({ children }) {
     }
   }, [isAuthenticated, fetchBackups, fetchRestoreHistory])
 
-  // Get current state of all relevant tables
+  // ── Export: fetch ALL data from Supabase + localStorage ──────
   const exportAllData = async () => {
-    const tables = [
-      'budgets',
-      'expenses',
-      'requests',
-      'documents',
-      'projects',
-      'created_accounts',
-      // skip audit_trail, backups, restore_history to avoid recursion/bloat
-    ]
-    
-    const exportData = {}
-    for (const table of tables) {
-      const { data, error } = await supabase.from(table).select('*')
-      if (!error && data) {
-        exportData[table] = data
+    const supabaseData = {}
+
+    for (const table of SUPABASE_TABLES) {
+      try {
+        const { data, error } = await supabase.from(table).select('*')
+        if (!error && data) {
+          supabaseData[table] = data
+        } else if (error) {
+          console.warn(`[Backup] Skipping table "${table}":`, error.message)
+          supabaseData[table] = []
+        }
+      } catch (err) {
+        console.warn(`[Backup] Failed to fetch "${table}":`, err)
+        supabaseData[table] = []
       }
     }
-    return exportData
+
+    // Export localStorage data
+    const localStorageData = {}
+    for (const key of LOCAL_STORAGE_KEYS) {
+      try {
+        const raw = window.localStorage.getItem(key)
+        if (raw) {
+          localStorageData[key] = JSON.parse(raw)
+        }
+      } catch (err) {
+        console.warn(`[Backup] Failed to read localStorage key "${key}":`, err)
+      }
+    }
+
+    return {
+      meta: {
+        version: BACKUP_FORMAT_VERSION,
+        appName: 'Cuenta',
+        createdAt: new Date().toISOString(),
+        createdBy: profileName || role || 'System',
+      },
+      supabase: supabaseData,
+      localStorage: localStorageData,
+    }
   }
 
+  // ── Create Backup ────────────────────────────────────────────
   const createBackup = async () => {
     try {
       setIsLoading(true)
       const data = await exportAllData()
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
       const filename = `cuenta_backup_${timestamp}.json`
-      
+
       const jsonStr = JSON.stringify(data, null, 2)
       const blob = new Blob([jsonStr], { type: 'application/json' })
       const sizeBytes = blob.size
 
-      // In a real app with storage setup, we would upload the blob to Supabase Storage.
-      // Here, we just download it locally and record the metadata.
+      // Download locally
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
@@ -117,43 +177,105 @@ export function BackupRestoreProvider({ children }) {
     }
   }
 
-  const restoreFromBackup = async (fileObj, parsedData) => {
+  // ── Helpers: detect backup format ────────────────────────────
+  function isNewFormat(parsed) {
+    return parsed && parsed.meta && parsed.meta.version && (parsed.supabase || parsed.localStorage)
+  }
+
+  // Convert old flat format { budgets: [...], expenses: [...] } into new format
+  function normalizeBackupData(parsed) {
+    if (isNewFormat(parsed)) return parsed
+
+    // Old format: flat object with table names as keys
+    return {
+      meta: {
+        version: '1.0',
+        appName: 'Cuenta',
+        createdAt: new Date().toISOString(),
+        createdBy: 'Unknown (legacy backup)',
+      },
+      supabase: parsed,
+      localStorage: {},
+    }
+  }
+
+  // ── Restore from Backup ──────────────────────────────────────
+  const restoreFromBackup = async (fileObj, rawParsedData) => {
     setIsLoading(true)
     let status = 'failed'
     let details = ''
+    const tableResults = []
 
     try {
-      // 1. Process tables in order (respecting rough FK constraints if any)
-      const tables = [
-        'created_accounts',
-        'projects',
-        'budgets',
-        'expenses',
-        'requests',
-        'documents',
-      ]
+      const backup = normalizeBackupData(rawParsedData)
+      const supabaseData = backup.supabase || {}
+      const localStoragePayload = backup.localStorage || {}
 
-      for (const table of tables) {
-        if (parsedData[table] && Array.isArray(parsedData[table])) {
-          // Upsert data. We assume IDs are preserved.
-          const { error } = await supabase.from(table).upsert(parsedData[table])
+      // 1. Restore Supabase tables in FK-safe order
+      for (const table of RESTORE_TABLE_ORDER) {
+        const rows = supabaseData[table]
+        if (!rows || !Array.isArray(rows) || rows.length === 0) {
+          continue
+        }
+
+        try {
+          const { error } = await supabase.from(table).upsert(rows, { onConflict: 'id' })
           if (error) {
-            console.warn(`Error restoring ${table}:`, error)
+            console.warn(`[Restore] Error restoring "${table}":`, error.message)
+            tableResults.push(`${table}: FAILED (${error.message})`)
+          } else {
+            tableResults.push(`${table}: ${rows.length} rows restored`)
+          }
+        } catch (err) {
+          console.warn(`[Restore] Exception restoring "${table}":`, err)
+          tableResults.push(`${table}: FAILED (${err.message})`)
+        }
+      }
+
+      // Also handle any extra tables in the backup that aren't in RESTORE_TABLE_ORDER
+      for (const table of Object.keys(supabaseData)) {
+        if (RESTORE_TABLE_ORDER.includes(table)) continue
+        const rows = supabaseData[table]
+        if (!rows || !Array.isArray(rows) || rows.length === 0) continue
+
+        try {
+          const { error } = await supabase.from(table).upsert(rows, { onConflict: 'id' })
+          if (error) {
+            tableResults.push(`${table}: FAILED (${error.message})`)
+          } else {
+            tableResults.push(`${table}: ${rows.length} rows restored`)
+          }
+        } catch (err) {
+          tableResults.push(`${table}: FAILED (${err.message})`)
+        }
+      }
+
+      // 2. Restore localStorage data
+      let localStorageRestored = 0
+      for (const key of LOCAL_STORAGE_KEYS) {
+        if (localStoragePayload[key] !== undefined) {
+          try {
+            window.localStorage.setItem(key, JSON.stringify(localStoragePayload[key]))
+            localStorageRestored++
+            tableResults.push(`localStorage[${key}]: restored`)
+          } catch (err) {
+            console.warn(`[Restore] Failed to write localStorage key "${key}":`, err)
+            tableResults.push(`localStorage[${key}]: FAILED`)
           }
         }
       }
 
       status = 'success'
-      details = `Successfully restored ${Object.keys(parsedData).length} tables.`
-      
+      details = tableResults.join('\n')
+
       addLog({
         action: 'Restored system from backup',
         module: 'Backup & Restore',
-        description: `File: ${fileObj.name}`
+        description: `File: ${fileObj.name}. ${tableResults.length} items processed.`
       })
     } catch (err) {
       status = 'failed'
-      details = err.message
+      details = err.message + '\n' + tableResults.join('\n')
       console.error('Restore failed', err)
       throw err
     } finally {
