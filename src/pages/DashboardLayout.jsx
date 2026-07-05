@@ -87,7 +87,7 @@ const navItems = [
   {
     label: 'AI Analysis',
     path: '/dashboard/ai-analysis',
-    roles: ['SK Chairman', 'SK Treasurer'],
+    roles: ['SK Chairman', 'SK Treasurer', 'Barangay Treasurer', 'SK Kagawad'],
     icon: Bot
   },
   {

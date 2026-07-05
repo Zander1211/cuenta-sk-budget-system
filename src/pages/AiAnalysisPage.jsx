@@ -533,7 +533,7 @@ function AiAnalysisPage() {
   const maxProjectValue = projectTotals[0]?.value || 0
 
   return (
-    <RoleGate allow={['SK Chairman', 'SK Treasurer']}>
+    <RoleGate allow={['SK Chairman', 'SK Treasurer', 'Barangay Treasurer', 'SK Kagawad']}>
       <header className="dashboard-header">
         <div className="header-left">
           <div>

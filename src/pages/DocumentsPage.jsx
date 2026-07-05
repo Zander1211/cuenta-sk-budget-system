@@ -16,7 +16,7 @@ import TransmittalLetterPreview from '../components/documents/TransmittalLetterP
 function DocumentsPage() {
   const navigate = useNavigate()
   const { role } = useAuth()
-  const { documents } = useDocuments()
+  const { documents, archiveDocument, restoreDocument } = useDocuments()
   
   const canCreate = ['SK Chairman', 'SK Treasurer'].includes(role)
   
@@ -24,6 +24,12 @@ function DocumentsPage() {
   const [activeGeneratorType, setActiveGeneratorType] = useState(null)
   
   const [viewingDoc, setViewingDoc] = useState(null)
+  const [activeTab, setActiveTab] = useState('active')
+  const [archiveModal, setArchiveModal] = useState({ open: false, docId: null })
+
+  const activeDocuments = documents.filter((doc) => !doc.archivedAt)
+  const archivedDocuments = documents.filter((doc) => doc.archivedAt)
+  const displayedDocuments = activeTab === 'active' ? activeDocuments : archivedDocuments
 
   function handleCreateSelect(type) {
     if (type === 'annual-report') {
@@ -93,10 +99,28 @@ function DocumentsPage() {
           </div>
         ) : (
           <div className="overview-card">
-            <h2>Past Generated Documents</h2>
-            <p style={{ marginBottom: '16px', color: 'var(--ink-soft)', fontSize: '0.9rem' }}>
-              View and download previously generated official documents.
-            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h2>{activeTab === 'active' ? 'Past Generated Documents' : 'Archived Documents'}</h2>
+                <p style={{ color: 'var(--ink-soft)', fontSize: '0.9rem', margin: 0 }}>
+                  {activeTab === 'active' ? 'View and download previously generated official documents.' : 'View and manage archived documents.'}
+                </p>
+              </div>
+              <div className="page-tabs" role="tablist">
+                <button
+                  className={`page-tab ${activeTab === 'active' ? 'is-active' : ''}`}
+                  onClick={() => setActiveTab('active')}
+                >
+                  Active
+                </button>
+                <button
+                  className={`page-tab ${activeTab === 'archive' ? 'is-active' : ''}`}
+                  onClick={() => setActiveTab('archive')}
+                >
+                  Archived
+                </button>
+              </div>
+            </div>
             
             <table className="data-table">
               <thead>
@@ -110,41 +134,60 @@ function DocumentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {documents.length > 0 ? (
-                  documents.map((doc) => (
-                    <tr key={doc.id}>
+                {displayedDocuments.length > 0 ? (
+                  displayedDocuments.map((doc) => (
+                    <tr key={doc.id} style={{ opacity: doc.archivedAt ? 0.7 : 1 }}>
                       <td style={{ fontWeight: 500 }}>{doc.name}</td>
                       <td>{doc.project || '—'}</td>
                       <td>{new Date(doc.dateGenerated).toLocaleString()}</td>
                       <td>{doc.generatedBy}</td>
                       <td>
                         <span className="status-chip is-neutral">{doc.type}</span>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <button
-                          className="text-button"
-                          onClick={() => setViewingDoc(doc)}
-                          style={{ marginRight: '8px' }}
-                        >
-                          <Eye size={16} style={{ marginRight: '4px' }}/> View
-                        </button>
-                        <button
-                          className="text-button"
-                          onClick={() => {
-                            // Open preview and immediately trigger print
-                            setViewingDoc(doc)
-                            setTimeout(() => window.print(), 500)
-                          }}
-                        >
-                          <Download size={16} style={{ marginRight: '4px' }}/> Download
-                        </button>
+                      <td>
+                        <div className="action-group is-right">
+                          <button
+                            className="text-button"
+                            onClick={() => setViewingDoc(doc)}
+                          >
+                            <Eye size={16} style={{ marginRight: '4px' }}/> View
+                          </button>
+                          <button
+                            className="text-button"
+                            onClick={() => {
+                              // Open preview and immediately trigger print
+                              setViewingDoc(doc)
+                              setTimeout(() => window.print(), 500)
+                            }}
+                          >
+                            <Download size={16} style={{ marginRight: '4px' }}/> Download
+                          </button>
+                          {canCreate && (
+                            activeTab === 'active' ? (
+                              <button
+                                className="text-button"
+                                onClick={() => setArchiveModal({ open: true, docId: doc.id })}
+                                style={{ color: '#e53e3e' }}
+                              >
+                                Archive
+                              </button>
+                            ) : (
+                              <button
+                                className="text-button"
+                                onClick={() => restoreDocument(doc.id)}
+                                style={{ color: 'var(--accent)' }}
+                              >
+                                Restore
+                              </button>
+                            )
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
                     <td colSpan="6" className="empty-state">
-                      No documents have been generated yet.
+                      {activeTab === 'active' ? 'No documents have been generated yet.' : 'No archived documents.'}
                     </td>
                   </tr>
                 )}
@@ -182,6 +225,45 @@ function DocumentsPage() {
 
       {/* Viewing Document Preview */}
       {renderViewingDoc()}
+
+      {/* Archive Confirmation Modal */}
+      {archiveModal.open && archiveModal.docId && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <h2>Archive Document</h2>
+            </div>
+            <div className="modal-body" style={{ margin: '16px 0' }}>
+              <p>
+                Are you sure you want to archive this document? It will be moved to the Archived Documents section.
+              </p>
+            </div>
+            <div
+              className="modal-footer"
+              style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}
+            >
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setArchiveModal({ open: false, docId: null })}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                style={{ backgroundColor: '#e53e3e', color: 'white', borderColor: '#e53e3e' }}
+                onClick={() => {
+                  archiveDocument(archiveModal.docId)
+                  setArchiveModal({ open: false, docId: null })
+                }}
+              >
+                Archive
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </RoleGate>
   )
 }

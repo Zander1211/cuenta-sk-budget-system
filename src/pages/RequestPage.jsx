@@ -156,7 +156,7 @@ function RequestPage() {
                             className="text-button"
                             type="button"
                             onClick={() => handleEdit(request)}
-                            style={{ marginRight: '8px', fontWeight: 500 }}
+                            style={{ fontWeight: 500 }}
                           >
                             Edit
                           </button>

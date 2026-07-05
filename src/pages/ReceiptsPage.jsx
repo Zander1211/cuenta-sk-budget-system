@@ -3,8 +3,10 @@ import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import { supabase } from '../supabase/supabaseClient'
 import CurrencyInput from '../components/CurrencyInput'
+import { useAuth } from '../context/AuthContext'
 
 function ReceiptsPage() {
+  const { role } = useAuth()
   const { expenses, refreshExpensesFromSupabase, expensesSyncStatus } = useBudget()
   const [filesById, setFilesById] = useState({})
   const [errorsById, setErrorsById] = useState({})
@@ -245,7 +247,7 @@ function ReceiptsPage() {
   }
 
   return (
-    <RoleGate allow={['SK Chairman', 'SK Treasurer']}>
+    <RoleGate allow={['SK Chairman', 'SK Treasurer', 'Barangay Treasurer']}>
       <header className="dashboard-header">
         <div className="header-left">
           <div>
@@ -311,22 +313,26 @@ function ReceiptsPage() {
                         )}
                       </td>
                       <td>
-                        <div className="field-row" style={{ gap: '8px' }}>
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            onClick={() => triggerCamera(expense)}
-                          >
-                            📷 Scan Receipt
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            onClick={() => triggerUpload(expense)}
-                          >
-                            📁 Upload
-                          </button>
-                        </div>
+                        {role !== 'Barangay Treasurer' ? (
+                          <div className="field-row" style={{ gap: '8px' }}>
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => triggerCamera(expense)}
+                            >
+                              📷 Scan Receipt
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => triggerUpload(expense)}
+                            >
+                              📁 Upload
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="status-pill status-neutral">View Only</span>
+                        )}
                       </td>
                     </tr>
                   ))

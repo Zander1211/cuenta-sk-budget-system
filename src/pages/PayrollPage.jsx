@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import { useBudget } from '../context/BudgetContext'
 import RoleGate from '../components/RoleGate'
+import { useAuth } from '../context/AuthContext'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -17,6 +18,7 @@ function getPayrollTotal(breakdown = []) {
 }
 
 function PayrollPage() {
+  const { role } = useAuth()
   const { expenses, updateProjectStatus } = useBudget()
   const [expanded, setExpanded] = useState({})
 
@@ -217,15 +219,21 @@ function PayrollPage() {
                           </div>
                         </td>
                         <td>
-                          <select
-                            className="project-status-select"
-                            value={project.projectStatus || 'Ongoing'}
-                            onChange={(e) => updateProjectStatus(project.id, e.target.value)}
-                            aria-label="Update Payroll Status"
-                          >
-                            <option value="Ongoing">Ongoing</option>
-                            <option value="Completed">Completed</option>
-                          </select>
+                          {role === 'SK Chairman' ? (
+                            <select
+                              className="project-status-select"
+                              value={project.projectStatus || 'Ongoing'}
+                              onChange={(e) => updateProjectStatus(project.id, e.target.value)}
+                              aria-label="Update Payroll Status"
+                            >
+                              <option value="Ongoing">Ongoing</option>
+                              <option value="Completed">Completed</option>
+                            </select>
+                          ) : (
+                            <span className={`status-pill status-${(project.projectStatus || 'Ongoing').toLowerCase()}`}>
+                              {project.projectStatus || 'Ongoing'}
+                            </span>
+                          )}
                         </td>
                         <td className="table-actions">
                           <button

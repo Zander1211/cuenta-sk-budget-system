@@ -35,6 +35,9 @@ function UserManagementPage() {
   // Deactivate confirmation modal
   const [deactivateModal, setDeactivateModal] = useState({ open: false, account: null, action: '' })
 
+  // View User Info Modal
+  const [viewModal, setViewModal] = useState({ open: false, user: null })
+
   useEffect(() => {
     loadAccounts()
   }, [])
@@ -372,6 +375,14 @@ function UserManagementPage() {
 
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="text-button"
+                            style={{ fontSize: '0.8rem' }}
+                            onClick={() => setViewModal({ open: true, user })}
+                          >
+                            View Info
+                          </button>
                           {editingRoleId !== user.id && (
                             <button
                               type="button"
@@ -450,6 +461,67 @@ function UserManagementPage() {
                 onClick={confirmToggleActive}
               >
                 {deactivateModal.action === 'deactivate' ? 'Deactivate' : 'Reactivate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View User Information Modal */}
+      {viewModal.open && viewModal.user && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2>User Information</h2>
+            </div>
+            <div className="modal-body" style={{ margin: '16px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+                <div style={{ 
+                  width: '64px', height: '64px', borderRadius: '50%', 
+                  backgroundColor: 'var(--accent)', color: 'white',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '24px', fontWeight: 'bold'
+                }}>
+                  {viewModal.user.full_name?.charAt(0)?.toUpperCase() || '?'}
+                </div>
+                <div>
+                  <h3 style={{ margin: '0 0 4px', fontSize: '1.25rem' }}>{viewModal.user.full_name}</h3>
+                  <p style={{ margin: 0, color: 'var(--ink-soft)' }}>{viewModal.user.email}</p>
+                </div>
+              </div>
+
+              <div className="details-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div>
+                  <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Role</p>
+                  <p className="details-value" style={{ fontWeight: 500 }}>{viewModal.user.role}</p>
+                </div>
+                <div>
+                  <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Account Status</p>
+                  <p className="details-value" style={{ fontWeight: 500, color: viewModal.user.is_active ? '#15803d' : '#ef4444' }}>
+                    {viewModal.user.is_active ? 'Active' : 'Deactivated'}
+                  </p>
+                </div>
+                <div>
+                  <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Date Created</p>
+                  <p className="details-value" style={{ fontWeight: 500 }}>
+                    {viewModal.user.created_at ? new Date(viewModal.user.created_at).toLocaleDateString() : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Last Login</p>
+                  <p className="details-value" style={{ fontWeight: 500 }}>
+                    {viewModal.user.last_sign_in_at ? new Date(viewModal.user.last_sign_in_at).toLocaleDateString() : 'Not available'}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setViewModal({ open: false, user: null })}
+              >
+                Close
               </button>
             </div>
           </div>

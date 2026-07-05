@@ -1,48 +1,131 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { supabase } from '../supabase/supabaseClient'
 
 const DocumentContext = createContext(null)
-const STORAGE_KEY = 'cuenta.documentHistory.v2'
-
-function getInitialState() {
-  if (typeof window === 'undefined') return []
-
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY)
-    if (!stored) return []
-    return JSON.parse(stored)
-  } catch {
-    return []
-  }
-}
 
 export function DocumentProvider({ children }) {
-  const [documents, setDocuments] = useState(() => getInitialState())
+  const [documents, setDocuments] = useState([])
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(documents))
-    }
-  }, [documents])
+    let mounted = true
 
-  function addDocument(doc) {
-    setDocuments((prev) => [
-      {
-        id: typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `${Date.now()}`,
-        dateGenerated: new Date().toISOString(),
-        ...doc,
-      },
-      ...prev,
-    ])
+    async function loadDocuments() {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .order('date_generated', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching documents:', error)
+        return
+      }
+
+      if (mounted && data) {
+        const mapped = data.map((d) => ({
+          ...d,
+          dateGenerated: d.date_generated,
+          archivedAt: d.archived_at,
+          generatedBy: d.generated_by,
+        }))
+        setDocuments(mapped)
+      }
+    }
+
+    loadDocuments()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  async function addDocument(doc) {
+    // Generate a temporary ID for optimistic update
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+    const dateGenerated = new Date().toISOString()
+    
+    const newDoc = {
+      id: tempId,
+      dateGenerated,
+      ...doc
+    }
+    
+    // Optimistic update
+    setDocuments((prev) => [newDoc, ...prev])
+
+    // Save to Supabase (omit id to let Postgres generate UUID)
+    const { data: insertedData, error } = await supabase.from('documents').insert({
+      date_generated: dateGenerated,
+      name: doc.name,
+      project: doc.project,
+      generated_by: doc.generatedBy,
+      type: doc.type,
+      data: doc.data,
+      archived_at: null
+    }).select().single()
+
+    if (error) {
+      console.error('Error adding document:', error)
+      // Rollback optimistic update
+      setDocuments((prev) => prev.filter((d) => d.id !== tempId))
+    } else if (insertedData) {
+      // Update optimistic document with actual DB UUID
+      setDocuments((prev) => prev.map((d) => d.id === tempId ? {
+        ...d,
+        id: insertedData.id
+      } : d))
+    }
   }
 
-  function deleteDocument(docId) {
+  async function deleteDocument(docId) {
+    const backup = [...documents]
     setDocuments((prev) => prev.filter((d) => d.id !== docId))
+
+    const { error } = await supabase.from('documents').delete().eq('id', docId)
+    if (error) {
+      console.error('Error deleting document:', error)
+      setDocuments(backup)
+    }
+  }
+
+  async function archiveDocument(docId) {
+    const timestamp = new Date().toISOString()
+    const backup = [...documents]
+    
+    setDocuments((prev) =>
+      prev.map((d) => (d.id === docId ? { ...d, archivedAt: timestamp } : d))
+    )
+
+    const { error } = await supabase
+      .from('documents')
+      .update({ archived_at: timestamp })
+      .eq('id', docId)
+      
+    if (error) {
+      console.error('Error archiving document:', error)
+      setDocuments(backup)
+    }
+  }
+
+  async function restoreDocument(docId) {
+    const backup = [...documents]
+    
+    setDocuments((prev) =>
+      prev.map((d) => (d.id === docId ? { ...d, archivedAt: null } : d))
+    )
+
+    const { error } = await supabase
+      .from('documents')
+      .update({ archived_at: null })
+      .eq('id', docId)
+      
+    if (error) {
+      console.error('Error restoring document:', error)
+      setDocuments(backup)
+    }
   }
 
   return (
-    <DocumentContext.Provider value={{ documents, addDocument, deleteDocument }}>
+    <DocumentContext.Provider value={{ documents, addDocument, deleteDocument, archiveDocument, restoreDocument }}>
       {children}
     </DocumentContext.Provider>
   )

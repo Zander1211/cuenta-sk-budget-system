@@ -282,6 +282,8 @@ body {
 }
 
 .primary-button {
+	vertical-align: middle;
+	box-sizing: border-box;
 	padding: 12px 20px;
 	border-radius: 8px;
 	border: none;
@@ -290,7 +292,7 @@ body {
 	font-weight: 600;
 	font-size: 0.95rem;
 	cursor: pointer;
-	transition: background-color 0.2s ease, transform 0.2s ease;
+	transition: all 0.2s ease;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -298,16 +300,24 @@ body {
 	box-shadow: 0 4px 12px rgba(30, 58, 46, 0.2);
 }
 
-.primary-button:hover {
+.primary-button:hover:not(:disabled) {
 	background: var(--sea-soft);
 	transform: translateY(-1px);
 }
 
-.primary-button:active {
+.primary-button:active:not(:disabled) {
 	transform: translateY(0);
 }
 
+.primary-button:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+	box-shadow: none;
+}
+
 .secondary-button {
+	vertical-align: middle;
+	box-sizing: border-box;
 	border: 1px solid var(--border);
 	background: #fff;
 	padding: 10px 16px;
@@ -316,12 +326,26 @@ body {
 	font-weight: 600;
 	cursor: pointer;
 	color: var(--ink);
-	transition: background-color 0.2s ease, transform 0.2s ease;
+	transition: all 0.2s ease;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
 }
 
-.secondary-button:hover {
+.secondary-button:hover:not(:disabled) {
 	background: rgba(0, 0, 0, 0.04);
 	transform: translateY(-1px);
+}
+
+.secondary-button:active:not(:disabled) {
+	transform: translateY(0);
+}
+
+.secondary-button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	background: rgba(0, 0, 0, 0.02);
 }
 
 .sync-banner {
@@ -346,20 +370,37 @@ body {
 }
 
 .ghost-button {
+	vertical-align: middle;
+	box-sizing: border-box;
 	background: transparent;
 	border: 1px solid rgba(15, 31, 54, 0.25);
 	padding: 10px 14px;
 	border-radius: 999px;
 	font-size: 0.9rem;
+	font-weight: 500;
 	cursor: pointer;
 	color: var(--ink);
-	transition: border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+	transition: all 0.2s ease;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
 }
 
-.ghost-button:hover {
+.ghost-button:hover:not(:disabled) {
 	border-color: rgba(255, 107, 61, 0.7);
+	background: rgba(255, 107, 61, 0.05);
 	color: var(--coral-dark);
 	transform: translateY(-1px);
+}
+
+.ghost-button:active:not(:disabled) {
+	transform: translateY(0);
+}
+
+.ghost-button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
 }
 
 .notification-bell-wrap {
@@ -847,6 +888,23 @@ body {
 	place-items: center;
 	cursor: pointer;
 	color: var(--ink);
+	transition: all 0.2s ease;
+}
+
+.icon-button:hover:not(:disabled) {
+	background: rgba(15, 31, 54, 0.05);
+	border-color: rgba(15, 31, 54, 0.25);
+	transform: translateY(-1px);
+}
+
+.icon-button:active:not(:disabled) {
+	transform: translateY(0);
+}
+
+.icon-button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	background: rgba(0, 0, 0, 0.02);
 }
 
 .user-chip {
@@ -1461,16 +1519,39 @@ body {
 }
 
 .text-button {
-	border: none;
-	background: transparent;
-	color: var(--ink-soft);
+	vertical-align: middle;
+	box-sizing: border-box;
+	height: 32px;
+	border: 1px solid rgba(15, 31, 54, 0.12);
+	background: rgba(15, 31, 54, 0.04);
+	color: var(--ink);
 	font-size: 0.85rem;
+	font-weight: 500;
 	cursor: pointer;
-	padding: 6px 8px;
+	padding: 6px 12px;
+	border-radius: 6px;
+	transition: all 0.2s ease;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
 }
 
-.text-button:hover {
-	color: var(--coral-dark);
+.text-button:hover:not(:disabled) {
+	background: rgba(15, 31, 54, 0.08);
+	border-color: rgba(15, 31, 54, 0.2);
+	color: var(--ink-dark);
+}
+
+.text-button:active:not(:disabled) {
+	transform: translateY(1px);
+}
+
+.text-button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	background: rgba(15, 31, 54, 0.02);
+	border-color: transparent;
 }
 
 .form-note {
@@ -3820,4 +3901,15 @@ td.nr-info-label {
 
 .request-dropdown-item:hover {
   background: rgba(15, 31, 54, 0.04);
+}
+
+/* Global action group for tables and forms */
+.action-group {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+.action-group.is-right {
+	justify-content: flex-end;
 }
