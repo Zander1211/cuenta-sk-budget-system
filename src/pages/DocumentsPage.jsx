@@ -143,6 +143,7 @@ function DocumentsPage() {
                       <td>{doc.generatedBy}</td>
                       <td>
                         <span className="status-chip is-neutral">{doc.type}</span>
+                      </td>
                       <td>
                         <div className="action-group is-right">
                           <button
