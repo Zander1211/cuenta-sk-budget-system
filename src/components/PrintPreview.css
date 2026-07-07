@@ -305,42 +305,64 @@
     visibility: hidden;
   }
 
+  /* Make sure the main layout elements don't constrain the print overlay */
+  html, body, #root, .dashboard, .dashboard-shell, .dashboard-layout, .dashboard-main {
+    position: static !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
   .print-preview-overlay,
   .print-preview-overlay * {
     visibility: visible;
   }
 
   .print-preview-overlay {
-    position: absolute;
-    inset: 0;
+    position: relative !important;
     background: #fff;
     padding: 0;
-    overflow: visible;
+    margin: 0;
+    overflow: visible !important;
+    display: block !important;
   }
 
   .print-preview-toolbar {
     display: none !important;
   }
 
+  /* The container of the actual page */
   .print-preview-container {
     max-width: 100%;
     margin: 0;
+    display: block !important;
   }
 
   .print-page {
     box-shadow: none;
     border: none;
     border-radius: 0;
-    padding: 20px 30px;
+    padding: 0;
+    margin: 0;
     min-height: auto;
     page-break-after: avoid;
+    width: 100%;
   }
 
-  .dashboard,
-  .dashboard-shell,
-  .dashboard-sidebar,
-  .dashboard-mobile-header,
-  .sidebar-scrim {
+  /* Hide all siblings of the tree that leads to print-preview-overlay to prevent extra blank pages */
+  #root *:not(:has(.print-preview-overlay)):not(.print-preview-overlay):not(.print-preview-overlay *) {
     display: none !important;
+  }
+
+  /* Reset padding/margin on the tree leading to the overlay */
+  #root, .dashboard, .dashboard-shell, .dashboard-layout, .dashboard-main, .dashboard-content, .overview-card, .doc-gen-section {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
   }
 }

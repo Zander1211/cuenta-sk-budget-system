@@ -81,7 +81,7 @@ body {
 }
 
 .details-label {
-	margin: 0 0 4px;
+	margin: 0 0 8px;
 	font-size: 0.7rem;
 	letter-spacing: 0.12rem;
 	text-transform: uppercase;
@@ -237,12 +237,12 @@ body {
 
 .login-form {
 	display: grid;
-	gap: 18px;
+	gap: 24px;
 }
 
 .field {
 	display: grid;
-	gap: 6px;
+	gap: 10px;
 	font-size: 0.95rem;
 }
 
@@ -574,6 +574,7 @@ body {
 	border-radius: 0;
 	padding: 32px 40px 48px;
 	box-shadow: none;
+	overflow: hidden;
 }
 
 .dashboard-mobile-header {
@@ -955,9 +956,9 @@ body {
 	background: #fff;
 	border-radius: 18px;
 	border: 1px solid rgba(15, 31, 54, 0.08);
-	padding: 18px;
+	padding: 24px;
 	display: grid;
-	gap: 12px;
+	gap: 16px;
 	box-shadow: 0 16px 30px rgba(6, 10, 20, 0.08);
 }
 
@@ -977,14 +978,22 @@ body {
 	color: var(--ink);
 }
 
+.summary-body {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
 .summary-label {
 	color: var(--ink-soft);
 	font-weight: 600;
 }
 
 .summary-value {
-	font-size: 1.5rem;
+	font-size: clamp(1.2rem, 4vw, 1.5rem);
 	font-weight: 700;
+	word-break: break-word;
+	overflow-wrap: anywhere;
 }
 
 .summary-meta {
@@ -1029,7 +1038,7 @@ body {
 	background: #fff;
 	border-radius: 20px;
 	border: 1px solid rgba(15, 31, 54, 0.08);
-	padding: 20px;
+	padding: 24px;
 	box-shadow: 0 16px 30px rgba(6, 10, 20, 0.08);
 	display: grid;
 	gap: 16px;
@@ -1467,7 +1476,7 @@ body {
 }
 
 .details-label {
-	margin: 0 0 4px;
+	margin: 0 0 8px;
 	font-size: 0.7rem;
 	letter-spacing: 0.12rem;
 	text-transform: uppercase;
@@ -1628,6 +1637,7 @@ body {
 .user-table th {
 	text-align: left;
 	font-size: 0.7rem;
+	font-weight: bold;
 	letter-spacing: 0.18rem;
 	text-transform: uppercase;
 	color: var(--ink-soft);
@@ -1637,6 +1647,7 @@ body {
 .audit-table th {
 	text-align: left;
 	font-size: 0.7rem;
+	font-weight: bold;
 	letter-spacing: 0.18rem;
 	text-transform: uppercase;
 	color: var(--ink-soft);
@@ -1646,24 +1657,25 @@ body {
 .data-table th {
 	text-align: left;
 	font-size: 0.7rem;
+	font-weight: bold;
 	letter-spacing: 0.18rem;
 	text-transform: uppercase;
 	color: var(--ink-soft);
-	padding: 6px 0 10px;
+	padding: 12px 0 16px;
 }
 
 .user-table td {
-	padding: 12px 0;
+	padding: 16px 0;
 	border-top: 1px solid rgba(15, 31, 54, 0.08);
 }
 
 .audit-table td {
-	padding: 12px 0;
+	padding: 16px 0;
 	border-top: 1px solid rgba(15, 31, 54, 0.08);
 }
 
 .data-table td {
-	padding: 12px 0;
+	padding: 16px 0;
 	border-top: 1px solid rgba(15, 31, 54, 0.08);
 }
 
@@ -1685,7 +1697,7 @@ body {
 .overview-card {
 	background: #ffffff;
 	border-radius: 22px;
-	padding: 26px 28px;
+	padding: 32px;
 	border: 1px solid rgba(15, 31, 54, 0.08);
 	box-shadow: 0 16px 30px rgba(6, 10, 20, 0.08);
 }
@@ -1728,7 +1740,7 @@ body {
 
 .profile-name {
 	margin: 0;
-	font-size: 1.6rem;
+	font-size: clamp(1.2rem, 5vw, 1.6rem);
 }
 
 .profile-title {
@@ -1794,10 +1806,10 @@ body {
 .stat-card {
 	background: #fff;
 	border-radius: 18px;
-	padding: 20px;
+	padding: 24px;
 	border: 1px solid rgba(15, 31, 54, 0.08);
 	display: grid;
-	gap: 8px;
+	gap: 12px;
 }
 
 .stat-title {
@@ -1820,9 +1832,9 @@ body {
 	background: #fff;
 	border: 1px solid rgba(15, 31, 54, 0.08);
 	border-radius: 18px;
-	padding: 18px;
+	padding: 24px;
 	display: grid;
-	gap: 8px;
+	gap: 12px;
 	box-shadow: 0 12px 20px rgba(6, 10, 20, 0.08);
 }
 
@@ -3348,14 +3360,14 @@ td.nr-info-label {
 .modal-content {
 	background: #fff;
 	border-radius: 20px;
-	padding: 24px;
+	padding: 32px;
 	width: min(480px, 100%);
 	box-shadow: 0 20px 40px rgba(6, 10, 20, 0.15);
 	animation: shellFloat 0.3s ease;
 }
 
 .modal-header {
-	margin-bottom: 20px;
+	margin-bottom: 24px;
 }
 
 .modal-header h2 {
@@ -3372,7 +3384,7 @@ td.nr-info-label {
 	display: flex;
 	justify-content: flex-end;
 	gap: 12px;
-	margin-top: 24px;
+	margin-top: 32px;
 }
 
 .table-responsive {
@@ -3445,14 +3457,14 @@ td.nr-info-label {
 
 .data-table th,
 .data-table td {
-	padding: 14px 16px;
+	padding: 18px 20px;
 	text-align: left;
 	border-bottom: 1px solid rgba(15, 31, 54, 0.08);
 }
 
 .data-table th {
 	font-size: 0.75rem;
-	font-weight: 600;
+	font-weight: bold;
 	text-transform: uppercase;
 	letter-spacing: 0.1em;
 	color: var(--ink-soft);
@@ -3479,7 +3491,7 @@ td.nr-info-label {
 
 .breakdown-utilization-value {
 	margin: 6px 0 0;
-	font-size: 2.2rem;
+	font-size: clamp(1.6rem, 5vw, 2.2rem);
 	font-weight: 700;
 	color: var(--ink);
 }
@@ -3912,4 +3924,407 @@ td.nr-info-label {
 }
 .action-group.is-right {
 	justify-content: flex-end;
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/*  COMPREHENSIVE RESPONSIVE OVERRIDES                     */
+/* ═══════════════════════════════════════════════════════ */
+
+/* ── Tablet (≤ 720px) ── */
+@media (max-width: 720px) {
+
+	/* 1. Touch-friendly buttons */
+	.primary-button,
+	.secondary-button,
+	.ghost-button {
+		min-height: 44px;
+		padding: 12px 20px;
+		font-size: 0.95rem;
+	}
+
+	.icon-button,
+	.mobile-icon-button {
+		min-width: 44px;
+		min-height: 44px;
+	}
+
+	/* 8. Filter & action bar stacking */
+	.dashboard-filters {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.filter-group {
+		width: 100%;
+		justify-content: flex-start;
+	}
+
+	.content-actions {
+		flex-direction: column;
+		width: 100%;
+	}
+
+	.content-actions .primary-button,
+	.content-actions .secondary-button {
+		width: 100%;
+	}
+
+	/* Table actions wrap better */
+	.table-actions {
+		flex-wrap: wrap;
+	}
+
+	/* Action group stacks */
+	.action-group {
+		width: 100%;
+		justify-content: stretch;
+	}
+
+	/* 9. Backup grid → 2 col */
+	.backup-summary-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	/* Profile header wraps nicely */
+	.profile-header {
+		gap: 12px;
+	}
+
+	/* Overview card */
+	.overview-card {
+		padding: 20px;
+	}
+
+	/* Search field shrinks */
+	.search-field {
+		min-width: 0;
+		flex: 1;
+	}
+
+	.search-field input {
+		width: 100%;
+	}
+}
+
+/* ── Phone (≤ 600px) ── */
+@media (max-width: 600px) {
+
+	/* 2. Table card view on mobile */
+	.data-table thead,
+	.user-table thead,
+	.audit-table thead {
+		display: none;
+	}
+
+	.data-table tbody,
+	.user-table tbody,
+	.audit-table tbody,
+	.data-table tr,
+	.user-table tr,
+	.audit-table tr {
+		display: block;
+	}
+
+	.data-table tr,
+	.user-table tr,
+	.audit-table tr {
+		background: #fff;
+		border: 1px solid rgba(15, 31, 54, 0.08);
+		border-radius: 14px;
+		padding: 16px;
+		margin-bottom: 12px;
+		box-shadow: 0 4px 12px rgba(6, 10, 20, 0.06);
+	}
+
+	.data-table td,
+	.user-table td,
+	.audit-table td {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		padding: 8px 0 !important;
+		border-top: none !important;
+		border-bottom: 1px solid rgba(15, 31, 54, 0.06);
+		gap: 12px;
+		text-align: right;
+		white-space: normal;
+	}
+
+	.data-table td:last-child,
+	.user-table td:last-child,
+	.audit-table td:last-child {
+		border-bottom: none;
+	}
+
+	.data-table td::before,
+	.user-table td::before,
+	.audit-table td::before {
+		content: attr(data-label);
+		font-weight: 600;
+		font-size: 0.75rem;
+		letter-spacing: 0.08rem;
+		text-transform: uppercase;
+		color: var(--ink-soft);
+		text-align: left;
+		flex-shrink: 0;
+		min-width: 100px;
+	}
+
+	/* Reset the horizontal scroll behavior */
+	.data-table,
+	.user-table,
+	.audit-table {
+		display: block;
+		overflow-x: visible;
+		white-space: normal;
+	}
+
+	/* 3. Form layout collapse */
+	.form-grid {
+		grid-template-columns: 1fr !important;
+	}
+
+	.user-management-grid {
+		grid-template-columns: 1fr !important;
+	}
+
+	.details-grid {
+		grid-template-columns: 1fr !important;
+	}
+
+	.field-row {
+		flex-direction: column;
+	}
+
+	.user-form {
+		gap: 20px;
+	}
+
+	/* 4. Modal mobile optimization */
+	.modal-content {
+		padding: 20px;
+		border-radius: 18px;
+	}
+
+	.modal-header {
+		margin-bottom: 16px;
+	}
+
+	.modal-header h2 {
+		font-size: 1.2rem;
+	}
+
+	.modal-footer {
+		margin-top: 20px;
+		flex-direction: column;
+	}
+
+	.modal-footer .primary-button,
+	.modal-footer .secondary-button,
+	.modal-footer .ghost-button {
+		width: 100%;
+	}
+
+	/* Dropdown → bottom sheet */
+	.request-dropdown-menu {
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		top: auto;
+		margin-top: 0;
+		border-radius: 18px 18px 0 0;
+		min-width: 100%;
+		z-index: 1001;
+		box-shadow: 0 -8px 30px rgba(6, 10, 20, 0.18);
+		animation: slideUpSheet 0.25s ease;
+	}
+
+	.request-dropdown-item {
+		padding: 16px 20px;
+		font-size: 1rem;
+	}
+
+	/* 5. Card & dashboard widgets → single column */
+	.summary-grid,
+	.stat-grid,
+	.insights-grid {
+		grid-template-columns: 1fr !important;
+	}
+
+	.expenses-breakdown-grid {
+		grid-template-columns: 1fr !important;
+	}
+
+	.breakdown-summary-row {
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.breakdown-summary-row > div {
+		width: 100%;
+	}
+
+	/* Summary cards fill */
+	.summary-card {
+		padding: 20px;
+	}
+
+	.stat-card {
+		padding: 18px;
+	}
+
+	.insight-card {
+		padding: 18px;
+	}
+
+	.panel-card {
+		padding: 16px;
+	}
+
+	/* 7. Profile card mobile layout */
+	.profile-header {
+		flex-direction: column;
+		text-align: center;
+		align-items: center;
+	}
+
+	.profile-avatar {
+		width: 64px;
+		height: 64px;
+	}
+
+	.profile-avatar-fallback {
+		font-size: 1.1rem;
+	}
+
+	.profile-name {
+		font-size: 1.2rem;
+	}
+
+	/* 9. NR grids collapse */
+	.nr-sig-grid {
+		grid-template-columns: 1fr;
+		gap: 16px;
+	}
+
+	.nr-info-table td {
+		display: block;
+		width: 100% !important;
+	}
+
+	td.nr-info-label {
+		width: 100% !important;
+	}
+
+	/* Backup grid → single column */
+	.backup-summary-grid {
+		grid-template-columns: 1fr !important;
+	}
+
+	/* Dashboard panels */
+	.dashboard-panels {
+		grid-template-columns: 1fr;
+	}
+
+	/* Two-column layout collapse */
+	.dashboard-content.two-column {
+		grid-template-columns: 1fr !important;
+	}
+
+	/* Page tabs scroll */
+	.page-tabs {
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		flex-wrap: nowrap;
+		padding-bottom: 4px;
+	}
+
+	/* 10. Overflow protection */
+	.overview-card {
+		overflow: hidden;
+	}
+}
+
+/* ── Small phone (≤ 480px) ── */
+@media (max-width: 480px) {
+
+	/* 6. Sidebar drawer wider on small phones */
+	.dashboard-sidebar {
+		width: min(300px, 88vw) !important;
+	}
+
+	/* Tighter padding */
+	.overview-card {
+		padding: 16px;
+	}
+
+	.overview-card h2 {
+		font-size: 1.15rem;
+	}
+
+	/* Buttons go full-width */
+	.secondary-button {
+		width: 100%;
+	}
+
+	/* Modal full-width */
+	.modal-content {
+		width: calc(100vw - 32px);
+		padding: 16px;
+		border-radius: 16px;
+	}
+
+	/* Details panel tighter */
+	.details-panel {
+		padding: 12px;
+	}
+
+	/* Profile adjustments */
+	.profile-card {
+		gap: 14px;
+	}
+
+	/* Header title adjustments */
+	.header-left h1 {
+		font-size: clamp(1.3rem, 6vw, 1.8rem);
+	}
+
+	/* Backup card tighter */
+	.backup-card {
+		padding: 12px 14px;
+	}
+
+	/* Form-grid no gap overflow */
+	.form-grid {
+		gap: 14px;
+	}
+
+	/* Dropdown items bigger for touch */
+	.request-dropdown-item {
+		padding: 18px 20px;
+		min-height: 52px;
+	}
+}
+
+/* Bottom sheet slide-up animation */
+@keyframes slideUpSheet {
+	from {
+		opacity: 0;
+		transform: translateY(100%);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* Prevent background scroll when sidebar is open */
+.is-sidebar-open {
+	overflow: hidden;
+}
+
+/* Ensure all table wrapper containers allow scroll */
+.table-responsive {
+	max-width: 100%;
 }

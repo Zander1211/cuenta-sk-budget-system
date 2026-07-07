@@ -234,7 +234,7 @@ function ApprovedProjectsPage() {
                 approvedProjects.map((project) => (
                   <Fragment key={project.id}>
                     <tr>
-                      <td><strong>{project.project || project.event || 'Untitled'}</strong></td>
+                      <td>{project.project || project.event || 'Untitled'}</td>
                       <td>{project.category}</td>
                       <td>{currency.format(project.amount || 0)}</td>
                       <td>

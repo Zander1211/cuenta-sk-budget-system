@@ -847,7 +847,7 @@ function ExpensesPage() {
                           </td>
                           <td>
                             <div>
-                              <strong>{expense.project || expense.event || 'Untitled'}</strong>
+                              {expense.project || expense.event || 'Untitled'}
                               {expense.description ? (
                                 <div style={{ fontSize: '0.82rem', color: 'var(--ink-soft)', marginTop: '2px' }}>
                                   {expense.description.slice(0, 60)}{expense.description.length > 60 ? '...' : ''}
@@ -860,7 +860,7 @@ function ExpensesPage() {
                               {expense.category || 'Uncategorized'}
                             </span>
                           </td>
-                          <td style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 600 }}>
+                          <td style={{ fontFamily: 'var(--font-mono, monospace)' }}>
                             {currency.format(expense.amount || 0)}
                           </td>
                           <td>
@@ -931,14 +931,14 @@ function ExpensesPage() {
                             : '—'}
                         </td>
                         <td>
-                          <strong>{expense.project || expense.event || 'Untitled'}</strong>
+                          {expense.project || expense.event || 'Untitled'}
                         </td>
                         <td>
                           <span className="category-tag">
                             {expense.category || 'Uncategorized'}
                           </span>
                         </td>
-                        <td style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 600 }}>
+                        <td style={{ fontFamily: 'var(--font-mono, monospace)' }}>
                           {currency.format(expense.amount || 0)}
                         </td>
                         <td>

@@ -224,7 +224,7 @@ function ProjectsPage() {
                   return (
                     <Fragment key={project.id}>
                       <tr>
-                        <td><strong>{project.project || project.event || 'Untitled'}</strong></td>
+                        <td>{project.project || project.event || 'Untitled'}</td>
                         <td>{project.category || '—'}</td>
                         <td>{currency.format(approvedBudget)}</td>
                         <td>
@@ -232,7 +232,7 @@ function ProjectsPage() {
                             <div style={{ flex: 1, height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
                               <div style={{ height: '100%', background: utilization > 100 ? 'var(--danger-color)' : 'var(--primary-color)', width: `${Math.min(utilization, 100)}%` }} />
                             </div>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{utilization}%</span>
+                            <span style={{ fontSize: '0.75rem' }}>{utilization}%</span>
                           </div>
                         </td>
                         <td>
