@@ -59,6 +59,7 @@ function getInitialState() {
     quarter: Math.floor(i / 3) + 1,
     year: year,
     amount: 0,
+    source: '',
     createdAt: new Date().toISOString()
   }));
 
@@ -105,6 +106,7 @@ function getInitialState() {
           quarter,
           year,
           amount: Number(item.amount) || 0,
+          source: item.source || '',
           createdAt: item.createdAt || new Date().toISOString(),
         }
       })
@@ -119,6 +121,7 @@ function getInitialState() {
           quarter: Math.floor((i - 1) / 3) + 1,
           year,
           amount: 0,
+          source: '',
           createdAt: new Date().toISOString()
         });
       }
@@ -222,6 +225,7 @@ function BudgetProvider({ children }) {
           quarter: Number(item.quarter),
           year: Number(item.year),
           amount: Number(item.amount),
+          source: item.source || '',
           createdAt: item.created_at || new Date().toISOString(),
         }));
         
@@ -245,6 +249,7 @@ function BudgetProvider({ children }) {
                   quarter: Math.floor((i - 1) / 3) + 1,
                   year: currentYear,
                   amount: 0,
+                  source: '',
                   createdAt: new Date().toISOString()
                 });
               }
@@ -277,7 +282,7 @@ function BudgetProvider({ children }) {
     }
   }, [isAuthenticated])
 
-  async function addMonthlyBudget({ month, year, amount }) {
+  async function addMonthlyBudget({ month, year, amount, source }) {
     const normalizedMonth = Number(month)
     const normalizedYear = Number(year)
 
@@ -300,6 +305,7 @@ function BudgetProvider({ children }) {
       quarter,
       year: normalizedYear,
       amount: Number(amount) || 0,
+      source: source || '',
     }
 
     // Optimistically update UI
@@ -326,6 +332,7 @@ function BudgetProvider({ children }) {
         quarter: newBudget.quarter,
         year: newBudget.year,
         amount: newBudget.amount,
+        source: newBudget.source,
       })
 
       if (error) {

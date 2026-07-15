@@ -41,6 +41,8 @@ function BudgetsPage() {
   const [month, setMonth] = useState(initialMonth)
   const [year, setYear] = useState(now.getFullYear())
   const [amount, setAmount] = useState('')
+  const [sourceOption, setSourceOption] = useState('')
+  const [customSource, setCustomSource] = useState('')
   const [viewMode, setViewMode] = useState('monthly')
   const [filterMonth, setFilterMonth] = useState(initialMonth)
   const [filterQuarter, setFilterQuarter] = useState(Math.floor((initialMonth - 1) / 3) + 1)
@@ -59,13 +61,18 @@ function BudgetsPage() {
       return
     }
 
+    const finalSource = sourceOption === 'Other' ? customSource : sourceOption
+
     addMonthlyBudget({
       month,
       year,
       amount: cleanedAmount,
+      source: finalSource || '',
     })
 
     setAmount('')
+    setSourceOption('')
+    setCustomSource('')
   }
 
   const displayedBudgets = useMemo(() => {
@@ -157,6 +164,32 @@ function BudgetsPage() {
                     required
                   />
                 </label>
+                <label className="field">
+                  <span>Budget Source (Optional)</span>
+                  <select
+                    value={sourceOption}
+                    onChange={(event) => setSourceOption(event.target.value)}
+                  >
+                    <option value="">Select a source (Optional)</option>
+                    <option value="Regular SK Budget">Regular SK Budget</option>
+                    <option value="Donation">Donation</option>
+                    <option value="Solicitation">Solicitation</option>
+                    <option value="Sponsorship">Sponsorship</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </label>
+                {sourceOption === 'Other' && (
+                  <label className="field" style={{ gridColumn: '1 / -1' }}>
+                    <span>Specify Other Source</span>
+                    <input
+                      type="text"
+                      value={customSource}
+                      onChange={(event) => setCustomSource(event.target.value)}
+                      placeholder="e.g. Fundraising Event"
+                      required
+                    />
+                  </label>
+                )}
               </div>
               <button type="submit" className="primary-button">
                 Save Budget
@@ -237,6 +270,7 @@ function BudgetsPage() {
                 <th>{viewMode === 'monthly' ? 'Month' : 'Quarter'}</th>
                 <th>Year</th>
                 <th>Total Budget</th>
+                {viewMode === 'monthly' && <th>Source</th>}
                 <th>{viewMode === 'monthly' ? 'Date Added' : 'Last Updated'}</th>
               </tr>
             </thead>
@@ -247,12 +281,15 @@ function BudgetsPage() {
                     <td>{budget.periodLabel}</td>
                     <td>{budget.year}</td>
                     <td>{currency.format(budget.amount)}</td>
+                    {viewMode === 'monthly' && (
+                      <td>{budget.source || 'Not Specified'}</td>
+                    )}
                     <td>{new Date(budget.createdAt).toLocaleDateString()}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="4" className="empty-state">
+                  <td colSpan={viewMode === 'monthly' ? "5" : "4"} className="empty-state">
                     No budgets yet.
                   </td>
                 </tr>
