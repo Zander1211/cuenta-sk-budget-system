@@ -250,9 +250,14 @@ export function BackupRestoreProvider({ children }) {
 
       // Always log to audit trail and refresh list, even if metadata insert had issues
       addLog({
-        action: 'Created system backup',
+        action: `Backup Generated — ${filename}`,
+        actionType: 'Backup Generated',
         module: 'Backup & Restore',
-        description: `File: ${filename}, Size: ${(sizeBytes / 1024).toFixed(1)} KB`
+        recordType: 'Backup',
+        recordId: filename,
+        description: `System backup created. File: ${filename}, Size: ${(sizeBytes / 1024).toFixed(1)} KB`,
+        newValue: { filename, sizeBytes, createdBy: profileName || role || 'System' },
+        status: 'Success',
       })
 
       await fetchBackups()
@@ -354,9 +359,13 @@ export function BackupRestoreProvider({ children }) {
       details = tableResults.join('\n')
 
       addLog({
-        action: 'Restored system from backup',
+        action: `Restore Completed — ${fileObj.name}`,
+        actionType: 'Restore Completed',
         module: 'Backup & Restore',
-        description: `File: ${fileObj.name}. ${tableResults.length} items processed.`
+        recordType: 'Backup',
+        recordId: fileObj.name,
+        description: `System restored from backup file: ${fileObj.name}. ${tableResults.length} items processed.`,
+        status: 'Success',
       })
     } catch (err) {
       status = 'failed'

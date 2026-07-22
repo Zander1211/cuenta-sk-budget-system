@@ -49,6 +49,16 @@ function LoginPage() {
     const { error } = await loginUser(email, password, captchaToken)
 
     if (error) {
+      addLog({
+        action: 'User Login Failed',
+        actionType: 'User Login',
+        module: 'Authentication',
+        recordType: 'User',
+        description: `Failed login attempt for ${email}`,
+        status: 'Failed',
+        remarks: error.message,
+        actor: email,
+      })
       alert(error.message)
       if (recaptchaRef.current) {
         recaptchaRef.current.reset()
@@ -59,7 +69,15 @@ function LoginPage() {
     }
 
     await refreshSession()
-    addLog({ action: 'Logged in', actor: email || 'SK Chairman' })
+    addLog({
+      action: 'User Login',
+      actionType: 'User Login',
+      module: 'Authentication',
+      recordType: 'User',
+      description: `${email} successfully logged into the system`,
+      status: 'Success',
+      actor: email,
+    })
   }
 
   return (

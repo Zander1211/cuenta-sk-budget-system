@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import RoleGate from '../components/RoleGate'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
+import { getUploadErrorMessage } from '../utils/uploadUtils'
+import ImageCropper from '../components/ImageCropper'
 
 function ProfilePage() {
-  const { user, role } = useAuth()
+  const { user, role, refreshSession } = useAuth()
   const navigate = useNavigate()
 
   const [avatarUrl, setAvatarUrl] = useState(
@@ -21,6 +23,10 @@ function ProfilePage() {
   const [nickname, setNickname] = useState(
     user?.user_metadata?.nickname || ''
   )
+  
+  // Cropper state
+  const [cropImageSrc, setCropImageSrc] = useState(null)
+  const [selectedSafeExt, setSelectedSafeExt] = useState('png')
 
   const email = user?.email || ''
   const metadataFullName = user?.user_metadata?.full_name?.trim() || ''
@@ -82,14 +88,32 @@ function ProfilePage() {
 
     const fileExt = file.name.split('.').pop()?.toLowerCase() || 'png'
     const safeExt = fileExt.replace(/[^a-z0-9]/g, '') || 'png'
-    const filePath = `${user.id}/avatar-${Date.now()}.${safeExt}`
+    setSelectedSafeExt(safeExt)
 
+    // Instead of uploading directly, read the file as a data URL and open the cropper
+    const reader = new FileReader()
+    reader.addEventListener('load', () => setCropImageSrc(reader.result?.toString() || ''))
+    reader.readAsDataURL(file)
+
+    // Reset the input so the same file can be selected again if cancelled
+    input.value = ''
+  }
+
+  async function handleCropComplete(croppedBlob) {
+    setCropImageSrc(null) // Close the cropper
+    setIsUploading(true)
+    setAvatarError('')
+    setAvatarStatus('')
+
+    const filePath = `${user.id}/profile.${selectedSafeExt}`
+
+    // Upload the cropped blob
     const { error: uploadError } = await supabase.storage
       .from('avatars')
-      .upload(filePath, file, { upsert: true })
+      .upload(filePath, croppedBlob, { upsert: true, contentType: `image/${selectedSafeExt}` })
 
     if (uploadError) {
-      setAvatarError(uploadError.message)
+      setAvatarError(getUploadErrorMessage(uploadError))
       setIsUploading(false)
       return
     }
@@ -97,7 +121,9 @@ function ProfilePage() {
     const { data: publicData } = supabase.storage
       .from('avatars')
       .getPublicUrl(filePath)
-    const publicUrl = publicData?.publicUrl
+    
+    // Append a timestamp parameter to bust the browser cache so the new image displays immediately
+    const publicUrl = publicData?.publicUrl ? `${publicData.publicUrl}?t=${Date.now()}` : null
 
     if (!publicUrl) {
       setAvatarError('Unable to retrieve the public URL for this image.')
@@ -110,15 +136,20 @@ function ProfilePage() {
     })
 
     if (updateError) {
-      setAvatarError(updateError.message)
+      setAvatarError(`Profile update failed: ${updateError.message}`)
       setIsUploading(false)
       return
     }
 
     setAvatarUrl(publicUrl)
-    setAvatarStatus('Profile photo updated successfully.')
+    setAvatarStatus('Profile picture updated successfully.')
+    await refreshSession()
     setIsUploading(false)
-    input.value = ''
+  }
+
+  const handleCancelCrop = () => {
+    setCropImageSrc(null)
+    setIsUploading(false)
   }
 
   return (
@@ -201,6 +232,14 @@ function ProfilePage() {
 
         </div>
       </section>
+
+      {cropImageSrc && (
+        <ImageCropper
+          imageSrc={cropImageSrc}
+          onCropComplete={handleCropComplete}
+          onCancel={handleCancelCrop}
+        />
+      )}
     </RoleGate>
   )
 }

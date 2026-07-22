@@ -3,6 +3,8 @@ import { Wallet, Receipt, PieChart, ClipboardCheck } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBudget, useBudgetCalculations } from '../context/BudgetContext'
 import { supabase } from '../supabase/supabaseClient'
+import BudgetVsExpensesChart from '../components/BudgetVsExpensesChart'
+import YearSpinner from '../components/YearSpinner'
 
 
 const monthOptions = [
@@ -109,30 +111,10 @@ function AiAnalysisPage() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
   const [selectedYear, setSelectedYear] = useState(currentYear)
 
-  const availableYears = useMemo(() => {
-    const years = new Set([currentYear])
-    budgets.forEach((budget) => {
-      if (Number.isFinite(budget.year)) {
-        years.add(budget.year)
-        return
-      }
-      const createdDate = parseDate(budget.createdAt)
-      if (createdDate) years.add(createdDate.getFullYear())
-    })
-    return Array.from(years).sort((a, b) => a - b)
-  }, [budgets, currentYear])
-
-  useEffect(() => {
-    if (!availableYears.length) return
-    if (!availableYears.includes(selectedYear)) {
-      setSelectedYear(availableYears[availableYears.length - 1])
-    }
-  }, [availableYears, selectedYear])
-
   const periodLabel = viewMode === 'monthly' ? `${monthOptions.find(m => m.value === selectedMonth)?.label} ${selectedYear}` : `${selectedYear}`
   const periodDescriptor = viewMode === 'monthly' ? 'month' : 'year'
 
-  function isInPeriod(dateValue) {
+  const isInPeriod = useCallback((dateValue) => {
     const date = parseDate(dateValue)
     if (!date) return false
     if (viewMode === 'monthly') {
@@ -140,14 +122,17 @@ function AiAnalysisPage() {
       return date.getFullYear() === selectedYear && month === selectedMonth
     }
     return date.getFullYear() === selectedYear
-  }
+  }, [viewMode, selectedYear, selectedMonth])
 
   const targetMonth = viewMode === 'monthly' ? selectedMonth : null
   const { totalBudget, totalExpenses, remainingBalance: remainingBudget, hasBudgetData } = useBudgetCalculations(targetMonth, selectedYear)
   const usedPercentOld = totalBudget > 0 ? Math.min(100, Math.round((totalExpenses / totalBudget) * 100)) : 0
   const remainingPercent = totalBudget > 0 ? Math.max(0, 100 - usedPercentOld) : 0
 
-  const filteredRequests = requests.filter((request) => isInPeriod(request.submittedAt || request.createdAt || request.eventDate))
+  const filteredRequests = useMemo(() => {
+    return requests.filter((request) => isInPeriod(request.submittedAt || request.createdAt || request.eventDate))
+  }, [requests, isInPeriod])
+
   const pendingCount = filteredRequests.filter(req => (!req.status || req.status === 'Pending') && !req.archivedAt).length
 
   const summaryCards = [
@@ -193,24 +178,19 @@ function AiAnalysisPage() {
       { label: 'Programs', percent: 0, tone: 'sun' },
     ]
 
-  const trendValues = hasBudgetData ? [0.18, 0.28, 0.24, 0.42, 0.6, 0.78] : [0, 0, 0, 0, 0, 0]
-  const trendPoints = trendValues.map((value, index) => {
-    const x = (index / (trendValues.length - 1)) * 100
-    const y = 100 - value * 100
-    return `${x},${y}`
-  }).join(' ')
+
 
   const pendingRequests = useMemo(
     () =>
-      requests.filter(
+      filteredRequests.filter(
         (request) => request.status === 'Pending' && !request.archivedAt
       ),
-    [requests]
+    [filteredRequests]
   )
 
   const activeExpenses = useMemo(
-    () => expenses.filter((e) => !e.archivedAt && e.status !== 'Cancelled'),
-    [expenses]
+    () => expenses.filter((e) => !e.archivedAt && e.status !== 'Cancelled' && isInPeriod(e.approvedAt || e.createdAt || e.eventDate || e.date)),
+    [expenses, isInPeriod]
   )
 
   const categoryTotals = useMemo(() => {
@@ -225,7 +205,9 @@ function AiAnalysisPage() {
     return Array.from(totalsByCategory, ([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5)
-  }, [expenses])
+  }, [activeExpenses])
+
+  const noData = !hasBudgetData && activeExpenses.length === 0 && pendingRequests.length === 0
 
   const projectTotals = useMemo(() => {
     const totalsByProject = new Map()
@@ -239,10 +221,10 @@ function AiAnalysisPage() {
     return Array.from(totalsByProject, ([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5)
-  }, [expenses])
+  }, [activeExpenses])
 
-  const spendingPercent = totals.totalBudget
-    ? Math.round((totals.totalExpenses / totals.totalBudget) * 100)
+  const spendingPercent = totalBudget
+    ? Math.round((totalExpenses / totalBudget) * 100)
     : 0
   const usedPercent = Math.min(100, Math.max(0, spendingPercent))
 
@@ -305,15 +287,16 @@ function AiAnalysisPage() {
       1,
       (Date.now() - earliest) / (1000 * 60 * 60 * 24 * 30)
     )
-    const avgMonthly = totals.totalExpenses / monthsActive
+    const avgMonthly = totalExpenses / monthsActive
     if (!avgMonthly) {
       return null
     }
 
-    return totals.remaining / avgMonthly
-  }, [activeExpenses, totals])
+    return remainingBudget / avgMonthly
+  }, [activeExpenses, totalExpenses, remainingBudget])
 
   const fallbackInsights = useMemo(() => {
+    if (noData) return []
     const insights = []
     const topCategory = categoryTotals[0]
     const runway = runwayMonths
@@ -377,6 +360,7 @@ function AiAnalysisPage() {
   }, [categoryTotals, missingDocsCount, runwayMonths, spendingPercent, usedPercent])
 
   const fallbackAlerts = useMemo(() => {
+    if (noData) return []
     const today = shortDate.format(new Date())
     const topProject = projectTotals[0]
     const alerts = []
@@ -414,6 +398,7 @@ function AiAnalysisPage() {
   }, [missingDocsCount, projectTotals, spendingPercent, usedPercent])
 
   const fallbackRecommendations = useMemo(() => {
+    if (noData) return []
     const recs = []
 
     if (spendingPercent >= 85) {
@@ -457,7 +442,7 @@ function AiAnalysisPage() {
 
   const aiPayload = useMemo(
     () => ({
-      totals,
+      totals: { totalBudget, totalExpenses, remaining: remainingBudget },
       pendingApprovals: pendingRequests.length,
       topCategories: categoryTotals,
       topProjects: projectTotals,
@@ -485,11 +470,25 @@ function AiAnalysisPage() {
       pendingRequests.length,
       projectTotals,
       spendingTrend,
-      totals,
+      totalBudget,
+      totalExpenses,
+      remainingBudget,
     ]
   )
 
   const runAiAnalysis = useCallback(async () => {
+    if (noData) {
+      setAiState({
+        status: 'ready',
+        summary: '',
+        insights: [],
+        alerts: [],
+        recommendations: [],
+        updatedAt: null,
+      })
+      return
+    }
+
     setAiError('')
     setAiState((prev) => ({ ...prev, status: 'loading' }))
 
@@ -581,7 +580,7 @@ function AiAnalysisPage() {
           </div>
           <div className="filter-group">
             <span className="filter-label">Year</span>
-            <span className="filter-year">{selectedYear}</span>
+            <YearSpinner year={selectedYear} onYearChange={setSelectedYear} />
           </div>
         </section>
 
@@ -605,124 +604,99 @@ function AiAnalysisPage() {
         </section>
 
         <section className="dashboard-panels single" style={{ marginBottom: '24px' }}>
-          <div className="panel-card">
-            <div className="panel-header">
+          <div className="overview-card">
+            <div className="ai-card-header">
               <div>
-                <p className="panel-eyebrow">Spending Overview</p>
-                <h2>Category share</h2>
+                <p className="eyebrow">Financial Performance</p>
+                <h2>Chart for Budget</h2>
               </div>
-              <span className="panel-period">{periodLabel}</span>
+              <span className="ai-chip">Budget</span>
             </div>
-            <div className="spending-grid">
-              <div className="donut-wrap">
-                <div className={`donut ${hasBudgetData ? '' : 'is-empty'}`} style={{ '--donut-value': usedPercentOld }}>
-                  <div className="donut-center">
-                    <span className="donut-value">{usedPercentOld}%</span>
-                    <span className="donut-label">used</span>
-                  </div>
-                </div>
-                <div className="category-list">
-                  {categoryShare.map((item) => (
-                    <div key={item.label} className="category-row">
-                      <span className={`category-dot ${item.tone}`} />
-                      <span className="category-name">{item.label}</span>
-                      <span className="category-value">{item.percent}%</span>
-                    </div>
-                  ))}
-                  <p className="category-meta">
-                    Total Expenses ({periodLabel}): {currency.format(totalExpenses)}
-                  </p>
-                </div>
-              </div>
-              <div className="trend-wrap">
-                <div className="trend-header">
-                  <span>Monthly Trend</span>
-                  <span className={`trend-badge ${hasBudgetData ? 'positive' : 'neutral'}`}>
-                    {hasBudgetData ? 'Updated' : 'Awaiting data'}
-                  </span>
-                </div>
-                <div className={`trend-chart ${hasBudgetData ? '' : 'is-empty'}`}>
-                  <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-                    <polyline points={trendPoints} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <div className="trend-foot">
-                  <span>Jan</span>
-                  <span>Jun</span>
-                </div>
-              </div>
+            <div style={{ marginTop: '16px' }}>
+              <BudgetVsExpensesChart 
+                year={selectedYear}
+              />
             </div>
           </div>
         </section>
         <div className="ai-main-grid">
 
 
-          <div className="overview-card" style={{ gridColumn: "1 / -1" }}>            <div className="ai-card-header">
-            <div>
-              <p className="eyebrow">AI Insights</p>
-              <h2>Risk and recommendations</h2>
-              <p className="ai-status">{aiStatusLabel}</p>
-              {aiState.summary ? (
-                <p className="ai-summary">{aiState.summary}</p>
-              ) : null}
-            </div>
-            <span className="ai-chip ai-chip-accent">Powered by AI</span>
-          </div>
-            <div style={{ marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>Risk Level Guide</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-                <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '4px solid #ef4444', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#ef4444' }}></span>
-                    <strong style={{ fontSize: '13px', color: '#b91c1c' }}>High Risk</strong>
-                  </div>
-                  <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event has a high likelihood of exceeding its allocated budget or experiencing significant financial issues.</p>
-                </div>
-                <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '4px solid #f59e0b', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#f59e0b' }}></span>
-                    <strong style={{ fontSize: '13px', color: '#b45309' }}>Medium Risk</strong>
-                  </div>
-                  <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event is currently within an acceptable budget range but requires close monitoring.</p>
-                </div>
-                <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '4px solid #10b981', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#10b981' }}></span>
-                    <strong style={{ fontSize: '13px', color: '#047857' }}>Low Risk</strong>
-                  </div>
-                  <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event is being managed efficiently and is well within its allocated budget.</p>
-                </div>
+          <div className="overview-card" style={{ gridColumn: "1 / -1" }}>
+            <div className="ai-card-header">
+              <div>
+                <p className="eyebrow">AI Insights</p>
+                <h2>Risk and recommendations</h2>
+                <p className="ai-status">{aiStatusLabel}</p>
+                {aiState.summary ? (
+                  <p className="ai-summary">{aiState.summary}</p>
+                ) : null}
               </div>
+              <span className="ai-chip ai-chip-accent">Powered by AI</span>
             </div>
-            <div className="ai-insight-list">
-              {insights.map((item, index) => (
-                <div
-                  key={`${item.title}-${index}`}
-                  className={`ai-insight-item ${item.severity}`}
-                >
-                  <div className="ai-insight-head">
-                    <span className="ai-insight-title">{item.title}</span>
-                    <span
-                      className={`ai-severity ai-severity-${item.severity}`}
-                    >
-                      {severityLabel[item.severity]}
-                    </span>
+            {noData ? (
+              <div className="ai-empty" style={{ padding: '24px', color: '#64748b' }}>
+                No financial records available for risk analysis during the selected month and year.
+              </div>
+            ) : (
+              <>
+                <div style={{ marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+                  <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>Risk Level Guide</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                    <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '4px solid #ef4444', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#ef4444' }}></span>
+                        <strong style={{ fontSize: '13px', color: '#b91c1c' }}>High Risk</strong>
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event has a high likelihood of exceeding its allocated budget or experiencing significant financial issues.</p>
+                    </div>
+                    <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '4px solid #f59e0b', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#f59e0b' }}></span>
+                        <strong style={{ fontSize: '13px', color: '#b45309' }}>Medium Risk</strong>
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event is currently within an acceptable budget range but requires close monitoring.</p>
+                    </div>
+                    <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '4px solid #10b981', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#10b981' }}></span>
+                        <strong style={{ fontSize: '13px', color: '#047857' }}>Low Risk</strong>
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event is being managed efficiently and is well within its allocated budget.</p>
+                    </div>
                   </div>
-                  <p className="ai-insight-detail">{item.detail}</p>
                 </div>
-              ))}
-            </div>
-            <div className="ai-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={runAiAnalysis}
-                disabled={aiState.status === 'loading'}
-              >
-                Refresh Analysis
-              </button>
-              {aiError ? <span className="ai-status error">{aiError}</span> : null}
-            </div>
+                <div className="ai-insight-list">
+                  {insights.map((item, index) => (
+                    <div
+                      key={`${item.title}-${index}`}
+                      className={`ai-insight-item ${item.severity}`}
+                    >
+                      <div className="ai-insight-head">
+                        <span className="ai-insight-title">{item.title}</span>
+                        <span
+                          className={`ai-severity ai-severity-${item.severity}`}
+                        >
+                          {severityLabel[item.severity]}
+                        </span>
+                      </div>
+                      <p className="ai-insight-detail">{item.detail}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="ai-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={runAiAnalysis}
+                    disabled={aiState.status === 'loading'}
+                  >
+                    Refresh Analysis
+                  </button>
+                  {aiError ? <span className="ai-status error">{aiError}</span> : null}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="overview-card" style={{ gridColumn: '1 / -1' }}>
@@ -735,7 +709,9 @@ function AiAnalysisPage() {
               <span className="ai-chip">Actionable</span>
             </div>
             <div className="ai-insight-list" style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-              {recommendations.length ? (
+              {noData ? (
+                <p className="ai-empty">No recommendations available because there is no financial data to analyze for the selected month and year.</p>
+              ) : recommendations.length ? (
                 recommendations.map((item, index) => (
                   <div
                     key={`${item.title}-${index}`}
@@ -763,30 +739,48 @@ function AiAnalysisPage() {
         <div className="ai-mini-grid">
           <div className="stat-card ai-mini-card">
             <span className="ai-mini-title">Overspending Risk</span>
-            <span className="ai-mini-value">
-              {spendingPercent >= 85
-                ? 'High'
-                : spendingPercent >= 65
-                  ? 'Medium'
-                  : 'Low'}
-            </span>
-            <span className="ai-mini-meta">
-              {usedPercent}% budget used
-            </span>
+            {noData ? (
+              <span className="ai-mini-value" style={{ fontSize: '13px', fontWeight: 500, color: '#64748b' }}>No overspending analysis available for the selected month and year.</span>
+            ) : (
+              <>
+                <span className="ai-mini-value">
+                  {spendingPercent >= 85
+                    ? 'High'
+                    : spendingPercent >= 65
+                      ? 'Medium'
+                      : 'Low'}
+                </span>
+                <span className="ai-mini-meta">
+                  {usedPercent}% budget used
+                </span>
+              </>
+            )}
           </div>
           <div className="stat-card ai-mini-card">
-            <span className="ai-mini-title">Missing Documents</span>
-            <span className="ai-mini-value">{missingDocsCount}</span>
-            <span className="ai-mini-meta">Expenses without receipts</span>
+            <span className="ai-mini-title">Missing Receipts</span>
+            {noData ? (
+              <span className="ai-mini-value" style={{ fontSize: '13px', fontWeight: 500, color: '#64748b' }}>N/A</span>
+            ) : (
+              <>
+                <span className="ai-mini-value">{missingDocsCount}</span>
+                <span className="ai-mini-meta">Expenses without receipts</span>
+              </>
+            )}
           </div>
           <div className="stat-card ai-mini-card">
             <span className="ai-mini-title">Spending Trend</span>
-            <span className="ai-mini-value">{spendingTrend.label}</span>
-            <span className="ai-mini-meta">
-              {spendingTrend.delta
-                ? `${Math.abs(Math.round(spendingTrend.delta))}% from last month`
-                : 'Flat vs last month'}
-            </span>
+            {noData ? (
+              <span className="ai-mini-value" style={{ fontSize: '13px', fontWeight: 500, color: '#64748b' }}>N/A</span>
+            ) : (
+              <>
+                <span className="ai-mini-value">{spendingTrend.label}</span>
+                <span className="ai-mini-meta">
+                  {spendingTrend.delta
+                    ? `${Math.abs(Math.round(spendingTrend.delta))}% from last month`
+                    : 'Flat vs last month'}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -800,7 +794,9 @@ function AiAnalysisPage() {
               <span className="ai-chip">Alerts</span>
             </div>
             <div className="ai-alerts-list">
-              {alerts.length ? (
+              {noData ? (
+                <p className="ai-empty">No risks detected because there are no financial records for the selected month and year.</p>
+              ) : alerts.length ? (
                 alerts.map((alert, index) => (
                   <div className="ai-alert-item" key={`${alert.title}-${index}`}>
                     <div className="ai-alert-head">
@@ -832,7 +828,9 @@ function AiAnalysisPage() {
               <span className="ai-chip">Projects</span>
             </div>
             <div className="ai-bars">
-              {projectTotals.length ? (
+              {noData ? (
+                <p className="ai-empty">No allocation records found for the selected month and year.</p>
+              ) : projectTotals.length ? (
                 projectTotals.map((project) => (
                   <div className="ai-bar-row" key={project.name}>
                     <div className="ai-bar-head">

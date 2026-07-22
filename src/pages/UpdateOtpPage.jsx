@@ -151,7 +151,15 @@ function UpdateOtpPage() {
     }
 
     setResetStatus('Password updated successfully.')
-    addLog({ action: 'Updated password via OTP', actor: resetEmail })
+    addLog({
+      action: 'Password Updated via OTP',
+      actionType: 'Password Updated via OTP',
+      module: 'Authentication',
+      recordType: 'User',
+      description: `Password successfully reset via OTP for ${resetEmail}`,
+      status: 'Success',
+      actor: resetEmail,
+    })
     setResetToken('')
     setResetPassword('')
     setResetConfirm('')

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Receipt, PieChart, TrendingUp, BarChart3, Download, Filter } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
+import YearSpinner from '../components/YearSpinner'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -47,20 +48,6 @@ function ExpenseSummaryPage() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
   const [selectedYear, setSelectedYear] = useState(currentYear)
   const [categoryFilter, setCategoryFilter] = useState('All')
-
-  const availableYears = useMemo(() => {
-    const years = new Set([currentYear])
-    budgets.forEach((budget) => {
-      if (Number.isFinite(budget.year)) {
-        years.add(budget.year)
-      }
-    })
-    expenses.forEach((expense) => {
-      const date = parseDate(expense.approvedAt || expense.date)
-      if (date) years.add(date.getFullYear())
-    })
-    return Array.from(years).sort((a, b) => a - b)
-  }, [budgets, expenses, currentYear])
 
   const periodLabel = viewMode === 'monthly'
     ? `${monthOptions.find(m => m.value === selectedMonth)?.label} ${selectedYear}`
@@ -259,15 +246,7 @@ function ExpenseSummaryPage() {
         )}
         <div className="filter-group">
           <span className="filter-label">Year</span>
-          <select
-            className="panel-select"
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-          >
-            {availableYears.map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+          <YearSpinner year={selectedYear} onYearChange={setSelectedYear} />
         </div>
         <div className="filter-group">
           <span className="filter-label">Category</span>

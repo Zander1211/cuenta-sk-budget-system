@@ -139,13 +139,12 @@ function DashboardLayout() {
     profileSurname || (fullName ? fullName.split(' ').filter(Boolean).slice(-1)[0] : '') || ''
   const sidebarRole = [role, surname].filter(Boolean).join(', ')
 
-  function handleNavClick(label) {
-    addLog({ action: `Opened ${label} page` })
+  function handleNavClick() {
     setSidebarOpen(false)
   }
 
   function handleNotifications() {
-    addLog({ action: 'Opened notifications' })
+    // no-op audit for notification panel open
   }
 
   function confirmLogout() {
@@ -154,9 +153,16 @@ function DashboardLayout() {
 
   async function handleLogout() {
     setIsLogoutModalOpen(false)
+    addLog({
+      action: 'User Logout',
+      actionType: 'User Logout',
+      module: 'Authentication',
+      recordType: 'User',
+      description: `${profileName || role} logged out of the system`,
+      status: 'Success',
+    })
     await logoutUser()
     await refreshSession()
-    addLog({ action: 'Logged out' })
     setSidebarOpen(false)
   }
 

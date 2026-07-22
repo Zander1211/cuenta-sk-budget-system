@@ -2,138 +2,261 @@
  * AuditLogContext.jsx
  *
  * Provides audit trail functionality backed by Supabase.
- * - addLog({ action, module, description }) — writes to audit_trail table
- * - logs — array of audit trail records (fetched from Supabase)
- * - fetchLogs() — re-fetches logs from Supabase
- * - clearLogs() — deletes all audit trail records (SK Chairman only)
- * - isLoadingLogs — loading state for the logs query
+ *
+ * Public API:
+ *   addLog(params)   — Write to audit_trail table (append-only, fire-and-forget)
+ *   logs             — Array of audit trail records fetched from Supabase
+ *   fetchLogs()      — Re-fetch with optional server-side filters + pagination
+ *   isLoadingLogs    — Loading state
+ *   totalCount       — Total records matching current filters (for pagination)
+ *   currentPage      — Current page number (1-based)
+ *   setCurrentPage   — Navigate to a different page
+ *   activeFilters    — Current filter state
+ *   setActiveFilters — Apply new filters (resets to page 1)
+ *
+ * Security note:
+ *   clearLogs() has been intentionally removed. Audit records are append-only
+ *   and must never be deleted through the application. The DELETE RLS policy
+ *   has also been removed in the v2 SQL migration.
  *
  * Export names (useAuditLog, AuditLogProvider) are preserved for backward
- * compatibility with dozens of existing consumers.
+ * compatibility with all existing consumers.
  */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from './AuthContext'
 import { supabase } from '../supabase/supabaseClient'
 import { logAuditEvent } from '../utils/auditLogger'
+import { getDeviceInfo } from '../utils/deviceInfo'
 
 const AuditLogContext = createContext(null)
 
+const PAGE_SIZE = 50
+
+const DEFAULT_FILTERS = {
+  search:     '',
+  userName:   'All',
+  userRole:   'All',
+  actionType: 'All',
+  module:     'All',
+  recordType: 'All',
+  status:     'All',
+  dateFrom:   '',
+  dateTo:     '',
+}
+
 function AuditLogProvider({ children }) {
-  const [logs, setLogs] = useState([])
-  const [isLoadingLogs, setIsLoadingLogs] = useState(false)
+  const [logs, setLogs]               = useState([])
+  const [isLoadingLogs, setIsLoading] = useState(false)
+  const [totalCount, setTotalCount]   = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [activeFilters, setActiveFiltersState] = useState(DEFAULT_FILTERS)
+
   const { user, profileName, role, isAuthenticated } = useAuth()
 
+  // Cache the device info string so we only parse UA once per session
+  const deviceInfoRef = useRef(getDeviceInfo())
+
   // ── Fetch logs from Supabase ─────────────────────────────────
-  const fetchLogs = useCallback(async (filters = {}) => {
-    setIsLoadingLogs(true)
+  const fetchLogs = useCallback(async (filters = activeFilters, page = 1) => {
+    setIsLoading(true)
     try {
+      const from = (page - 1) * PAGE_SIZE
+      const to   = from + PAGE_SIZE - 1
+
       let query = supabase
         .from('audit_trail')
-        .select('*')
+        .select('*', { count: 'exact' })
         .order('created_at', { ascending: false })
-        .limit(500)
+        .range(from, to)
 
-      // Apply optional filters
+      // ── Full-text search ─────────────────────────────
       if (filters.search) {
+        const s = filters.search
         query = query.or(
-          `action.ilike.%${filters.search}%,user_name.ilike.%${filters.search}%,description.ilike.%${filters.search}%,module.ilike.%${filters.search}%`
+          [
+            `action.ilike.%${s}%`,
+            `user_name.ilike.%${s}%`,
+            `description.ilike.%${s}%`,
+            `record_id.ilike.%${s}%`,
+            `action_type.ilike.%${s}%`,
+          ].join(',')
         )
       }
+
+      // ── Dropdown filters ──────────────────────────────
       if (filters.userRole && filters.userRole !== 'All') {
         query = query.eq('user_role', filters.userRole)
       }
       if (filters.userName && filters.userName !== 'All') {
         query = query.eq('user_name', filters.userName)
       }
-      if (filters.dateFrom) {
-        query = query.gte('created_at', filters.dateFrom)
+      if (filters.actionType && filters.actionType !== 'All') {
+        query = query.ilike('action_type', `%${filters.actionType}%`)
       }
-      if (filters.dateTo) {
-        // Add one day to include the full end date
-        const endDate = new Date(filters.dateTo)
-        endDate.setDate(endDate.getDate() + 1)
-        query = query.lt('created_at', endDate.toISOString())
+      if (filters.module && filters.module !== 'All') {
+        query = query.eq('module', filters.module)
+      }
+      if (filters.recordType && filters.recordType !== 'All') {
+        query = query.eq('record_type', filters.recordType)
+      }
+      if (filters.status && filters.status !== 'All') {
+        query = query.eq('status', filters.status)
       }
 
-      const { data, error } = await query
+      // ── Date range ────────────────────────────────────
+      if (filters.dateFrom) {
+        const fromDate = new Date(filters.dateFrom)
+        fromDate.setHours(0, 0, 0, 0)
+        query = query.gte('created_at', fromDate.toISOString())
+      }
+      if (filters.dateTo) {
+        const toDate = new Date(filters.dateTo)
+        toDate.setHours(23, 59, 59, 999)
+        query = query.lte('created_at', toDate.toISOString())
+      }
+
+      const { data, error, count } = await query
 
       if (error) {
         console.warn('[AuditLogContext] Fetch failed:', error.message)
       } else {
         setLogs(data || [])
+        setTotalCount(count ?? 0)
+        setCurrentPage(page)
       }
     } catch (err) {
       console.warn('[AuditLogContext] Fetch error:', err)
     } finally {
-      setIsLoadingLogs(false)
+      setIsLoading(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Apply new filters and reset to page 1
+  const setActiveFilters = useCallback((newFilters) => {
+    setActiveFiltersState(newFilters)
+    fetchLogs(newFilters, 1)
+  }, [fetchLogs])
 
   // Load logs when authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      fetchLogs()
+      fetchLogs(DEFAULT_FILTERS, 1)
     } else {
       setLogs([])
+      setTotalCount(0)
+      setCurrentPage(1)
     }
   }, [isAuthenticated, fetchLogs])
 
-  // ── Add a log entry to Supabase ──────────────────────────────
-  // Preserves backward compatibility: addLog({ action }) still works
-  // New signature: addLog({ action, module, description })
-  function addLog({ action, module = '', description = '', actor }) {
+  // ── Add a log entry ──────────────────────────────────────────
+  /**
+   * addLog — Append-only audit record writer.
+   *
+   * Accepts all fields supported by the v2 schema.
+   * Legacy callers using only { action } still work.
+   *
+   * @param {Object} params
+   * @param {string}  params.action
+   * @param {string}  [params.actionType]
+   * @param {string}  [params.module]
+   * @param {string}  [params.recordType]
+   * @param {string}  [params.recordId]
+   * @param {string}  [params.description]
+   * @param {Object}  [params.previousValue]
+   * @param {Object}  [params.newValue]
+   * @param {string}  [params.ipAddress]
+   * @param {string}  [params.status]    — "Success" | "Failed"
+   * @param {string}  [params.remarks]
+   * @param {string}  [params.actor]     — Override user name (legacy compat)
+   */
+  function addLog({
+    action,
+    actionType = '',
+    module = '',
+    recordType = '',
+    recordId = '',
+    description = '',
+    previousValue = null,
+    newValue = null,
+    ipAddress = '',
+    status = 'Success',
+    remarks = '',
+    actor,
+  }) {
     if (!action) return
 
-    const resolvedName = actor || profileName || role || 'System'
-    const resolvedRole = role || ''
+    const resolvedName   = actor || profileName || role || 'System'
+    const resolvedRole   = role || ''
     const resolvedUserId = user?.id || null
+    const resolvedDevice = deviceInfoRef.current
 
-    // Optimistically add to local state for instant UI feedback
+    // Optimistically prepend to local state for instant UI feedback
     const optimisticEntry = {
-      id: crypto?.randomUUID?.() || `${Date.now()}`,
-      user_id: resolvedUserId,
-      user_name: resolvedName,
-      user_role: resolvedRole,
+      id:             crypto?.randomUUID?.() || `${Date.now()}`,
+      user_id:        resolvedUserId,
+      user_name:      resolvedName,
+      user_role:      resolvedRole,
       action,
+      action_type:    actionType || action,
       module,
+      record_type:    recordType,
+      record_id:      String(recordId || ''),
       description,
-      created_at: new Date().toISOString(),
+      previous_value: previousValue || null,
+      new_value:      newValue || null,
+      ip_address:     ipAddress || '',
+      device_info:    resolvedDevice || '',
+      status,
+      remarks,
+      created_at:     new Date().toISOString(),
     }
     setLogs((prev) => [optimisticEntry, ...prev])
+    setTotalCount((prev) => prev + 1)
 
-    // Use shared utility (fire-and-forget)
+    // Persist to Supabase (fire-and-forget)
     logAuditEvent({
-      userId: resolvedUserId,
-      userName: resolvedName,
-      userRole: resolvedRole,
+      userId:        resolvedUserId,
+      userName:      resolvedName,
+      userRole:      resolvedRole,
       action,
+      actionType:    actionType || action,
       module,
-      description
+      recordType,
+      recordId:      String(recordId || ''),
+      description,
+      previousValue,
+      newValue,
+      ipAddress,
+      deviceInfo:    resolvedDevice,
+      status,
+      remarks,
     })
   }
 
-  // ── Clear all logs (SK Chairman only) ────────────────────────
-  async function clearLogs() {
-    try {
-      const STORAGE_KEY = 'cuenta.auditLogData.v4'
-      const { error } = await supabase
-        .from('audit_trail')
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000') // delete all rows
+  // ── Page navigation ──────────────────────────────────────────
+  const goToPage = useCallback((page) => {
+    fetchLogs(activeFilters, page)
+  }, [fetchLogs, activeFilters])
 
-      if (error) {
-        console.warn('[AuditLogContext] Clear failed:', error.message)
-      } else {
-        setLogs([])
-      }
-    } catch (err) {
-      console.warn('[AuditLogContext] Clear error:', err)
-    }
-  }
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
   const value = useMemo(
-    () => ({ logs, addLog, clearLogs, fetchLogs, isLoadingLogs }),
-    [logs, fetchLogs, isLoadingLogs]
+    () => ({
+      logs,
+      addLog,
+      fetchLogs,
+      isLoadingLogs,
+      totalCount,
+      totalPages,
+      currentPage,
+      goToPage,
+      activeFilters,
+      setActiveFilters,
+      PAGE_SIZE,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [logs, fetchLogs, isLoadingLogs, totalCount, totalPages, currentPage, goToPage, activeFilters, setActiveFilters]
   )
 
   return (

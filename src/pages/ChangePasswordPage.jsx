@@ -70,7 +70,15 @@ function ChangePasswordPage() {
     }
 
     setStatus('Password updated successfully.')
-    addLog({ action: 'Updated account password', actor: email })
+    addLog({
+      action: 'Password Changed',
+      actionType: 'Password Changed',
+      module: 'Authentication',
+      recordType: 'User',
+      description: 'User successfully updated their account password',
+      status: 'Success',
+      actor: email,
+    })
     setOldPassword('')
     setPassword('')
     setConfirmPassword('')

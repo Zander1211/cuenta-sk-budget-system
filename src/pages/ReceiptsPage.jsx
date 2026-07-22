@@ -4,10 +4,11 @@ import { useBudget } from '../context/BudgetContext'
 import { supabase } from '../supabase/supabaseClient'
 import CurrencyInput from '../components/CurrencyInput'
 import { useAuth } from '../context/AuthContext'
+import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
 
 function ReceiptsPage() {
-  const { role } = useAuth()
-  const { expenses, refreshExpensesFromSupabase, expensesSyncStatus } = useBudget()
+  const { user, role } = useAuth()
+  const { expenses, refreshExpensesFromSupabase, expensesSyncStatus, updateExpenseReceipt } = useBudget()
   const [filesById, setFilesById] = useState({})
   const [errorsById, setErrorsById] = useState({})
   const [uploadingId, setUploadingId] = useState(null)
@@ -101,40 +102,60 @@ function ReceiptsPage() {
 
   async function handleUpload(expense) {
     const file = filesById[expense.id]
-    if (!file) {
+    
+    const validationError = validateReceiptFile(file, role)
+    if (validationError) {
       setErrorsById((prev) => ({
         ...prev,
-        [expense.id]: 'Select a receipt file first.',
+        [expense.id]: validationError,
       }))
       return
     }
 
     setUploadingId(expense.id)
     setErrorsById((prev) => ({ ...prev, [expense.id]: '' }))
-    const safeName = file.name.replace(/\s+/g, '-')
-    const filePath = `expenses/${expense.id}-${Date.now()}-${safeName}`
+    
+    const filePath = generateReceiptPath(expense, file)
 
     const { error: uploadError } = await supabase.storage
       .from(RECEIPTS_BUCKET)
-      .upload(filePath, file, { upsert: false })
+      .upload(filePath, file, { upsert: true })
 
     if (uploadError) {
-      setErrorsById((prev) => ({ ...prev, [expense.id]: uploadError.message }))
+      logUploadDebugInfo(uploadError, { expenseId: expense.id, filePath })
+      setErrorsById((prev) => ({ ...prev, [expense.id]: getUploadErrorMessage(uploadError) }))
       setUploadingId(null)
       return
     }
 
+    // 2. Insert robust database record
+    const { error: dbError } = await insertReceiptRecord(supabase, expense, file, filePath, user, role)
+
+    if (dbError) {
+      // Rollback storage upload
+      await supabase.storage.from(RECEIPTS_BUCKET).remove([filePath])
+      
+      logUploadDebugInfo(dbError, { expenseId: expense.id, step: 'receipt_record_insert', note: 'Rolled back storage' })
+      setErrorsById((prev) => ({ ...prev, [expense.id]: `Database Error: ${dbError.message || 'Failed to link receipt record'}` }))
+      setUploadingId(null)
+      return
+    }
+
+    // 3. Update local state immediately (this is the primary store)
+    updateExpenseReceipt(expense.id, filePath, file.name)
+
+    // 4. Best-effort sync to minimal expenses table (only valid columns)
     const { error: updateError } = await supabase
       .from('expenses')
       .update({ receipt_url: filePath, receipt_name: file.name })
       .eq('id', expense.id)
 
     if (updateError) {
-      setErrorsById((prev) => ({ ...prev, [expense.id]: updateError.message }))
-      setUploadingId(null)
-      return
+      // Log but don't fail — local state is already updated
+      logUploadDebugInfo(updateError, { expenseId: expense.id, step: 'supabase_sync', note: 'Local state already updated' })
     }
 
+    // 3. Generate a signed URL to display the receipt immediately
     const { data } = await supabase.storage
       .from(RECEIPTS_BUCKET)
       .createSignedUrl(filePath, 60 * 60)
@@ -186,6 +207,14 @@ function ReceiptsPage() {
   function handleFileSelected(event) {
     const file = event.target.files?.[0]
     if (!file || !activeExpense) return
+    
+    const validationError = validateReceiptFile(file, role)
+    if (validationError) {
+      alert(validationError)
+      event.target.value = ''
+      return
+    }
+
     setScanFile(file)
     setScanModalOpen(true)
     setScanStatus('scanning')
@@ -208,38 +237,51 @@ function ReceiptsPage() {
     if (!activeExpense || !scanFile) return
     setScanStatus('uploading')
     const expense = activeExpense
-    const safeName = scanFile.name.replace(/\s+/g, '-')
-    const filePath = `expenses/${expense.id}-${Date.now()}-${safeName}`
+    const filePath = generateReceiptPath(expense, scanFile)
 
     const { error: uploadError } = await supabase.storage
       .from(RECEIPTS_BUCKET)
-      .upload(filePath, scanFile, { upsert: false })
+      .upload(filePath, scanFile, { upsert: true })
 
     if (uploadError) {
-      alert("Upload failed: " + uploadError.message)
+      logUploadDebugInfo(uploadError, { expenseId: expense.id, filePath, isScan: true })
+      alert(getUploadErrorMessage(uploadError))
       setScanModalOpen(false)
       return
     }
 
-    // Map extracted fields into existing table columns
-    const appendedNotes = `Receipt #: ${ocrData.receiptNumber}\nItems: ${ocrData.items}`
+    // 1. Insert robust database record
+    const { error: dbError } = await insertReceiptRecord(supabase, expense, scanFile, filePath, user, role)
 
+    if (dbError) {
+      // Rollback storage upload
+      await supabase.storage.from(RECEIPTS_BUCKET).remove([filePath])
+      
+      logUploadDebugInfo(dbError, { expenseId: expense.id, step: 'receipt_record_insert', note: 'Rolled back storage' })
+      alert(`Database Error: ${dbError.message || 'Failed to link receipt record'}`)
+      setScanModalOpen(false)
+      return
+    }
+
+    // 2. Update local state immediately (primary store)
+    updateExpenseReceipt(expense.id, filePath, scanFile.name)
+
+    // 3. Build notes from OCR data to append to remarks
+    const appendedNotes = `Vendor: ${ocrData.vendor}\nReceipt #: ${ocrData.receiptNumber}\nItems: ${ocrData.items}`
+
+    // 4. Best-effort sync to minimal expenses table (only valid columns)
     const { error: updateError } = await supabase
       .from('expenses')
       .update({ 
         receipt_url: filePath, 
         receipt_name: scanFile.name,
-        amount: ocrData.amount,
-        date: ocrData.date,
-        venue: ocrData.vendor,
-        notes: expense.notes ? `${expense.notes}\n\n${appendedNotes}` : appendedNotes
+        remarks: expense.remarks ? `${expense.remarks}\n\n${appendedNotes}` : appendedNotes
       })
       .eq('id', expense.id)
 
     if (updateError) {
-      alert("Update failed: " + updateError.message)
-      setScanModalOpen(false)
-      return
+      // Log error but don't block the user — local state is already updated
+      logUploadDebugInfo(updateError, { expenseId: expense.id, step: 'supabase_sync', isScan: true })
     }
 
     setScanModalOpen(false)

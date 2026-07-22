@@ -346,7 +346,13 @@ function BudgetProvider({ children }) {
     }
 
     addLog({
-      action: `Added monthly budget: ${monthLabels[normalizedMonth - 1]} ${normalizedYear} (${amount})`,
+      action: `Monthly Budget Created — ${monthLabels[normalizedMonth - 1]} ${normalizedYear}`,
+      actionType: 'Budget Created',
+      module: 'Monthly Budget',
+      recordType: 'Budget',
+      recordId: id,
+      description: `Set ${monthLabels[normalizedMonth - 1]} ${normalizedYear} budget to ₱${Number(amount).toLocaleString()}${source ? ` (Source: ${source})` : ''}`,
+      newValue: { month: normalizedMonth, year: normalizedYear, amount: Number(amount), source: source || '' },
     })
   }
 
@@ -390,7 +396,16 @@ function BudgetProvider({ children }) {
       ...prev,
     ])
 
-    addLog({ action: `Approved budget request for ${request.event}` })
+    addLog({
+      action: `Request Approved — ${request.event}`,
+      actionType: 'Request Approved',
+      module: 'Budget Requests',
+      recordType: 'Budget Request',
+      recordId: requestId,
+      description: `Approved budget request for ${request.event} (₱${Number(request.amount).toLocaleString()})`,
+      previousValue: { status: request.status, projectStatus: request.projectStatus },
+      newValue: { status: 'Approved', projectStatus: 'Ongoing' },
+    })
     addNotification({
       type: 'approval',
       title: 'Budget Request Approved',
@@ -414,7 +429,17 @@ function BudgetProvider({ children }) {
       )
     )
 
-    addLog({ action: `Rejected budget request ${requestId}` })
+    addLog({
+      action: `Request Rejected — ${requests.find(r => r.id === requestId)?.event || requestId}`,
+      actionType: 'Request Rejected',
+      module: 'Budget Requests',
+      recordType: 'Budget Request',
+      recordId: requestId,
+      description: `Rejected budget request. Reason: ${reason}`,
+      previousValue: { status: requests.find(r => r.id === requestId)?.status || 'Pending' },
+      newValue: { status: 'Rejected' },
+      remarks: reason,
+    })
 
     const request = requests.find((item) => item.id === requestId)
     addNotification({
@@ -442,7 +467,16 @@ function BudgetProvider({ children }) {
       )
     )
 
-    addLog({ action: `Restored rejected budget request ${requestId} to Pending` })
+    addLog({
+      action: `Request Restored to Pending — ${request.event}`,
+      actionType: 'Request Updated',
+      module: 'Budget Requests',
+      recordType: 'Budget Request',
+      recordId: requestId,
+      description: `Restored rejected request back to Pending status`,
+      previousValue: { status: 'Rejected' },
+      newValue: { status: 'Pending' },
+    })
   }
 
   function cancelApproval(requestId, reason) {
@@ -472,7 +506,17 @@ function BudgetProvider({ children }) {
       )
     )
 
-    addLog({ action: `Cancelled approval for ${request.event}` })
+    addLog({
+      action: `Request Cancelled — ${request.event}`,
+      actionType: 'Request Cancelled',
+      module: 'Budget Requests',
+      recordType: 'Budget Request',
+      recordId: requestId,
+      description: `Cancelled approval for ${request.event}. Reason: ${reason}`,
+      previousValue: { status: 'Approved', projectStatus: request.projectStatus },
+      newValue: { status: 'Cancelled', projectStatus: 'Cancelled' },
+      remarks: reason,
+    })
     addNotification({
       type: 'rejection',
       title: 'Approval Cancelled',
@@ -510,7 +554,16 @@ function BudgetProvider({ children }) {
       )
     }
 
-    addLog({ action: `Archived budget request for ${request.event}` })
+    addLog({
+      action: `Request Archived — ${request.event}`,
+      actionType: 'Request Archived',
+      module: 'Budget Requests',
+      recordType: 'Budget Request',
+      recordId: requestId,
+      description: `Archived budget request for ${request.event}`,
+      previousValue: { archivedAt: null },
+      newValue: { archivedAt: now },
+    })
   }
 
   function restoreRequest(requestId) {
@@ -541,7 +594,16 @@ function BudgetProvider({ children }) {
       )
     }
 
-    addLog({ action: `Restored budget request for ${request.event}` })
+    addLog({
+      action: `Request Restored — ${request.event}`,
+      actionType: 'Request Restored',
+      module: 'Budget Requests',
+      recordType: 'Budget Request',
+      recordId: requestId,
+      description: `Restored archived budget request for ${request.event}`,
+      previousValue: { archivedAt: request.archivedAt },
+      newValue: { archivedAt: null },
+    })
   }
 
   function addRequest({
@@ -595,7 +657,15 @@ function BudgetProvider({ children }) {
       ...prev,
     ])
 
-    addLog({ action: `Submitted budget request for ${event}` })
+    addLog({
+      action: `Request Submitted — ${event}`,
+      actionType: 'Request Submitted',
+      module: 'Budget Requests',
+      recordType: 'Budget Request',
+      recordId: id,
+      description: `New budget request submitted for ${event} (₱${Number(amount || 0).toLocaleString()})`,
+      newValue: { event, amount: Number(amount || 0), category, status: 'Pending' },
+    })
     addNotification({
       type: 'system',
       title: 'New Budget Request Pending',
@@ -645,7 +715,16 @@ function BudgetProvider({ children }) {
       })
     )
 
-    addLog({ action: `Resubmitted budget request for ${updatedData.event || request.event}` })
+    addLog({
+      action: `Request Resubmitted — ${updatedData.event || request.event}`,
+      actionType: 'Request Updated',
+      module: 'Budget Requests',
+      recordType: 'Budget Request',
+      recordId: requestId,
+      description: `Resubmitted budget request for ${updatedData.event || request.event}`,
+      previousValue: { status: 'Rejected', amount: request.amount },
+      newValue: { status: 'Pending', amount: Number(updatedData.amount) || 0, event: updatedData.event || request.event },
+    })
     addNotification({
       type: 'system',
       title: 'Budget Request Resubmitted',
@@ -676,7 +755,16 @@ function BudgetProvider({ children }) {
       )
     )
 
-    addLog({ action: `Updated project status for ${request.event} to ${newStatus}` })
+    addLog({
+      action: `Status Changed — ${request.event}`,
+      actionType: 'Status Changed',
+      module: 'Budget Requests',
+      recordType: 'Budget Request',
+      recordId: requestId,
+      description: `Project status updated for ${request.event}`,
+      previousValue: { projectStatus: request.projectStatus },
+      newValue: { projectStatus: newStatus },
+    })
   }
 
   function updateRejectionReason(requestId, reason) {
@@ -687,7 +775,15 @@ function BudgetProvider({ children }) {
           : item
       )
     )
-    addLog({ action: `Updated rejection reason for request ${requestId}` })
+    addLog({
+      action: `Request Updated — Rejection Reason`,
+      actionType: 'Request Updated',
+      module: 'Budget Requests',
+      recordType: 'Budget Request',
+      recordId: requestId,
+      description: `Updated rejection reason for request ${requestId}`,
+      newValue: { rejectionReason: reason },
+    })
   }
 
   function updateCancellationReason(requestId, reason) {
@@ -698,7 +794,15 @@ function BudgetProvider({ children }) {
           : item
       )
     )
-    addLog({ action: `Updated cancellation reason for request ${requestId}` })
+    addLog({
+      action: `Request Updated — Cancellation Reason`,
+      actionType: 'Request Updated',
+      module: 'Budget Requests',
+      recordType: 'Budget Request',
+      recordId: requestId,
+      description: `Updated cancellation reason for request ${requestId}`,
+      newValue: { cancellationReason: reason },
+    })
   }
 
   function addExpense(entry) {
@@ -718,7 +822,30 @@ function BudgetProvider({ children }) {
       ...prev,
     ])
 
-    addLog({ action: `Added expense: ${entry.event || entry.project}` })
+    addLog({
+      action: `Expense Added — ${entry.event || entry.project}`,
+      actionType: 'Expense Added',
+      module: 'Expenses',
+      recordType: 'Expense',
+      recordId: id,
+      description: `Added expense: ${entry.event || entry.project} (₱${Number(entry.amount || 0).toLocaleString()})`,
+      newValue: { event: entry.event || entry.project, amount: Number(entry.amount || 0), category: entry.category },
+    })
+  }
+
+  /**
+   * Updates the receipt fields of an expense in local state.
+   * This is the primary way to link a receipt after uploading,
+   * since expenses are stored locally in localStorage.
+   */
+  function updateExpenseReceipt(expenseId, receiptUrl, receiptName) {
+    setExpenses((prev) =>
+      prev.map((item) =>
+        item.id === expenseId
+          ? { ...item, receiptUrl, receiptName, receipt_url: receiptUrl, receipt_name: receiptName }
+          : item
+      )
+    )
   }
 
   function archiveExpense(expenseId) {
@@ -738,7 +865,16 @@ function BudgetProvider({ children }) {
       )
     )
 
-    addLog({ action: `Archived expense for ${expense.event || expense.project}` })
+    addLog({
+      action: `Expense Archived — ${expense.event || expense.project}`,
+      actionType: 'Expense Deleted',
+      module: 'Expenses',
+      recordType: 'Expense',
+      recordId: expenseId,
+      description: `Archived expense for ${expense.event || expense.project}`,
+      previousValue: { archivedAt: null, status: expense.status },
+      newValue: { archivedAt: new Date().toISOString() },
+    })
   }
 
   function restoreExpense(expenseId) {
@@ -758,7 +894,16 @@ function BudgetProvider({ children }) {
       )
     )
 
-    addLog({ action: `Restored expense for ${expense.event || expense.project}` })
+    addLog({
+      action: `Expense Restored — ${expense.event || expense.project}`,
+      actionType: 'Expense Updated',
+      module: 'Expenses',
+      recordType: 'Expense',
+      recordId: expenseId,
+      description: `Restored archived expense for ${expense.event || expense.project}`,
+      previousValue: { archivedAt: expense.archivedAt },
+      newValue: { archivedAt: null },
+    })
   }
 
   const totals = useMemo(() => {
@@ -802,6 +947,7 @@ function BudgetProvider({ children }) {
       updateProjectStatus,
       updateRejectionReason,
       updateCancellationReason,
+      updateExpenseReceipt,
       refreshExpensesFromSupabase,
     }),
     [

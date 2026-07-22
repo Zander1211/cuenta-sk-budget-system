@@ -1,48 +1,109 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import './ChatWidget.css'
-import { useAuth } from '../context/AuthContext'
+import React, { useState, useRef, useEffect } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { MessageCircle, X, Bot, Send } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
 import { useBudget } from '../context/BudgetContext'
-import { useAuditLog } from '../context/AuditLogContext'
-import { useDocuments } from '../context/DocumentContext'
+import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
-import ReactMarkdown from 'react-markdown'
 
-const QUICK_SUGGESTIONS = [
-  "Remaining Budget",
-  "Pending Requests",
-  "Budget Recommendation"
-]
+const PAGE_NAMES = {
+  '/dashboard': 'Main Dashboard',
+  '/dashboard/budgets': 'Budgets',
+  '/dashboard/projects': 'Projects and Events',
+  '/dashboard/expenses': 'Expenses',
+  '/dashboard/request': 'Submit Budget Request',
+  '/dashboard/documents': 'Documents',
+  '/dashboard/approvals': 'Approvals',
+  '/dashboard/archive': 'Archive',
+  '/dashboard/ai-analysis': 'AI Analysis',
+  '/dashboard/report': 'Reports',
+  '/dashboard/audit-logs': 'Audit Logs',
+  '/dashboard/user-management': 'User Management',
+  '/dashboard/profile': 'Profile',
+}
 
-class ChatErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
+function computeTopCategories(expenses = []) {
+  const totals = {}
+  for (const e of expenses) {
+    if (!e.category) continue
+    totals[e.category] = (totals[e.category] || 0) + (Number(e.amount) || 0)
+  }
+  return Object.entries(totals)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name, total]) => ({ name, total }))
+}
+
+function buildWelcome({ userName, budgetUtilization, pendingApprovals, missingReceipts, currentPage }) {
+  const firstName = userName?.split(' ')[0] || 'there'
+  let msg = `Hi ${firstName}! I'm Cue, your SK financial assistant.`
+
+  const alerts = []
+  if (pendingApprovals > 0) alerts.push(`${pendingApprovals} request(s) pending approval`)
+  if (missingReceipts > 0) alerts.push(`${missingReceipts} expense(s) missing receipts`)
+  if (budgetUtilization >= 75) alerts.push(`budget is at ${budgetUtilization}% utilization`)
+
+  if (alerts.length > 0) {
+    msg += ` Quick heads up \u2014 ` + alerts.join(', and ') + `.`
+  } else {
+    msg += ` Everything looks good right now.`
   }
 
-  static getDerivedStateFromError(error) {
-    return { hasError: true };
+  msg += ` You're on the ${currentPage} page. What can I help you with?`
+  return msg
+}
+
+function getChips({ role, budgetUtilization, remaining, pendingApprovals, missingReceipts, currentPage }) {
+  const chips = []
+  if (budgetUtilization >= 75) chips.push(`How should I use the remaining \u20B1${Number(remaining).toLocaleString('en-PH')} budget?`)
+  if (pendingApprovals > 0 && role === 'SK Chairman') chips.push(`Summarize the pending approval requests`)
+  if (missingReceipts > 0) chips.push(`Which expenses are missing receipts?`)
+  if (currentPage === 'Submit Budget Request') chips.push(`How do I fill out a Purchase Request?`)
+  if (currentPage === 'Documents') chips.push(`What documents do I need for a disbursement?`)
+
+  const fallback = [
+    `How is our budget doing this month?`,
+    `What are the top spending categories?`,
+    `Explain SK Fund procurement rules`,
+    `How should I allocate the remaining budget?`,
+    `What does COA require for expenses?`,
+  ]
+  for (const f of fallback) {
+    if (chips.length >= 3) break
+    if (!chips.includes(f)) chips.push(f)
+  }
+  return chips.slice(0, 3)
+}
+
+// Error boundary to prevent chatbot errors from crashing the whole app
+class ChatErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error("ChatWidget caught an error:", error, errorInfo);
+    console.error('ChatWidget caught an error:', error, errorInfo)
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="chat-widget">
-          <button className="chat-toggle" onClick={() => this.setState({ hasError: false })} aria-label="Chat error, click to reset">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="red" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="8" x2="12" y2="12"></line>
-              <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
-          </button>
-        </div>
-      );
+        <button
+          onClick={() => this.setState({ hasError: false })}
+          className="fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-[9999]"
+          style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #0ea5e9 100%)' }}
+          aria-label="Chat error, click to reset"
+        >
+          <MessageCircle size={22} color="white" />
+        </button>
+      )
     }
-    return this.props.children;
+    return this.props.children
   }
 }
 
@@ -55,33 +116,43 @@ export default function ChatWidget() {
 }
 
 function ChatWidgetInner() {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const { user, role } = useAuth()
-  const { totals, requests, expenses, budgets } = useBudget()
-  const { logs } = useAuditLog()
-  const { documents } = useDocuments()
-  
-  const [open, setOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [initialLoading, setInitialLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
+  const [hasUnread, setHasUnread] = useState(false)
+  const [initialized, setInitialized] = useState(false)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
   const messagesEndRef = useRef(null)
+  const inputRef = useRef(null)
 
-  // Load chat history from Supabase based on user ID
+  const location = useLocation()
+  const { user, role, profileName } = useAuth()
+  const { requests, expenses, totals } = useBudget()
+
+  const currentPage = PAGE_NAMES[location.pathname] || 'Dashboard'
+  const budgetUtilization = totals?.totalBudget
+    ? Math.round((totals.totalExpenses / totals.totalBudget) * 100)
+    : 0
+  const pendingApprovals = (requests || []).filter(r => r.status === 'Pending').length
+  const missingReceipts = (expenses || []).filter(e => !e.receiptUrl && !e.receiptName).length
+  const remaining = totals?.remaining || 0
+  const userName = profileName || user?.user_metadata?.full_name || user?.email || 'Official'
+
+  // Load chat history from Supabase on user change
   useEffect(() => {
     let mounted = true
     async function loadHistory() {
-      // 🚨 CRITICAL PRIVACY FIX: Immediately clear previous messages when user changes!
       if (mounted) setMessages([])
 
       if (!user?.id) {
-        if (mounted) setInitialLoading(false)
+        if (mounted) {
+          setHistoryLoaded(true)
+          setInitialized(false)
+        }
         return
       }
-      
-      setInitialLoading(true)
+
       try {
         const { data, error } = await supabase
           .from('chat_history')
@@ -91,380 +162,491 @@ function ChatWidgetInner() {
 
         if (error) {
           console.warn('Chat history query error:', error.message)
-          // If the table doesn't exist or RLS blocks it, we must ensure it stays empty
           if (mounted) setMessages([])
-          return
-        }
-
-        if (data && mounted) {
+        } else if (data && mounted) {
           const history = data.map(row => ({
             role: row.role,
             content: row.content,
-            timestamp: row.created_at
+            timestamp: row.created_at,
           }))
           setMessages(history)
+          if (history.length > 0) {
+            setInitialized(true)
+          }
         }
       } catch (err) {
         console.warn('Failed to load chat history', err)
         if (mounted) setMessages([])
       } finally {
-        if (mounted) setInitialLoading(false)
+        if (mounted) setHistoryLoaded(true)
       }
     }
-    
+
+    setHistoryLoaded(false)
+    setInitialized(false)
     loadHistory()
-    
-    return () => {
-      mounted = false
-    }
+
+    return () => { mounted = false }
   }, [user?.id])
 
+  // Show welcome message on first open if no history exists
   useEffect(() => {
-    scrollToBottom()
-  }, [messages, open, loading])
+    if (isOpen && !initialized && historyLoaded) {
+      const welcome = buildWelcome({ userName, budgetUtilization, pendingApprovals, missingReceipts, currentPage })
+      setMessages(prev => {
+        if (prev.length > 0) return prev
+        return [{ role: 'assistant', content: welcome, timestamp: new Date().toISOString() }]
+      })
+      setInitialized(true)
+    }
+    if (isOpen) {
+      setHasUnread(false)
+      setTimeout(() => inputRef.current?.focus(), 100)
+    }
+  }, [isOpen, historyLoaded])
 
-  function scrollToBottom() {
+  // Auto-scroll on new messages
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+  }, [messages, isLoading])
 
-  function normalizeAuditAction(action = '') {
-    const lowered = action.toLowerCase()
-    if (lowered.includes('approved')) return 'approved request'
-    if (lowered.includes('rejected')) return 'rejected request'
-    if (lowered.includes('archived')) return 'archived item'
-    if (lowered.includes('restored')) return 'restored item'
-    if (lowered.includes('submitted')) return 'submitted request'
-    if (lowered.includes('opened')) return 'opened page'
-    if (lowered.includes('logged out')) return 'logout'
-    return 'activity'
-  }
-
-  function formatTimestamp(isoString) {
-    if (!isoString) return ''
-    const date = new Date(isoString)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    
-    if (diffMins < 1) return 'Just now'
-    if (diffMins < 60) return `${diffMins} min ago`
-    
-    if (date.toDateString() === now.toDateString()) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  function buildSystemContext() {
+    return {
+      role,
+      userName,
+      currentPage,
+      totalBudget: totals?.totalBudget || 0,
+      totalExpenses: totals?.totalExpenses || 0,
+      remaining,
+      budgetUtilization,
+      pendingApprovals,
+      missingReceipts,
+      recentRequests: (requests || []).slice(0, 5).map(r => ({
+        event: r.event,
+        amount: r.amount,
+        status: r.status,
+        category: r.category,
+      })),
+      recentExpenses: (expenses || []).slice(0, 5).map(e => ({
+        project: e.project || e.event,
+        amount: e.amount,
+        category: e.category,
+      })),
+      topCategories: computeTopCategories(expenses || []),
     }
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   }
 
-function generateDeterministicResponse(input, dbContext) {
-  const query = input.toLowerCase()
-  const { totalBudget, totalExpenses, remainingBalance, budgetUtilization, totalRequests } = dbContext.verifiedCalculations
-  const formatCurrency = (val) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(val || 0)
-
-  // 1. Remaining Budget
-  if (query.includes('remaining') || query.includes('balance') || query.includes('left')) {
-    return `**Remaining Budget Analysis**\n\nYour current remaining budget is **${formatCurrency(remainingBalance)}**.\n- **Total Allocated Budget**: ${formatCurrency(totalBudget)}\n- **Total Expenses**: ${formatCurrency(totalExpenses)}\n- **Utilization**: ${budgetUtilization}`
-  }
-
-  // 2. Budget Utilization / Summary
-  if (query.includes('utilization') || query.includes('summary') || query.includes('report')) {
-    return `**AI Financial Summary**\n\nHere is your real-time system summary:\n\n- **Total Budget Allocated**: ${formatCurrency(totalBudget)}\n- **Total Expenses Incurred**: ${formatCurrency(totalExpenses)}\n- **Remaining Balance**: ${formatCurrency(remainingBalance)}\n- **Budget Utilization Rate**: **${budgetUtilization}**\n- **Total Active Requests**: ${totalRequests}`
-  }
-
-  // 3. Expenses
-  if (query.includes('expense') || query.includes('spent') || query.includes('cost')) {
-    let highestExpense = dbContext.rawExpenses !== "No expenses found in database" && dbContext.rawExpenses.length > 0 
-      ? dbContext.rawExpenses.reduce((max, e) => (e.amount || e.total || 0) > (max.amount || max.total || 0) ? e : max, dbContext.rawExpenses[0]) 
-      : null
-
-    return `**Expense Analysis**\n\nThe system has recorded a total of **${formatCurrency(totalExpenses)}** in expenses across ${dbContext.verifiedCalculations.totalActiveExpenses} active records.\n${highestExpense ? `\n*Highest Single Expense*: **${highestExpense.event || highestExpense.project}** (${formatCurrency(highestExpense.amount || highestExpense.total || 0)})` : ''}`
-  }
-
-  // 4. Pending Requests
-  if (query.includes('pending') || query.includes('request')) {
-    const pendingReqs = dbContext.rawRequests !== "No requests found in database" 
-      ? dbContext.rawRequests.filter(r => r.status === 'Pending') 
-      : []
-    
-    if (pendingReqs.length === 0) {
-      return `There are currently **0** pending budget requests in the system.`
-    }
-    
-    let text = `You have **${pendingReqs.length}** pending budget requests:\n\n`
-    pendingReqs.forEach(r => {
-      text += `- **${r.event || r.project || 'Unknown'}**: ${formatCurrency(r.amount)}\n`
-    })
-    return text
-  }
-
-  // 5. Approved Projects
-  if (query.includes('approved') || query.includes('project')) {
-    const approvedReqs = dbContext.rawRequests !== "No requests found in database" 
-      ? dbContext.rawRequests.filter(r => r.status === 'Approved') 
-      : []
-    
-    if (approvedReqs.length === 0) {
-      return `There are currently no approved projects in the system.`
-    }
-    
-    return `There are **${approvedReqs.length}** approved projects in the system. The total recorded expenses across all approved activities currently stand at ${formatCurrency(totalExpenses)}.`
-  }
-
-  // 6. Budget Recommendation / AI Risk Detection
-  if (query.includes('recommendation') || query.includes('risk') || query.includes('advice')) {
-    const utilNum = parseFloat(budgetUtilization)
-    let risk = "Low Risk"
-    let advice = "Your budget is well-managed. Continue monitoring standard expenses."
-    
-    if (utilNum >= 80) {
-      risk = "High Risk"
-      advice = "⚠️ **Warning**: You have consumed over 80% of your budget. Immediate restrictions on non-essential projects are recommended to prevent a deficit."
-    } else if (utilNum >= 50) {
-      risk = "Medium Risk"
-      advice = "You have consumed over half of your allocated budget. Prioritize upcoming mandatory youth programs and limit miscellaneous spending."
-    }
-
-    return `**AI Budget Recommendation & Risk Detection**\n\n- **Overall System Risk Level**: **${risk}**\n- **Budget Utilization**: ${budgetUtilization}\n- **Remaining Balance**: ${formatCurrency(remainingBalance)}\n\n**Recommendation**: ${advice}`
-  }
-  
-  if (query.includes('receipt') || query.includes('document')) {
-    return `**Document Assistant**\n\nThere are **${dbContext.verifiedCalculations.totalDocuments}** documents uploaded to the system.`
-  }
-
-  // Default Fallback
-  return `I am Cue, your intelligent financial assistant. I am connected to the real-time Supabase database.\n\nCurrently, your total remaining budget is **${formatCurrency(remainingBalance)}**. You can ask me about:\n- "Remaining Budget"\n- "AI Financial Summary"\n- "Pending Requests"\n- "Budget Recommendation"`
-}
-
-  async function handleSendMessage(text) {
-    const trimmed = text.trim()
-    if (!trimmed) return
-    
-    const userMsg = { role: 'user', content: trimmed, timestamp: new Date().toISOString() }
-    const newMessages = [...messages, userMsg]
-    setMessages(newMessages)
+  async function sendMessage(text) {
+    const userText = (text || input).trim()
+    if (!userText || isLoading) return
     setInput('')
-    setLoading(true)
 
-    // Insert user message to Supabase
+    // Reset textarea height
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto'
+    }
+
+    const userMsg = { role: 'user', content: userText, timestamp: new Date().toISOString() }
+    const updatedMessages = [...messages, userMsg]
+    setMessages(updatedMessages)
+    setIsLoading(true)
+
+    // Save user message to Supabase (fire-and-forget)
     if (user?.id) {
-      await supabase.from('chat_history').insert({
+      supabase.from('chat_history').insert({
         user_id: user.id,
         role: 'user',
-        content: trimmed
-      })
+        content: userText,
+      }).then()
     }
 
     try {
-      // 1. Use the Context data directly to ensure an exact match with the Dashboard
-      const safeBudgets = budgets || []
-      const safeExpenses = expenses || []
-      const safeRequests = requests || []
-      const safeDocuments = documents || []
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
+          systemContext: buildSystemContext(),
+          context: buildSystemContext(), // backward compat with deployed API
+        }),
+      })
 
-      // Totals from BudgetContext are already verified and match the dashboard
-      const totalBudget = totals?.totalBudget || 0
-      const totalExpenses = totals?.totalExpenses || 0
-      const remainingBalance = totals?.remaining || 0
-      const budgetUtilization = totalBudget > 0 ? ((totalExpenses / totalBudget) * 100).toFixed(2) + '%' : '0%'
-
-      const dbContext = {
-        role: role || 'Viewer',
-        verifiedCalculations: {
-          totalBudget,
-          totalExpenses,
-          remainingBalance,
-          budgetUtilization,
-          totalBudgetsAdded: safeBudgets.length,
-          totalActiveExpenses: safeExpenses.filter(e => !e.archivedAt && e.status !== 'Cancelled').length,
-          totalRequests: safeRequests.length,
-          totalDocuments: safeDocuments.length
-        },
-        rawBudgets: safeBudgets.length > 0 ? safeBudgets : "No budgets found in database",
-        rawExpenses: safeExpenses.length > 0 ? safeExpenses : "No expenses found in database",
-        rawRequests: safeRequests.length > 0 ? safeRequests : "No requests found in database",
-        rawDocuments: safeDocuments.length > 0 ? safeDocuments : "No documents found in database",
+      const data = await res.json().catch(() => ({ error: 'Invalid response from server' }))
+      if (!res.ok) {
+        const errorObj = new Error(data.error || 'Request failed')
+        errorObj.code = data.code
+        errorObj.status = res.status
+        throw errorObj
       }
 
-      // Simulate network delay for natural AI feel
-      await new Promise(resolve => setTimeout(resolve, 800))
-
-      const aiResponseText = generateDeterministicResponse(trimmed, dbContext)
-
-      const assistantMsg = { 
-        role: 'assistant', 
-        content: aiResponseText,
-        timestamp: new Date().toISOString()
+      // Parse reply — handles both new plain text and old JSON-structured format
+      let replyText = data.reply || ''
+      try {
+        const parsed = JSON.parse(replyText)
+        if (parsed && typeof parsed.content === 'string') {
+          replyText = parsed.content
+        }
+      } catch {
+        // reply is already plain text, use as-is
       }
 
-      setMessages((prev) => [...prev, assistantMsg])
+      const assistantMsg = {
+        role: 'assistant',
+        content: replyText,
+        timestamp: new Date().toISOString(),
+      }
 
+      setMessages(prev => [...prev, assistantMsg])
+
+      // Save assistant message to Supabase (fire-and-forget)
       if (user?.id) {
-        await supabase.from('chat_history').insert({
+        supabase.from('chat_history').insert({
           user_id: user.id,
           role: 'assistant',
-          content: assistantMsg.content
-        })
+          content: replyText,
+        }).then()
       }
+
+      if (!isOpen) setHasUnread(true)
+
     } catch (err) {
-      console.error('Chat error:', err)
-      const assistantMsg = { 
-        role: 'assistant', 
-        content: `Sorry, I encountered an error. ${err.message}`,
-        timestamp: new Date().toISOString()
+      console.error('[Cue Chat Widget] Error sending message:', err)
+
+      let friendlyMessage = 'An unexpected error occurred. Please try again.'
+      const isNetworkError = err instanceof TypeError || err.message?.includes('Failed to fetch') || err.message?.includes('network')
+
+      const systemCtx = buildSystemContext()
+      const hasNoData = !systemCtx.totalBudget && (!systemCtx.recentExpenses || systemCtx.recentExpenses.length === 0) && (!systemCtx.recentRequests || systemCtx.recentRequests.length === 0)
+
+      if (hasNoData) {
+        friendlyMessage = 'There is currently no financial data available to analyze.'
+      } else if (err.code === 'AUTH_ERROR' || err.status === 401 || err.status === 403) {
+        friendlyMessage = 'You do not have permission to access this information.'
+      } else if (err.code === 'AI_QUOTA_EXCEEDED' || err.code === 'AI_UNAVAILABLE' || err.status === 503) {
+        friendlyMessage = 'The AI service is temporarily unavailable. Please try again in a few moments.'
+      } else if (isNetworkError || err.status === 502 || err.status === 504) {
+        friendlyMessage = 'Unable to connect to the server. Please check your internet connection and try again.'
+      } else if (err.message) {
+        // Safe fallback for other backend errors
+        friendlyMessage = `The AI service is temporarily unavailable. Please try again in a few moments.`
       }
 
-      setMessages((prev) => [...prev, assistantMsg])
-      
-      if (user?.id) {
-        await supabase.from('chat_history').insert({
-          user_id: user.id,
-          role: 'assistant',
-          content: assistantMsg.content
-        })
-      }
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: friendlyMessage,
+        timestamp: new Date().toISOString(),
+        isError: true, // flag for optional error styling
+      }])
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
-  function onSubmit(e) {
-    e.preventDefault()
-    handleSendMessage(input)
-  }
-
+  // Hide widget on login page
   if (location.pathname === '/') {
     return null
   }
 
-  // Show suggestions if chat is empty, or if the last message is from assistant
-  const showSuggestions = messages.length === 0 || messages[messages.length - 1]?.role === 'assistant'
+  const chips = getChips({ role, budgetUtilization, remaining, pendingApprovals, missingReceipts, currentPage })
 
   return (
-    <div className={open ? 'chat-widget open' : 'chat-widget'}>
-      {open ? (
-        <>
-          <div className="chat-header" onClick={() => setOpen(false)}>
-            <div className="chat-header-main">
-              <div className="chat-title">Cue Financial Assistant</div>
-              <div className="chat-sub">Intelligent insights & system help</div>
-            </div>
-            <button
-              type="button"
-              className="chat-close"
-              aria-label="Close chat"
-              onClick={(event) => {
-                event.stopPropagation()
-                setOpen(false)
+    <>
+      {/* FAB Toggle Button */}
+      <button
+        id="cue-chat-fab"
+        onClick={() => setIsOpen(prev => !prev)}
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-[9999] transition-all duration-300 cursor-pointer border-none"
+        style={{
+          background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #0ea5e9 100%)',
+          boxShadow: '0 12px 24px rgba(37, 99, 235, 0.3), inset 0 2px 4px rgba(255,255,255,0.2)',
+        }}
+        aria-label={isOpen ? 'Close chat' : 'Open chat'}
+      >
+        {isOpen
+          ? <X size={22} color="white" />
+          : <MessageCircle size={22} color="white" />
+        }
+        {hasUnread && !isOpen && (
+          <span
+            className="absolute flex items-center justify-center w-5 h-5 rounded-full text-white font-bold"
+            style={{
+              top: '-4px',
+              right: '-4px',
+              fontSize: '10px',
+              background: '#ef4444',
+              animation: 'cue-pulse 2s infinite ease-in-out',
+            }}
+          >
+            !
+          </span>
+        )}
+      </button>
+
+      {/* Chat Panel */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.97 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            className="fixed flex flex-col z-[9999] overflow-hidden"
+            style={{
+              bottom: '96px',
+              right: '24px',
+              width: 'min(400px, 92vw)',
+              height: 'min(520px, 75vh)',
+              background: '#ffffff',
+              borderRadius: '18px',
+              boxShadow: '0 20px 60px rgba(15, 31, 54, 0.22), 0 0 0 1px rgba(15, 31, 54, 0.08)',
+            }}
+          >
+            {/* Header */}
+            <div
+              className="flex items-center justify-between px-4 py-3 shrink-0"
+              style={{
+                background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #0ea5e9 100%)',
+                borderBottom: '1px solid rgba(255,255,255,0.1)',
               }}
             >
-              ×
-            </button>
-          </div>
-          <div className="chat-body">
-            <div className="chat-messages">
-            {messages.length === 0 && (
-              <div className="chat-welcome">
-                <div className="chat-welcome-icon">✨</div>
-                <h3>Hi {user?.user_metadata?.first_name || 'there'}! I'm Cue.</h3>
-                <p>I can help you monitor budgets, track requests, analyze expenses, and navigate the system.</p>
-              </div>
-            )}
-            
-            {messages.map((m, i) => (
-              <div key={i} className={m.role === 'user' ? 'msg user' : 'msg assistant'}>
-                {m.role === 'assistant' && (
-                  <div className="msg-avatar assistant">🤖</div>
-                )}
-                <div className="msg-bubble">
-                  {m.summary && <div className="msg-summary">{m.summary}</div>}
-                  <div className="msg-content">
-                    {m.role === 'assistant' ? (
-                      <div className="markdown-body">
-                        <ReactMarkdown>{m.content || ''}</ReactMarkdown>
-                      </div>
-                    ) : (
-                      m.content || ''
-                    )}
-                  </div>
-                  {Array.isArray(m.alerts) && m.alerts.length > 0 && (
-                    <ul className="msg-alerts">
-                      {m.alerts.map((alert, idx) => (
-                        <li key={idx}>{alert}</li>
-                      ))}
-                    </ul>
-                  )}
-                  {Array.isArray(m.actions) && m.actions.length > 0 && (
-                    <div className="chat-actions">
-                      {m.actions.map((action, idx) => (
-                        <button
-                          key={`${action.to || 'action'}-${idx}`}
-                          type="button"
-                          className="chat-action-btn"
-                          onClick={() => action.to && navigate(action.to)}
-                        >
-                          {action.label || 'Open'}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <div className="msg-timestamp">{formatTimestamp(m.timestamp)}</div>
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-9 h-9 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}
+                >
+                  <Bot size={18} color="white" />
                 </div>
-                {m.role === 'user' && (
-                  <div className="msg-avatar user">{user?.email?.charAt(0).toUpperCase() || 'U'}</div>
-                )}
+                <div>
+                  <p className="text-white text-sm font-semibold" style={{ lineHeight: 1, margin: 0 }}>Cue</p>
+                  <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '11px', marginTop: '2px', lineHeight: 1 }}>SK Financial Assistant</p>
+                </div>
               </div>
-            ))}
-            
-            {loading && (
-              <div className="msg assistant typing">
-                 <div className="msg-avatar assistant">🤖</div>
-                 <div className="msg-bubble">
-                    <div className="typing-indicator">
-                      <span></span>
-                      <span></span>
-                      <span></span>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer border-none transition-all duration-200"
+                style={{ background: 'rgba(255,255,255,0.15)' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.3)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
+                aria-label="Close chat"
+              >
+                <X size={16} color="rgba(255,255,255,0.8)" />
+              </button>
+            </div>
+
+            {/* Messages */}
+            <div
+              className="flex-1 overflow-y-auto px-4 py-3"
+              style={{
+                background: '#f8fafc',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                scrollBehavior: 'smooth',
+              }}
+            >
+              {messages.map((msg, i) => (
+                <div
+                  key={i}
+                  className="flex items-end gap-2"
+                  style={{ flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}
+                >
+                  {msg.role === 'assistant' && (
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+                      style={{ background: 'linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%)' }}
+                    >
+                      <Bot size={13} color="white" />
                     </div>
-                 </div>
-              </div>
-            )}
+                  )}
+                  <div
+                    style={{
+                      maxWidth: '80%',
+                      borderRadius: msg.role === 'user' ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
+                      padding: '10px 14px',
+                      fontSize: '0.9rem',
+                      lineHeight: '1.55',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      ...(msg.role === 'user'
+                        ? {
+                            background: '#2563eb',
+                            color: '#ffffff',
+                          }
+                        : {
+                            background: '#ffffff',
+                            color: '#1e293b',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 1px 3px rgba(15, 31, 54, 0.04)',
+                          }),
+                    }}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
 
-            {showSuggestions && !loading && (
-              <div className="chat-suggestions">
-                {QUICK_SUGGESTIONS.map((sug, idx) => (
-                  <button key={idx} onClick={() => handleSendMessage(sug)} className="suggestion-chip">
-                    {sug}
-                  </button>
-                ))}
-              </div>
-            )}
+              {/* Typing indicator */}
+              {isLoading && (
+                <div className="flex items-end gap-2">
+                  <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+                    style={{ background: 'linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%)' }}
+                  >
+                    <Bot size={13} color="white" />
+                  </div>
+                  <div
+                    className="flex gap-1 items-center"
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '4px 16px 16px 16px',
+                      padding: '12px 14px',
+                      boxShadow: '0 1px 3px rgba(15, 31, 54, 0.04)',
+                    }}
+                  >
+                    {[0, 150, 300].map(delay => (
+                      <span
+                        key={delay}
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          background: '#94a3b8',
+                          borderRadius: '50%',
+                          animation: 'cue-bounce 1.4s infinite both',
+                          animationDelay: `${delay}ms`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
 
-            <div ref={messagesEndRef} />
-          </div>
+              {/* Suggestion chips — show only with welcome message */}
+              {messages.length <= 1 && !isLoading && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {chips.map((chip, i) => (
+                    <button
+                      key={i}
+                      onClick={() => sendMessage(chip)}
+                      className="cursor-pointer border-none transition-all duration-200"
+                      style={{
+                        fontSize: '0.8rem',
+                        padding: '7px 12px',
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '999px',
+                        color: '#334155',
+                        textAlign: 'left',
+                        boxShadow: '0 1px 2px rgba(15, 31, 54, 0.04)',
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = '#eff6ff'
+                        e.currentTarget.style.borderColor = '#93c5fd'
+                        e.currentTarget.style.color = '#1d4ed8'
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = '#ffffff'
+                        e.currentTarget.style.borderColor = '#cbd5e1'
+                        e.currentTarget.style.color = '#334155'
+                      }}
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-          <form className="chat-input" onSubmit={onSubmit}>
-            <input
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              placeholder="Ask about budgets, reports, or projects..."
-              disabled={loading}
-              autoFocus
-            />
-            <button type="submit" disabled={loading || !input.trim()}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-              </svg>
-            </button>
-          </form>
-        </div>
-        </>
-      ) : (
-        <button className="chat-toggle" onClick={() => setOpen(true)} aria-label="Open chat">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-          </svg>
-        </button>
-      )}
-    </div>
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input */}
+            <div
+              className="flex items-end gap-2 shrink-0"
+              style={{
+                borderTop: '1px solid #e2e8f0',
+                padding: '10px 12px',
+                background: '#ffffff',
+              }}
+            >
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={e => {
+                  setInput(e.target.value)
+                  e.target.style.height = 'auto'
+                  e.target.style.height = Math.min(e.target.scrollHeight, 96) + 'px'
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    sendMessage()
+                  }
+                }}
+                placeholder="Ask Cue anything..."
+                rows={1}
+                style={{
+                  flex: 1,
+                  resize: 'none',
+                  fontSize: '0.9rem',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '14px',
+                  padding: '10px 14px',
+                  outline: 'none',
+                  background: '#f8fafc',
+                  color: '#1e293b',
+                  maxHeight: '96px',
+                  transition: 'border-color 0.2s, box-shadow 0.2s',
+                  fontFamily: 'inherit',
+                  lineHeight: '1.4',
+                }}
+                onFocus={e => {
+                  e.target.style.borderColor = '#3b82f6'
+                  e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'
+                  e.target.style.background = '#ffffff'
+                }}
+                onBlur={e => {
+                  e.target.style.borderColor = '#cbd5e1'
+                  e.target.style.boxShadow = 'none'
+                  e.target.style.background = '#f8fafc'
+                }}
+              />
+              <button
+                onClick={() => sendMessage()}
+                disabled={!input.trim() || isLoading}
+                className="flex items-center justify-center shrink-0 cursor-pointer border-none transition-all duration-200"
+                style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '50%',
+                  background: (!input.trim() || isLoading)
+                    ? '#cbd5e1'
+                    : 'linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%)',
+                  opacity: (!input.trim() || isLoading) ? 0.5 : 1,
+                  boxShadow: (!input.trim() || isLoading)
+                    ? 'none'
+                    : '0 4px 12px rgba(37, 99, 235, 0.2)',
+                }}
+                aria-label="Send message"
+              >
+                <Send size={15} color="white" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Keyframe animations */}
+      <style>{`
+        @keyframes cue-bounce {
+          0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+          40% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes cue-pulse {
+          0% { transform: scale(1); opacity: 0.8; }
+          50% { transform: scale(1.15); opacity: 1; }
+          100% { transform: scale(1); opacity: 0.8; }
+        }
+      `}</style>
+    </>
   )
 }
-

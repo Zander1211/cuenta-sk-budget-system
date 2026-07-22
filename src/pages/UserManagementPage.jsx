@@ -124,9 +124,13 @@ function UserManagementPage() {
     }
 
     addLog({
-      action: `Created account for ${name} (${formState.role})`,
+      action: `User Created — ${name}`,
+      actionType: 'User Created',
       module: 'User Management',
-      description: `Email: ${email}, Role: ${formState.role}`,
+      recordType: 'User',
+      recordId: data.user.id,
+      description: `Created account for ${name} (${formState.role})`,
+      newValue: { name, email, role: formState.role },
     })
     setFormStatus('Account created. The user can log in after email verification.')
 
@@ -172,9 +176,14 @@ function UserManagementPage() {
     }
 
     addLog({
-      action: `Changed role for ${account.full_name} from ${account.role} to ${editRoleValue}`,
+      action: `User Updated — Role Changed for ${account.full_name}`,
+      actionType: 'User Updated',
       module: 'User Management',
-      description: `Email: ${account.email}`,
+      recordType: 'User',
+      recordId: account.id,
+      description: `Role changed for ${account.full_name} (${account.email})`,
+      previousValue: { role: account.role },
+      newValue: { role: editRoleValue },
     })
 
     setEditingRoleId(null)
@@ -214,10 +223,16 @@ function UserManagementPage() {
     }
 
     const actionLabel = action === 'deactivate' ? 'Deactivated' : 'Reactivated'
+    const actionType  = action === 'deactivate' ? 'User Deactivated' : 'User Activated'
     addLog({
-      action: `${actionLabel} account for ${account.full_name}`,
+      action: `${actionLabel} Account — ${account.full_name}`,
+      actionType,
       module: 'User Management',
-      description: `Email: ${account.email}, Role: ${account.role}`,
+      recordType: 'User',
+      recordId: account.id,
+      description: `${actionLabel} account for ${account.full_name} (${account.email}), Role: ${account.role}`,
+      previousValue: { is_active: action === 'deactivate' ? true : false },
+      newValue: { is_active: action === 'deactivate' ? false : true },
     })
 
     setUpdatingId(null)

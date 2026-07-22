@@ -12,6 +12,7 @@ import NotificationBell from '../components/NotificationBell'
 import { useAuth } from '../context/AuthContext'
 import { useBudget, useBudgetCalculations } from '../context/BudgetContext'
 import GlobalSearch from '../components/GlobalSearch'
+import YearSpinner from '../components/YearSpinner'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -42,7 +43,7 @@ function parseDate(value) {
 }
 
 function MainDashboardPage() {
-  const { role } = useAuth()
+  const { role, user } = useAuth()
   const { requests, budgets, expenses } = useBudget()
   const [viewMode, setViewMode] = useState('monthly')
   const currentDate = new Date()
@@ -51,29 +52,6 @@ function MainDashboardPage() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
   const [selectedYear, setSelectedYear] = useState(currentYear)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
-
-  const availableYears = useMemo(() => {
-    const years = new Set([currentYear])
-    budgets.forEach((budget) => {
-      if (Number.isFinite(budget.year)) {
-        years.add(budget.year)
-        return
-      }
-
-      const createdDate = parseDate(budget.createdAt)
-      if (createdDate) {
-        years.add(createdDate.getFullYear())
-      }
-    })
-    return Array.from(years).sort((a, b) => a - b)
-  }, [budgets, currentYear])
-
-  useEffect(() => {
-    if (!availableYears.length) return
-    if (!availableYears.includes(selectedYear)) {
-      setSelectedYear(availableYears[availableYears.length - 1])
-    }
-  }, [availableYears, selectedYear])
 
   const periodLabel = viewMode === 'monthly' ? `${monthOptions.find(m => m.value === selectedMonth)?.label} ${selectedYear}` : `${selectedYear}`
   const periodDescriptor = viewMode === 'monthly' ? 'month' : 'year'
@@ -213,7 +191,7 @@ function MainDashboardPage() {
   }
   if (missingDocsCount) {
     alerts.push({
-      title: 'Missing documents',
+      title: 'Missing receipts',
       detail: `${missingDocsCount} expenses are missing receipts.`,
       tone: 'warning',
     })
@@ -240,7 +218,11 @@ function MainDashboardPage() {
           </label>
           {['SK Chairman', 'SK Treasurer'].includes(role) && <NotificationBell />}
           <div className="user-chip">
-            <span className="user-avatar">{initials}</span>
+            {user?.user_metadata?.avatar_url ? (
+              <img src={user.user_metadata.avatar_url} alt="Profile" className="user-avatar" style={{ objectFit: 'cover' }} />
+            ) : (
+              <span className="user-avatar">{initials}</span>
+            )}
             <span className="user-info">
               <span className="user-name">{role}</span>
               <span className="user-role">Active role</span>
@@ -284,7 +266,7 @@ function MainDashboardPage() {
         </div>
         <div className="filter-group">
           <span className="filter-label">Year</span>
-          <span className="filter-year">{selectedYear}</span>
+          <YearSpinner year={selectedYear} onYearChange={setSelectedYear} />
         </div>
       </section>
 

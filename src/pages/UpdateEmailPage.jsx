@@ -106,7 +106,15 @@ function UpdateEmailPage() {
     await supabase.auth.refreshSession()
     
     setEmailStatus('Email updated successfully! Returning to profile...')
-    addLog({ action: 'Successfully updated email address', actor: normalizedNewEmail })
+    addLog({
+      action: 'Email Address Updated',
+      actionType: 'Email Address Updated',
+      module: 'Authentication',
+      recordType: 'User',
+      description: `Email address updated to ${normalizedNewEmail}`,
+      status: 'Success',
+      actor: normalizedNewEmail,
+    })
     setNewEmail('')
     setOtp('')
     localStorage.removeItem('cuenta_otp_email_sent')

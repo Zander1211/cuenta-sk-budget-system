@@ -7,7 +7,7 @@ const corsHeaders = {
 }
 
 // @ts-ignore
-const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-pro'
+const geminiModel = Deno.env.get('GEMINI_MODEL') || 'gemini-flash-latest'
 const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`
 
 const normalizeOutput = (payload: unknown) => {

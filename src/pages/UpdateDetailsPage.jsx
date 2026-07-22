@@ -59,7 +59,16 @@ function UpdateDetailsPage() {
     }
 
     await refreshSession()
-    addLog({ action: 'Updated profile name', actor: user?.email })
+    addLog({
+      action: 'Profile Updated',
+      actionType: 'Profile Updated',
+      module: 'Authentication',
+      recordType: 'User',
+      description: `Profile name updated to ${updatedFullName}`,
+      newValue: { first_name: trimmedFirst, last_name: trimmedLast, full_name: updatedFullName },
+      status: 'Success',
+      actor: user?.email,
+    })
     setNameStatus('Name updated successfully.')
     setIsSavingName(false)
   }

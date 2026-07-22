@@ -4,6 +4,7 @@ import { useBudget } from '../context/BudgetContext'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
+import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
 import ReceiptPrintPreview from '../components/ReceiptPrintPreview'
 import CurrencyInput from '../components/CurrencyInput'
 
@@ -35,9 +36,10 @@ function ExpensesPage() {
     archiveExpense,
     restoreExpense,
     addExpense,
+    updateExpenseReceipt,
   } = useBudget()
   const { addLog } = useAuditLog()
-  const { role } = useAuth()
+  const { user, role } = useAuth()
   const isTreasurer = role === 'SK Treasurer'
 
   const [activeTab, setActiveTab] = useState('active')
@@ -307,38 +309,57 @@ function ExpensesPage() {
 
   async function handleUpload(expense) {
     const file = filesById[expense.id]
-    if (!file) {
+    
+    const validationError = validateReceiptFile(file, role)
+    if (validationError) {
       setErrorsById((prev) => ({
         ...prev,
-        [expense.id]: 'Select a receipt file first.',
+        [expense.id]: validationError,
       }))
       return
     }
 
     setUploadingId(expense.id)
     setErrorsById((prev) => ({ ...prev, [expense.id]: '' }))
-    const safeName = file.name.replace(/\s+/g, '-')
-    const filePath = `expenses/${expense.id}-${Date.now()}-${safeName}`
+    
+    const filePath = generateReceiptPath(expense, file)
 
     const { error: uploadError } = await supabase.storage
       .from(RECEIPTS_BUCKET)
-      .upload(filePath, file, { upsert: false })
+      .upload(filePath, file, { upsert: true })
 
     if (uploadError) {
-      setErrorsById((prev) => ({ ...prev, [expense.id]: uploadError.message }))
+      logUploadDebugInfo(uploadError, { expenseId: expense.id, filePath })
+      setErrorsById((prev) => ({ ...prev, [expense.id]: getUploadErrorMessage(uploadError) }))
       setUploadingId(null)
       return
     }
 
+    // 2. Insert robust database record
+    const { error: dbError } = await insertReceiptRecord(supabase, expense, file, filePath, user, role)
+
+    if (dbError) {
+      // Rollback storage upload
+      await supabase.storage.from(RECEIPTS_BUCKET).remove([filePath])
+      
+      logUploadDebugInfo(dbError, { expenseId: expense.id, step: 'receipt_record_insert', note: 'Rolled back storage' })
+      setErrorsById((prev) => ({ ...prev, [expense.id]: `Database Error: ${dbError.message || 'Failed to link receipt record'}` }))
+      setUploadingId(null)
+      return
+    }
+
+    // 3. Update local state immediately (this is the primary store)
+    updateExpenseReceipt(expense.id, filePath, file.name)
+
+    // 4. Best-effort sync to minimal expenses table (only valid columns)
     const { error: updateError } = await supabase
       .from('expenses')
       .update({ receipt_url: filePath, receipt_name: file.name })
       .eq('id', expense.id)
 
     if (updateError) {
-      setErrorsById((prev) => ({ ...prev, [expense.id]: updateError.message }))
-      setUploadingId(null)
-      return
+      // Log but don't fail — local state is already updated
+      logUploadDebugInfo(updateError, { expenseId: expense.id, step: 'supabase_sync', note: 'Local state already updated' })
     }
 
     const { data } = await supabase.storage
@@ -351,7 +372,16 @@ function ExpensesPage() {
 
     setFilesById((prev) => ({ ...prev, [expense.id]: null }))
     setUploadingId(null)
-    addLog({ action: `Uploaded receipt for ${expense.event || expense.project || 'expense'}` })
+    addLog({
+      action: `Receipt Uploaded \u2014 ${expense.event || expense.project || 'expense'}`,
+      actionType: 'Receipt Uploaded',
+      module: 'Expenses',
+      recordType: 'Receipt',
+      recordId: expense.id,
+      description: `Uploaded receipt for ${expense.event || expense.project || 'expense'}`,
+      newValue: { receiptPath: filePath },
+      status: 'Success',
+    })
     await refreshExpensesFromSupabase()
   }
 

@@ -3,6 +3,80 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createClient } from '@supabase/supabase-js'
 
+// Local middleware to serve /api/chat using Gemini API
+// instead of proxying to the deployed Vercel function
+function localChatHandler(env) {
+  return {
+    name: 'local-chat-handler',
+    configureServer(server) {
+      // Set GEMINI_API_KEY in process.env at server startup
+      if (env.GEMINI_API_KEY) {
+        process.env.GEMINI_API_KEY = env.GEMINI_API_KEY
+      }
+
+      server.middlewares.use((req, res, next) => {
+        if (req.url === '/api/chat' && req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => { body += chunk.toString() })
+          req.on('end', async () => {
+            res.setHeader('Content-Type', 'application/json')
+
+            try {
+              const { messages = [], systemContext = {} } = JSON.parse(body)
+              const apiKey = process.env.GEMINI_API_KEY
+
+              if (!apiKey) {
+                res.statusCode = 500
+                res.end(JSON.stringify({ error: 'Gemini API key not configured in .env.local' }))
+                return
+              }
+
+              // Import the handler using file:// URL (works on Windows)
+              const handlerUrl = new URL('./api/chat/index.js', import.meta.url)
+              const mod = await import(handlerUrl.href + '?t=' + Date.now())
+              const handler = mod.default
+
+              // Create mock Vercel-style req/res
+              const mockReq = { method: 'POST', body: { messages, systemContext } }
+              let responded = false
+              const mockRes = {
+                statusCode: 200,
+                status(code) { this.statusCode = code; return this },
+                json(data) {
+                  if (responded) return
+                  responded = true
+                  res.statusCode = this.statusCode
+                  res.end(JSON.stringify(data))
+                },
+                end(data) {
+                  if (responded) return
+                  responded = true
+                  res.statusCode = this.statusCode
+                  res.end(data)
+                },
+                send(data) {
+                  if (responded) return
+                  responded = true
+                  res.statusCode = this.statusCode
+                  res.end(typeof data === 'string' ? data : JSON.stringify(data))
+                },
+              }
+
+              await handler(mockReq, mockRes)
+            } catch (err) {
+              console.error('[Cue Chat] Local handler error:', err)
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: err.message || 'Local chat handler failed' }))
+            }
+          })
+          return
+        }
+        next()
+      })
+    }
+  }
+}
+
 function localRecaptchaMock(env) {
   return {
     name: 'local-recaptcha-mock',
@@ -80,6 +154,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      localChatHandler(env),
       localRecaptchaMock(env),
     ],
     server: {
@@ -90,6 +165,9 @@ export default defineConfig(({ mode }) => {
           secure: true,
           bypass: (req) => {
             if (req.url === '/api/login') {
+              return req.url
+            }
+            if (req.url === '/api/chat') {
               return req.url
             }
           }
