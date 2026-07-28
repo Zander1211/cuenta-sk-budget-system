@@ -395,3 +395,75 @@
   .biodata-banner { flex-wrap: wrap; }
   .biodata-banner-actions { width: 100%; justify-content: flex-end; }
 }
+
+/* ============================================================
+   Analysis page — AI Insight Header (top-of-page risk overview)
+   ============================================================ */
+.an-ai-header { gap: 18px; }
+.an-ai-header-main {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+}
+.an-ai-header-lead { display: flex; align-items: flex-start; gap: 14px; min-width: 0; flex: 1 1 320px; }
+.an-ai-header-badge {
+  width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0; display: grid; place-items: center;
+  background: var(--cuenta-gradient-primary); color: #fff;
+}
+.an-ai-header-copy { min-width: 0; }
+.an-ai-header-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+.an-ai-header-title { margin: 0; font-size: 1.2rem; font-weight: 700; color: var(--cuenta-text-heading); }
+.an-ai-status {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 11px; border-radius: 999px;
+  font-size: 0.78rem; font-weight: 800; letter-spacing: 0.02em; border: 1px solid transparent; white-space: nowrap;
+}
+.an-ai-status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.an-ai-status-danger { background: var(--cuenta-badge-danger-bg); color: var(--cuenta-badge-danger-text); border-color: var(--cuenta-badge-danger-border); }
+.an-ai-status-warning { background: var(--cuenta-badge-warning-bg); color: var(--cuenta-badge-warning-text); border-color: var(--cuenta-badge-warning-border); }
+.an-ai-status-positive { background: var(--cuenta-badge-positive-bg); color: var(--cuenta-badge-positive-text); border-color: var(--cuenta-badge-positive-border); }
+.an-ai-status-neutral { background: var(--cuenta-badge-neutral-bg); color: var(--cuenta-badge-neutral-text); border-color: var(--cuenta-badge-neutral-border); }
+.an-ai-counts-inline {
+  margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  font-size: 0.86rem; font-weight: 800; letter-spacing: 0.02em;
+}
+.an-ai-counts-inline .hi { color: var(--cuenta-badge-danger-text); }
+.an-ai-counts-inline .me { color: var(--cuenta-badge-warning-text); }
+.an-ai-counts-inline .lo { color: var(--cuenta-badge-positive-text); }
+.an-ai-counts-inline .dot { color: var(--cuenta-border); font-weight: 700; }
+.an-ai-header-summary {
+  margin: 8px 0 0; font-size: 0.95rem; line-height: 1.55; color: var(--cuenta-text-primary); font-weight: 500;
+  max-width: 70ch;
+}
+.an-ai-header-meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.an-ai-updated { font-size: 0.84rem; font-weight: 600; color: var(--cuenta-text-secondary); white-space: nowrap; }
+
+.an-ai-sev-cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px;
+}
+.an-ai-sev-card {
+  display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 12px;
+  border: 1px solid transparent; border-left-width: 4px;
+}
+.an-ai-sev-card.high { background: #fdf0ed; border-color: #f4d4cf; border-left-color: #d9695a; }
+.an-ai-sev-card.medium { background: #fff7eb; border-color: #f7dfb8; border-left-color: #e0982f; }
+.an-ai-sev-card.low { background: #eef9f4; border-color: #d5eee1; border-left-color: #3aa981; }
+.an-ai-sev-count { font-size: 1.9rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.an-ai-sev-card.high .an-ai-sev-count { color: #bf5547; }
+.an-ai-sev-card.medium .an-ai-sev-count { color: #b97817; }
+.an-ai-sev-card.low .an-ai-sev-count { color: var(--cuenta-badge-positive-text); }
+.an-ai-sev-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.an-ai-sev-label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.95rem; font-weight: 700; color: var(--cuenta-text-heading); }
+.an-ai-sev-card.high .an-ai-sev-label svg { color: #bf5547; }
+.an-ai-sev-card.medium .an-ai-sev-label svg { color: #b97817; }
+.an-ai-sev-card.low .an-ai-sev-label svg { color: var(--cuenta-badge-positive-text); }
+.an-ai-sev-explain { font-size: 0.88rem; color: var(--cuenta-text-secondary); font-weight: 500; }
+
+.an-ai-header-actions { display: flex; }
+.an-ai-header-actions .an-btn { min-height: 42px; }
+
+@media (max-width: 760px) {
+  .an-ai-header-main { flex-direction: column; align-items: stretch; }
+  /* Reset the horizontal flex-basis so it isn't read as a tall height in column mode */
+  .an-ai-header-lead { flex: 0 1 auto; }
+  .an-ai-header-meta { justify-content: space-between; }
+  .an-ai-sev-cards { grid-template-columns: minmax(0, 1fr); }
+  .an-ai-header-actions .an-btn { width: 100%; justify-content: center; }
+}

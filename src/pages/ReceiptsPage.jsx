@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
-import ContextualRiskBanner from '../components/risk/ContextualRiskBanner'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import { supabase } from '../supabase/supabaseClient'
@@ -291,7 +290,6 @@ function ReceiptsPage() {
 
   return (
     <RoleGate allow={['SK Chairman', 'SK Treasurer', 'Barangay Treasurer']}>
-      <ContextualRiskBanner pageKey="receipts" />
       <header className="dashboard-header">
         <div className="header-left">
           <div>

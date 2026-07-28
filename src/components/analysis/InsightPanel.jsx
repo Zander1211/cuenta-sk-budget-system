@@ -39,6 +39,7 @@ export function InsightItem({ item }) {
 
 // Proactive, page-specific insight panel. Distinct from the conversational Cue chatbot.
 export function InsightPanel({
+  id,
   title = 'AI Insights',
   status,
   summary,
@@ -61,6 +62,7 @@ export function InsightPanel({
 
   return (
     <motion.aside
+      id={id}
       className="an-card an-insight-panel"
       initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}

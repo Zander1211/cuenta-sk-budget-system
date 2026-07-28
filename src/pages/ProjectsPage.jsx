@@ -1,5 +1,4 @@
 import { Fragment, useMemo, useState, useEffect } from 'react'
-import ContextualRiskBanner from '../components/risk/ContextualRiskBanner'
 import { useBudget } from '../context/BudgetContext'
 import RoleGate from '../components/RoleGate'
 import { useAuth } from '../context/AuthContext'
@@ -188,7 +187,6 @@ function ProjectsPage() {
 
   return (
     <RoleGate allow={['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']}>
-      <ContextualRiskBanner pageKey="projects" />
       <header className="dashboard-header">
         <div className="header-left">
           <div>

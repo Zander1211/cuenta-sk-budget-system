@@ -23,7 +23,6 @@ import { logoutUser } from '../services/authService'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
 import NotificationBell from '../components/NotificationBell'
-import { FinancialRiskProvider } from '../context/FinancialRiskContext'
 
 const SIDEBAR_COLLAPSE_KEY = 'cuenta.sidebarCollapsed'
 
@@ -186,7 +185,6 @@ function DashboardLayout() {
   }
 
   return (
-    <FinancialRiskProvider>
     <div className="dashboard">
       <div className="dashboard-shell">
         <div className="dashboard-mobile-header">
@@ -306,7 +304,6 @@ function DashboardLayout() {
         </div>
       )}
     </div>
-    </FinancialRiskProvider>
   )
 }
 

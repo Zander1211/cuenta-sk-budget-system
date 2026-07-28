@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react'
-import ContextualRiskBanner from '../components/risk/ContextualRiskBanner'
 import { useAuth } from '../context/AuthContext'
 import { useBudget } from '../context/BudgetContext'
 import CurrencyInput from '../components/CurrencyInput'
@@ -115,7 +114,6 @@ function BudgetsPage() {
 
   return (
     <>
-      <ContextualRiskBanner pageKey="budgets" />
       <header className="dashboard-header">
         <div className="header-left">
           <div>

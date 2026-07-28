@@ -11,6 +11,7 @@ import {
 import { useAnalysisAI } from '../../hooks/useAnalysisAI'
 import { AnalysisLayout, AnalysisFilterBar } from '../../components/analysis/AnalysisLayout'
 import { InsightPanel } from '../../components/analysis/InsightPanel'
+import AnalysisInsightHeader from '../../components/analysis/AnalysisInsightHeader'
 import { MetricCard, EmptyState, ChartCard } from '../../components/analysis/AnalysisUI'
 import { buildOverviewInsights } from '../../utils/insights'
 import {
@@ -153,6 +154,19 @@ export default function AnalysisOverviewPage() {
         />
       }
     >
+      {hasData ? (
+        <AnalysisInsightHeader
+          status={ai.status}
+          summary={ai.summary}
+          insights={ai.insights}
+          updatedAt={ai.updatedAt}
+          onRefresh={ai.refresh}
+          onViewDetails={() => {
+            document.getElementById('ai-insights-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }}
+        />
+      ) : null}
+
       <section className="an-metric-grid" aria-label="Summary metrics">
         {metricCards.map((c) => <MetricCard key={c.label} {...c} />)}
       </section>
@@ -181,6 +195,7 @@ export default function AnalysisOverviewPage() {
           </div>
 
           <InsightPanel
+            id="ai-insights-panel"
             title="AI Insights"
             status={ai.status}
             summary={ai.summary}

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import ContextualRiskBanner from '../components/risk/ContextualRiskBanner'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -37,7 +36,6 @@ function RequestPage() {
 
   return (
     <RoleGate allow={['SK Treasurer']}>
-      <ContextualRiskBanner pageKey="request" />
       <header className="dashboard-header">
         <div className="header-left">
           <div>
