@@ -36,6 +36,7 @@
 html {
 	-webkit-text-size-adjust: 100%;
 	text-size-adjust: 100%;
+	overflow-x: hidden;
 }
 
 * {
@@ -50,6 +51,7 @@ body {
 	line-height: 1.55;
 	background: var(--bone);
 	-webkit-font-smoothing: antialiased;
+	overflow-x: hidden;
 }
 
 #root {
@@ -1064,7 +1066,8 @@ body {
 
 .summary-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	/* Explicit breakpoints: 4-col desktop → 2-col tablet → 1-col mobile */
+	grid-template-columns: repeat(4, minmax(0, 1fr));
 	gap: 16px;
 }
 
@@ -2577,13 +2580,22 @@ body {
 		transform: translateX(0);
 	}
 
+	/* Scrim: always present in DOM but invisible/non-interactive when sidebar is closed.
+	   Becomes a dark overlay only when is-sidebar-open is active. */
 	.sidebar-scrim {
 		display: block;
 		position: fixed;
 		inset: 0;
-		background: rgba(14, 21, 34, 0.35);
+		background: transparent;
+		pointer-events: none;
 		border: none;
 		z-index: 20;
+		transition: background 0.25s ease;
+	}
+
+	.dashboard-layout.is-sidebar-open .sidebar-scrim {
+		background: rgba(14, 21, 34, 0.35);
+		pointer-events: auto;
 	}
 }
 
@@ -3511,6 +3523,9 @@ td.nr-info-label {
 	width: min(480px, 100%);
 	box-shadow: 0 20px 40px rgba(6, 10, 20, 0.15);
 	animation: shellFloat 0.3s ease;
+	/* Prevent tall modals from clipping off screen */
+	max-height: 90vh;
+	overflow-y: auto;
 }
 
 .modal-header {
@@ -5084,3 +5099,460 @@ td.nr-info-label {
 	}
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   RESPONSIVE DESIGN SYSTEM — COMPREHENSIVE FIXES v2
+   All breakpoints use min-width: 0 on flex/grid children to prevent
+   intrinsic-size overflow. Grouped by breakpoint descending.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Global layout guard: no child should cause horizontal overflow ── */
+.dashboard-main,
+.overview-card,
+.panel-card,
+.summary-card,
+.audit-stat-card,
+.summary-grid,
+.dashboard-panels,
+.dashboard-content,
+.user-management-grid,
+.form-grid {
+	min-width: 0;
+}
+
+/* ── Every flex/grid child gets min-width: 0 by default ── */
+.dashboard-layout > *,
+.dashboard-main > * {
+	min-width: 0;
+}
+
+/* ── Form inputs always fill their container — no intrinsic overflow ── */
+.field input,
+.field select,
+.field textarea,
+.panel-select {
+	min-width: 0;
+}
+
+/* ── Table wrappers — contain overflow, allow touch-scroll ── */
+.table-responsive,
+.audit-table-wrapper {
+	max-width: 100%;
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+
+/* ─────────────────────────────────────────────────────────
+   Breakpoint: ≤ 1280px  (large tablet / small laptop)
+───────────────────────────────────────────────────────── */
+@media (max-width: 1280px) {
+	.dashboard-shell {
+		padding: 28px 32px 40px;
+	}
+}
+
+
+/* ─────────────────────────────────────────────────────────
+   Breakpoint: ≤ 1024px  (tablet landscape)
+───────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+	.dashboard-shell {
+		padding: 24px 24px 36px;
+	}
+
+	/* 4-col → 2-col */
+	.summary-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	/* Backup stat cards — 4 → 2 col */
+	.backup-summary-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+
+
+/* ─────────────────────────────────────────────────────────
+   Breakpoint: ≤ 900px  (tablet portrait / phablet)
+───────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+	.dashboard-shell {
+		padding: 20px 20px 28px;
+	}
+
+	.dashboard-header {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 12px;
+	}
+
+	.header-actions {
+		width: 100%;
+		flex-wrap: wrap;
+	}
+
+	.dashboard-content {
+		gap: 16px;
+	}
+}
+
+
+/* ─────────────────────────────────────────────────────────
+   Breakpoint: ≤ 768px  (typical tablet portrait / large phone)
+───────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+	/* ── Audit Trail filter panel — PRIMARY BUG FIX ──
+	   The 6 dropdowns overflow the card on mobile. Force them to stack. */
+
+	/* Row 1: search + date inputs stack vertically */
+	.audit-filters-form .audit-filter-row {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 8px;
+	}
+
+	/* Override the inline minWidth: 240px on the search label element */
+	.audit-search {
+		min-width: 0 !important;
+		width: 100%;
+		flex: none;
+	}
+
+	/* Date range also stacks */
+	.audit-filters-form .audit-date-range {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 8px;
+	}
+
+	.audit-date-label {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 4px;
+	}
+
+	.audit-date-label input[type='date'] {
+		width: 100%;
+		box-sizing: border-box;
+	}
+
+	/* Row 2: dropdown grid → 2 per row on tablet */
+	.audit-filter-row--dropdowns {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.audit-filter-row--dropdowns .panel-select {
+		width: 100%;
+		box-sizing: border-box;
+	}
+
+	/* Row 3: action buttons stack */
+	.audit-filter-actions {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 8px;
+	}
+
+	.audit-filter-actions .primary-button,
+	.audit-filter-actions .secondary-button {
+		width: 100%;
+		justify-content: center;
+	}
+
+	/* ── Modal overlay — allow content to start from top + scroll ── */
+	.modal-overlay {
+		align-items: flex-start;
+		padding-top: 5vh;
+	}
+
+	/* ── Touch targets ── */
+	.primary-button,
+	.secondary-button,
+	.ghost-button {
+		min-height: 44px;
+	}
+
+	.sidebar-tab {
+		min-height: 44px;
+	}
+
+	.icon-button,
+	.mobile-icon-button {
+		min-width: 44px;
+		min-height: 44px;
+	}
+}
+
+
+/* ─────────────────────────────────────────────────────────
+   Breakpoint: ≤ 640px  (phone landscape / small tablet)
+───────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+	/* ── Audit Trail — text wrapping fix in mobile card view ──
+	   PRIMARY BUG: The ::before label display converts rows to cards.
+	   Text like "Opened Documents page" was truncating mid-word.
+	   Reset all nowrap / ellipsis / max-width rules in card-view mode. */
+	.audit-description {
+		white-space: normal !important;
+		text-overflow: unset !important;
+		max-width: 100% !important;
+		overflow: visible !important;
+		word-break: break-word;
+	}
+
+	.audit-module {
+		white-space: normal !important;
+		word-break: break-word;
+	}
+
+	.audit-timestamp {
+		white-space: normal;
+	}
+
+	/* ── Audit stat card — "Last Activity" overflowing text ── */
+	.audit-stat-value--sm {
+		font-size: 0.8rem;
+		line-height: 1.35;
+		word-break: break-word;
+		overflow-wrap: anywhere;
+		white-space: normal;
+	}
+
+	.audit-stat-card {
+		align-items: flex-start;
+	}
+
+	/* ── Dashboard filter group — full width stacking ── */
+	.dashboard-filters {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 10px;
+	}
+
+	.filter-group {
+		width: 100%;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 6px;
+	}
+
+	.filter-toggle {
+		width: 100%;
+		display: flex;
+	}
+
+	.filter-toggle-btn {
+		flex: 1;
+		text-align: center;
+	}
+
+	.filter-group .panel-select {
+		width: 100%;
+	}
+
+	/* ── Header typography ── */
+	.header-left h1 {
+		font-size: clamp(1.35rem, 6vw, 2rem);
+	}
+
+	.header-left p {
+		font-size: 0.87rem;
+		max-width: 100%;
+	}
+
+	.items-found-badge {
+		font-size: 0.8rem;
+		padding: 5px 10px;
+	}
+
+	/* ── Audit stats 2-col ── */
+	.audit-stats-bar {
+		grid-template-columns: repeat(2, 1fr);
+		gap: 10px;
+	}
+
+	.audit-stat-card {
+		padding: 14px 16px;
+	}
+
+	.audit-stat-value {
+		font-size: 1.2rem;
+	}
+}
+
+
+/* ─────────────────────────────────────────────────────────
+   Breakpoint: ≤ 600px  (mobile — card-view active)
+───────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+	/* ── Summary grid → 2 col on mobile ── */
+	.summary-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 12px;
+	}
+
+	/* ── Modal — slide up from bottom on phone ── */
+	.modal-overlay {
+		align-items: flex-end;
+		padding: 0;
+	}
+
+	.modal-content {
+		border-radius: 20px 20px 0 0;
+		width: 100%;
+		max-height: 92vh;
+		padding: 24px 20px;
+	}
+
+	/* ── Audit dropdown row → 1 col on phone ── */
+	.audit-filter-row--dropdowns {
+		grid-template-columns: 1fr;
+	}
+
+	/* ── Backup stats → 2 col ── */
+	.backup-summary-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	.dashboard-content {
+		gap: 14px;
+	}
+}
+
+
+/* ─────────────────────────────────────────────────────────
+   Breakpoint: ≤ 480px  (small phone)
+───────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+	/* ── Summary grid → single column on very small screens ── */
+	.summary-grid {
+		grid-template-columns: 1fr;
+	}
+
+	/* ── Audit + backup stats → 1 col ── */
+	.audit-stats-bar {
+		grid-template-columns: 1fr;
+	}
+
+	.backup-summary-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.dashboard-shell {
+		padding: 16px 14px 20px;
+	}
+
+	.header-left h1 {
+		font-size: clamp(1.2rem, 7vw, 1.75rem);
+	}
+
+	.action-group .primary-button,
+	.action-group .secondary-button {
+		width: 100%;
+		justify-content: center;
+	}
+
+	.modal-content {
+		padding: 20px 16px;
+	}
+
+	.modal-footer {
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.modal-footer .primary-button,
+	.modal-footer .secondary-button,
+	.modal-footer .ghost-button {
+		width: 100%;
+	}
+}
+
+
+/* ─────────────────────────────────────────────────────────
+   Analysis module responsive
+───────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+	.an-grid,
+	.analysis-grid {
+		grid-template-columns: 1fr !important;
+	}
+
+	.an-metrics-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+	}
+}
+
+@media (max-width: 480px) {
+	.an-metrics-grid {
+		grid-template-columns: 1fr !important;
+	}
+}
+
+
+/* ─────────────────────────────────────────────────────────
+   YearSpinner — prevent overflow in flex containers
+───────────────────────────────────────────────────────── */
+.year-spinner {
+	flex-shrink: 0;
+	min-width: 0;
+}
+
+
+/* ─────────────────────────────────────────────────────────
+   Profile page
+───────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+	.profile-edit-options {
+		width: 100%;
+	}
+
+	.profile-edit-options .ghost-button,
+	.profile-edit-options .secondary-button {
+		width: 100%;
+		justify-content: center;
+	}
+}
+
+
+/* ─────────────────────────────────────────────────────────
+   User Management table action buttons on narrow screens
+───────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+	.user-table td > div[style] {
+		flex-wrap: wrap;
+		gap: 4px;
+	}
+
+	.user-table .text-button {
+		flex: 1;
+		min-width: 80px;
+		justify-content: center;
+	}
+}
+
+
+/* ─────────────────────────────────────────────────────────
+   Print styles — hide navigation chrome
+───────────────────────────────────────────────────────── */
+@media print {
+	.dashboard-sidebar,
+	.dashboard-mobile-header,
+	.sidebar-scrim,
+	.dashboard-topbar {
+		display: none !important;
+	}
+
+	.dashboard-layout {
+		display: block !important;
+	}
+
+	.dashboard-main {
+		max-width: 100% !important;
+		overflow: visible !important;
+	}
+
+	.dashboard-shell {
+		padding: 0 !important;
+	}
+}
