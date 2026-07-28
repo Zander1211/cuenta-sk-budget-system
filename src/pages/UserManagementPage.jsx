@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { useAuditLog } from '../context/AuditLogContext'
 import RoleGate from '../components/RoleGate'
 import { supabase, supabaseAnonKey, supabaseUrl } from '../supabase/supabaseClient'
+import { formatBirthdate } from '../utils/biodata'
 
 const roles = ['SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']
 const adminClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -37,6 +38,20 @@ function UserManagementPage() {
 
   // View User Info Modal
   const [viewModal, setViewModal] = useState({ open: false, user: null })
+  const [viewBiodata, setViewBiodata] = useState({ status: 'idle', data: null })
+
+  async function openViewModal(account) {
+    setViewModal({ open: true, user: account })
+    setViewBiodata({ status: 'loading', data: null })
+
+    const { data, error } = await supabase
+      .from('member_biodata')
+      .select('*')
+      .eq('id', account.id)
+      .maybeSingle()
+
+    setViewBiodata({ status: error ? 'error' : 'ready', data: error ? null : data })
+  }
 
   useEffect(() => {
     loadAccounts()
@@ -394,7 +409,7 @@ function UserManagementPage() {
                             type="button"
                             className="text-button"
                             style={{ fontSize: '0.8rem' }}
-                            onClick={() => setViewModal({ open: true, user })}
+                            onClick={() => openViewModal(user)}
                           >
                             View Info
                           </button>
@@ -529,12 +544,50 @@ function UserManagementPage() {
                   </p>
                 </div>
               </div>
+
+              <div style={{ borderTop: '1px solid rgba(15, 31, 54, 0.08)', marginTop: '20px', paddingTop: '16px' }}>
+                <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)', marginBottom: '10px' }}>Biodata</p>
+                {viewBiodata.status === 'loading' ? (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--ink-soft)', margin: 0 }}>Loading biodata...</p>
+                ) : viewBiodata.status === 'error' ? (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--ink-soft)', margin: 0 }}>Unable to load biodata.</p>
+                ) : viewBiodata.data ? (
+                  <div className="details-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div>
+                      <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Birthdate</p>
+                      <p className="details-value" style={{ fontWeight: 500 }}>{formatBirthdate(viewBiodata.data.birthdate)}</p>
+                    </div>
+                    <div>
+                      <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Sex</p>
+                      <p className="details-value" style={{ fontWeight: 500 }}>{viewBiodata.data.sex || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Civil Status</p>
+                      <p className="details-value" style={{ fontWeight: 500 }}>{viewBiodata.data.civil_status || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Citizenship</p>
+                      <p className="details-value" style={{ fontWeight: 500 }}>{viewBiodata.data.citizenship || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Mobile Number</p>
+                      <p className="details-value" style={{ fontWeight: 500 }}>{viewBiodata.data.mobile_number || '—'}</p>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Complete Address</p>
+                      <p className="details-value" style={{ fontWeight: 500 }}>{viewBiodata.data.complete_address || '—'}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--ink-soft)', margin: 0 }}>This member hasn&apos;t filled out their biodata yet.</p>
+                )}
+              </div>
             </div>
             <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 type="button"
                 className="secondary-button"
-                onClick={() => setViewModal({ open: false, user: null })}
+                onClick={() => { setViewModal({ open: false, user: null }); setViewBiodata({ status: 'idle', data: null }) }}
               >
                 Close
               </button>

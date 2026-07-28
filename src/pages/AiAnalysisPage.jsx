@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Wallet, Receipt, PieChart, ClipboardCheck } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
+import { useAuth } from '../context/AuthContext'
 import { useBudget, useBudgetCalculations } from '../context/BudgetContext'
 import { supabase } from '../supabase/supabaseClient'
 import BudgetVsExpensesChart from '../components/BudgetVsExpensesChart'
@@ -92,6 +93,7 @@ const normalizeAiResponse = (payload) => {
 }
 
 function AiAnalysisPage() {
+  const { user } = useAuth()
   const { budgets, expenses, requests, totals } = useBudget()
   const [aiState, setAiState] = useState({
     status: 'idle',
@@ -103,13 +105,43 @@ function AiAnalysisPage() {
   })
   const [aiError, setAiError] = useState('')
 
-
-  const [viewMode, setViewMode] = useState('monthly')
   const currentDate = new Date()
   const currentYear = currentDate.getFullYear()
   const currentMonth = currentDate.getMonth() + 1
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
-  const [selectedYear, setSelectedYear] = useState(currentYear)
+
+  const [initialState] = useState(() => {
+    const defaultState = {
+      viewMode: 'monthly',
+      month: currentMonth,
+      year: currentYear,
+    }
+    if (!user?.id) return defaultState
+    try {
+      const saved = localStorage.getItem(`cuenta_ai_filters_${user.id}`)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return {
+          viewMode: parsed.viewMode || defaultState.viewMode,
+          month: parsed.month || defaultState.month,
+          year: parsed.year || defaultState.year,
+        }
+      }
+    } catch (e) {}
+    return defaultState
+  })
+
+  const [viewMode, setViewMode] = useState(initialState.viewMode)
+  const [selectedMonth, setSelectedMonth] = useState(initialState.month)
+  const [selectedYear, setSelectedYear] = useState(initialState.year)
+
+  useEffect(() => {
+    if (user?.id) {
+      localStorage.setItem(
+        `cuenta_ai_filters_${user.id}`,
+        JSON.stringify({ viewMode, month: selectedMonth, year: selectedYear })
+      )
+    }
+  }, [user?.id, viewMode, selectedMonth, selectedYear])
 
   const periodLabel = viewMode === 'monthly' ? `${monthOptions.find(m => m.value === selectedMonth)?.label} ${selectedYear}` : `${selectedYear}`
   const periodDescriptor = viewMode === 'monthly' ? 'month' : 'year'

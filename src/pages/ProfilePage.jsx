@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
 import { getUploadErrorMessage } from '../utils/uploadUtils'
 import ImageCropper from '../components/ImageCropper'
+import { isBiodataComplete } from '../utils/biodata'
 
 function ProfilePage() {
   const { user, role, refreshSession } = useAuth()
@@ -28,6 +29,8 @@ function ProfilePage() {
   const [cropImageSrc, setCropImageSrc] = useState(null)
   const [selectedSafeExt, setSelectedSafeExt] = useState('png')
 
+  const [biodataComplete, setBiodataComplete] = useState(null) // null = loading
+
   const email = user?.email || ''
   const metadataFullName = user?.user_metadata?.full_name?.trim() || ''
   const trimmedNickname = nickname.trim()
@@ -47,6 +50,23 @@ function ProfilePage() {
     setLastName(user?.user_metadata?.last_name || '')
     setNickname(user?.user_metadata?.nickname || '')
   }, [user])
+
+  useEffect(() => {
+    let isMounted = true
+    async function loadBiodataStatus() {
+      if (!user?.id) return
+      const { data } = await supabase
+        .from('member_biodata')
+        .select('birthdate, sex, civil_status, citizenship, complete_address, mobile_number')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (isMounted) setBiodataComplete(isBiodataComplete(data))
+    }
+    loadBiodataStatus()
+    return () => {
+      isMounted = false
+    }
+  }, [user?.id])
 
   function getInitials(value) {
     const cleaned = value?.trim()
@@ -204,6 +224,31 @@ function ProfilePage() {
           </div>
           {avatarError ? <p className="form-error">{avatarError}</p> : null}
           {avatarStatus ? <p className="form-status">{avatarStatus}</p> : null}
+        </div>
+
+        <div className="overview-card">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <div>
+              <p className="eyebrow">Personal Records</p>
+              <h2>Biodata</h2>
+            </div>
+            {biodataComplete !== null ? (
+              <span className={`an-chip ${biodataComplete ? 'positive' : 'warning'}`}>
+                {biodataComplete ? 'Complete' : 'Incomplete'}
+              </span>
+            ) : null}
+          </div>
+          <p className="profile-hint">
+            Personal information kept on file for SK records, visible to the SK Chairman.
+          </p>
+          <div className="profile-edit-options">
+            <button
+              className={biodataComplete ? 'secondary-button' : 'primary-button'}
+              onClick={() => navigate('/dashboard/profile/biodata')}
+            >
+              {biodataComplete ? 'Edit Biodata' : 'Complete Your Biodata'}
+            </button>
+          </div>
         </div>
 
         <div className="overview-card">

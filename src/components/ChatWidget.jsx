@@ -15,7 +15,12 @@ const PAGE_NAMES = {
   '/dashboard/documents': 'Documents',
   '/dashboard/approvals': 'Approvals',
   '/dashboard/archive': 'Archive',
-  '/dashboard/ai-analysis': 'AI Analysis',
+  '/dashboard/ai-analysis': 'Financial Analysis',
+  '/dashboard/analysis': 'Financial Analysis',
+  '/dashboard/analysis/budget-vs-actual': 'Budget vs Actual Analysis',
+  '/dashboard/analysis/expenses-by-category': 'Expenses by Category Analysis',
+  '/dashboard/analysis/monthly-spending': 'Monthly Spending Trend Analysis',
+  '/dashboard/analysis/budget-utilization': 'Budget Utilization Analysis',
   '/dashboard/report': 'Reports',
   '/dashboard/audit-logs': 'Audit Logs',
   '/dashboard/user-management': 'User Management',
@@ -96,7 +101,7 @@ class ChatErrorBoundary extends React.Component {
         <button
           onClick={() => this.setState({ hasError: false })}
           className="fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-[9999]"
-          style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #0ea5e9 100%)' }}
+          style={{ background: 'linear-gradient(135deg, #0C2E30 0%, #12805C 50%, #12b89a 100%)' }}
           aria-label="Chat error, click to reset"
         >
           <MessageCircle size={22} color="white" />
@@ -357,8 +362,8 @@ function ChatWidgetInner() {
         onClick={() => setIsOpen(prev => !prev)}
         className="fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-[9999] transition-all duration-300 cursor-pointer border-none"
         style={{
-          background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #0ea5e9 100%)',
-          boxShadow: '0 12px 24px rgba(37, 99, 235, 0.3), inset 0 2px 4px rgba(255,255,255,0.2)',
+          background: 'linear-gradient(135deg, #0C2E30 0%, #12805C 50%, #12b89a 100%)',
+          boxShadow: '0 12px 24px rgba(18, 128, 92, 0.3), inset 0 2px 4px rgba(255,255,255,0.2)',
         }}
         aria-label={isOpen ? 'Close chat' : 'Open chat'}
       >
@@ -405,7 +410,7 @@ function ChatWidgetInner() {
             <div
               className="flex items-center justify-between px-4 py-3 shrink-0"
               style={{
-                background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #0ea5e9 100%)',
+                background: 'linear-gradient(135deg, #0C2E30 0%, #12805C 50%, #12b89a 100%)',
                 borderBottom: '1px solid rgba(255,255,255,0.1)',
               }}
             >
@@ -435,6 +440,7 @@ function ChatWidgetInner() {
 
             {/* Messages */}
             <div
+              data-lenis-prevent
               className="flex-1 overflow-y-auto px-4 py-3"
               style={{
                 background: '#f8fafc',
@@ -453,7 +459,7 @@ function ChatWidgetInner() {
                   {msg.role === 'assistant' && (
                     <div
                       className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
-                      style={{ background: 'linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%)' }}
+                      style={{ background: 'linear-gradient(135deg, #12805C 0%, #12b89a 100%)' }}
                     >
                       <Bot size={13} color="white" />
                     </div>
@@ -469,7 +475,7 @@ function ChatWidgetInner() {
                       wordBreak: 'break-word',
                       ...(msg.role === 'user'
                         ? {
-                            background: '#2563eb',
+                            background: '#12805C',
                             color: '#ffffff',
                           }
                         : {
@@ -490,7 +496,7 @@ function ChatWidgetInner() {
                 <div className="flex items-end gap-2">
                   <div
                     className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
-                    style={{ background: 'linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%)' }}
+                    style={{ background: 'linear-gradient(135deg, #12805C 0%, #12b89a 100%)' }}
                   >
                     <Bot size={13} color="white" />
                   </div>
@@ -540,9 +546,9 @@ function ChatWidgetInner() {
                         boxShadow: '0 1px 2px rgba(15, 31, 54, 0.04)',
                       }}
                       onMouseEnter={e => {
-                        e.currentTarget.style.background = '#eff6ff'
-                        e.currentTarget.style.borderColor = '#93c5fd'
-                        e.currentTarget.style.color = '#1d4ed8'
+                        e.currentTarget.style.background = '#EEF9F4'
+                        e.currentTarget.style.borderColor = '#7FC9AE'
+                        e.currentTarget.style.color = '#0E6B4D'
                       }}
                       onMouseLeave={e => {
                         e.currentTarget.style.background = '#ffffff'
@@ -600,8 +606,8 @@ function ChatWidgetInner() {
                   lineHeight: '1.4',
                 }}
                 onFocus={e => {
-                  e.target.style.borderColor = '#3b82f6'
-                  e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'
+                  e.target.style.borderColor = '#12805C'
+                  e.target.style.boxShadow = '0 0 0 3px rgba(18, 128, 92, 0.1)'
                   e.target.style.background = '#ffffff'
                 }}
                 onBlur={e => {
@@ -620,11 +626,11 @@ function ChatWidgetInner() {
                   borderRadius: '50%',
                   background: (!input.trim() || isLoading)
                     ? '#cbd5e1'
-                    : 'linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%)',
+                    : 'linear-gradient(135deg, #12805C 0%, #12b89a 100%)',
                   opacity: (!input.trim() || isLoading) ? 0.5 : 1,
                   boxShadow: (!input.trim() || isLoading)
                     ? 'none'
-                    : '0 4px 12px rgba(37, 99, 235, 0.2)',
+                    : '0 4px 12px rgba(18, 128, 92, 0.2)',
                 }}
                 aria-label="Send message"
               >

@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react'
+import ContextualRiskBanner from '../components/risk/ContextualRiskBanner'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 
@@ -481,6 +482,7 @@ function ApprovalsPage() {
 
   return (
     <RoleGate allow={['SK Chairman']}>
+      <ContextualRiskBanner pageKey="request-review" />
       <header className="dashboard-header">
         <div className="header-left">
           <div>

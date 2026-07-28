@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import ContextualRiskBanner from '../components/risk/ContextualRiskBanner'
 import { AlertCircle, FileText, CheckCircle, ChevronDown, Plus, CreditCard, ChevronRight, Calculator, Archive, ArchiveRestore } from 'lucide-react'
 import { useBudget } from '../context/BudgetContext'
 import { useAuditLog } from '../context/AuditLogContext'
@@ -667,6 +668,7 @@ function ExpensesPage() {
 
   return (
     <>
+      <ContextualRiskBanner pageKey="expenses" />
       <header className="dashboard-header">
         <div className="header-left">
           <div>

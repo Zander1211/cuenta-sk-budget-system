@@ -47,9 +47,9 @@
 }
 
 .print-btn {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, #12805C, #12805C);
   color: #fff;
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+  box-shadow: 0 4px 14px rgba(18, 128, 92, 0.35);
 }
 
 .close-btn {

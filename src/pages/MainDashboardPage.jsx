@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   ClipboardCheck,
   PieChart,
@@ -6,6 +7,8 @@ import {
   Search,
   Settings,
   TriangleAlert,
+  UserRound,
+  X,
   Wallet,
 } from 'lucide-react'
 import NotificationBell from '../components/NotificationBell'
@@ -13,6 +16,8 @@ import { useAuth } from '../context/AuthContext'
 import { useBudget, useBudgetCalculations } from '../context/BudgetContext'
 import GlobalSearch from '../components/GlobalSearch'
 import YearSpinner from '../components/YearSpinner'
+import { supabase } from '../supabase/supabaseClient'
+import { isBiodataComplete } from '../utils/biodata'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -42,9 +47,12 @@ function parseDate(value) {
   return parsed
 }
 
+const BIODATA_BANNER_DISMISS_KEY = 'cuenta.biodataBannerDismissed'
+
 function MainDashboardPage() {
   const { role, user } = useAuth()
   const { requests, budgets, expenses } = useBudget()
+  const navigate = useNavigate()
   const [viewMode, setViewMode] = useState('monthly')
   const currentDate = new Date()
   const currentYear = currentDate.getFullYear()
@@ -52,6 +60,36 @@ function MainDashboardPage() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
   const [selectedYear, setSelectedYear] = useState(currentYear)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [showBiodataBanner, setShowBiodataBanner] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+    async function checkBiodata() {
+      if (!user?.id) return
+      if (typeof window !== 'undefined' && window.sessionStorage.getItem(BIODATA_BANNER_DISMISS_KEY) === 'true') {
+        return
+      }
+      const { data } = await supabase
+        .from('member_biodata')
+        .select('birthdate, sex, civil_status, citizenship, complete_address, mobile_number')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (isMounted && !isBiodataComplete(data)) {
+        setShowBiodataBanner(true)
+      }
+    }
+    checkBiodata()
+    return () => {
+      isMounted = false
+    }
+  }, [user?.id])
+
+  function dismissBiodataBanner() {
+    setShowBiodataBanner(false)
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(BIODATA_BANNER_DISMISS_KEY, 'true')
+    }
+  }
 
   const periodLabel = viewMode === 'monthly' ? `${monthOptions.find(m => m.value === selectedMonth)?.label} ${selectedYear}` : `${selectedYear}`
   const periodDescriptor = viewMode === 'monthly' ? 'month' : 'year'
@@ -230,6 +268,35 @@ function MainDashboardPage() {
           </div>
         </div>
       </section>
+
+      {showBiodataBanner ? (
+        <div className="an-card biodata-banner" role="status">
+          <span className="an-metric-icon" style={{ background: 'var(--cuenta-mint)', color: 'var(--cuenta-teal)' }}>
+            <UserRound size={18} />
+          </span>
+          <div className="biodata-banner-text">
+            <strong>Complete your biodata</strong>
+            <p>Your personal information is kept on file for SK records and isn&apos;t filled out yet.</p>
+          </div>
+          <div className="biodata-banner-actions">
+            <button
+              type="button"
+              className="an-btn an-btn-primary"
+              onClick={() => navigate('/dashboard/profile/biodata')}
+            >
+              Complete now
+            </button>
+            <button
+              type="button"
+              className="an-btn an-btn-icon an-btn-ghost"
+              onClick={dismissBiodataBanner}
+              aria-label="Dismiss reminder"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <section className="dashboard-filters" aria-label="Dashboard filters" style={{ marginBottom: '24px' }}>
         <div className="filter-group">

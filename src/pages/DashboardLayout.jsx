@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Navigate, Outlet } from 'react-router-dom'
 import {
-  Bell,
   Menu,
+  ChevronsLeft,
+  ChevronsRight,
   LayoutDashboard,
   Wallet,
   Briefcase,
@@ -11,7 +12,7 @@ import {
   FileText,
   Files,
   ThumbsUp,
-  Bot,
+  BarChart3,
   ScrollText,
   Users,
   UserCircle,
@@ -21,6 +22,10 @@ import {
 import { logoutUser } from '../services/authService'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
+import NotificationBell from '../components/NotificationBell'
+import { FinancialRiskProvider } from '../context/FinancialRiskContext'
+
+const SIDEBAR_COLLAPSE_KEY = 'cuenta.sidebarCollapsed'
 
 const navItems = [
   {
@@ -85,10 +90,10 @@ const navItems = [
     icon: ThumbsUp
   },
   {
-    label: 'AI Analysis',
-    path: '/dashboard/ai-analysis',
-    roles: ['SK Chairman', 'SK Treasurer', 'Barangay Treasurer', 'SK Kagawad'],
-    icon: Bot
+    label: 'Analysis',
+    path: '/dashboard/analysis',
+    roles: ['SK Chairman', 'SK Treasurer'],
+    icon: BarChart3
   },
   {
     label: 'Receipts',
@@ -123,11 +128,22 @@ const navItems = [
 ]
 
 function DashboardLayout() {
-  const navigate = useNavigate()
   const { addLog } = useAuditLog()
-  const { role, isAuthenticated, profileName, profileSurname, refreshSession } = useAuth()
+  const { role, isAuthenticated, profileName, profileSurname, refreshSession, user } = useAuth()
   const [isSidebarOpen, setSidebarOpen] = useState(false)
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === 'true'
+  })
+
+  function toggleCollapsed() {
+    setIsCollapsed((prev) => {
+      const next = !prev
+      window.localStorage.setItem(SIDEBAR_COLLAPSE_KEY, String(next))
+      return next
+    })
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/" replace />
@@ -138,13 +154,16 @@ function DashboardLayout() {
   const surname =
     profileSurname || (fullName ? fullName.split(' ').filter(Boolean).slice(-1)[0] : '') || ''
   const sidebarRole = [role, surname].filter(Boolean).join(', ')
+  const avatarUrl = user?.user_metadata?.avatar_url || ''
+  const initials = (fullName || role || 'U')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'U'
 
   function handleNavClick() {
     setSidebarOpen(false)
-  }
-
-  function handleNotifications() {
-    // no-op audit for notification panel open
   }
 
   function confirmLogout() {
@@ -167,6 +186,7 @@ function DashboardLayout() {
   }
 
   return (
+    <FinancialRiskProvider>
     <div className="dashboard">
       <div className="dashboard-shell">
         <div className="dashboard-mobile-header">
@@ -182,16 +202,7 @@ function DashboardLayout() {
             <span className="mobile-header-role">{role}</span>
             <span className="mobile-header-subtitle">Dashboard</span>
           </div>
-          {['SK Chairman', 'SK Treasurer'].includes(role) && (
-            <button
-              className="mobile-icon-button"
-              type="button"
-              onClick={handleNotifications}
-              aria-label="Notifications"
-            >
-              <Bell size={20} />
-            </button>
-          )}
+          {['SK Chairman', 'SK Treasurer'].includes(role) && <NotificationBell />}
         </div>
 
         <div className={`dashboard-layout ${isSidebarOpen ? 'is-sidebar-open' : ''}`}>
@@ -201,7 +212,16 @@ function DashboardLayout() {
             onClick={() => setSidebarOpen(false)}
             aria-label="Close menu"
           />
-          <aside className="dashboard-sidebar">
+          <aside className={`dashboard-sidebar ${isCollapsed ? 'is-collapsed' : ''}`} data-lenis-prevent>
+            <button
+              type="button"
+              className="sidebar-collapse-toggle"
+              onClick={toggleCollapsed}
+              aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {isCollapsed ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}
+            </button>
             <div className="sidebar-brand">
               <span className="brand-chip">C</span>
               <div className="sidebar-brand-text">
@@ -219,6 +239,7 @@ function DashboardLayout() {
                     `sidebar-tab ${isActive ? 'is-active' : ''}`
                   }
                   onClick={() => handleNavClick(item.label)}
+                  title={isCollapsed ? item.label : undefined}
                 >
                   <item.icon size={20} className="nav-icon" />
                   <span className="nav-label">{item.label}</span>
@@ -226,10 +247,22 @@ function DashboardLayout() {
               ))}
             </nav>
             <div className="sidebar-footer">
+              <div className="sidebar-profile">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="sidebar-profile-avatar" />
+                ) : (
+                  <span className="sidebar-profile-avatar" aria-hidden="true">{initials}</span>
+                )}
+                <div className="sidebar-profile-info">
+                  <span className="sidebar-profile-name">{fullName || role}</span>
+                  <span className="sidebar-profile-role">{role}</span>
+                </div>
+              </div>
               <button
                 className="logout-button"
                 type="button"
                 onClick={confirmLogout}
+                title={isCollapsed ? 'Logout' : undefined}
               >
                 <LogOut size={20} className="nav-icon" />
                 <span className="nav-label">Logout</span>
@@ -273,6 +306,7 @@ function DashboardLayout() {
         </div>
       )}
     </div>
+    </FinancialRiskProvider>
   )
 }
 

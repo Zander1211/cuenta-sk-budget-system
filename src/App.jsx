@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth, AuthProvider } from './context/AuthContext'
 import LoadingScreen from './components/LoadingScreen'
@@ -10,7 +11,6 @@ import ExpensesPage from './pages/ExpensesPage'
 import RequestPage from './pages/RequestPage'
 import DocumentsPage from './pages/DocumentsPage'
 import ApprovalsPage from './pages/ApprovalsPage'
-import AiAnalysisPage from './pages/AiAnalysisPage'
 import ReceiptsPage from './pages/ReceiptsPage'
 import ReceiptDetailsPage from './pages/ReceiptDetailsPage'
 import AuditTrailPage from './pages/AuditTrailPage'
@@ -25,6 +25,7 @@ import NewRequestPage from './pages/NewRequestPage'
 import EventsPage from './pages/EventsPage'
 import PayrollPage from './pages/PayrollPage'
 import UpdateDetailsPage from './pages/UpdateDetailsPage'
+import BiodataPage from './pages/BiodataPage'
 import ChangePasswordPage from './pages/ChangePasswordPage'
 import UpdateOtpPage from './pages/UpdateOtpPage'
 import UpdateEmailPage from './pages/UpdateEmailPage'
@@ -33,7 +34,15 @@ import { BudgetProvider } from './context/BudgetContext'
 import { BackupRestoreProvider } from './context/BackupRestoreContext'
 import { DocumentProvider } from './context/DocumentContext'
 import ChatWidget from './components/ChatWidget'
+import SmoothScroll, { ScrollToTop } from './components/SmoothScroll'
 import { NotificationProvider } from './context/NotificationContext'
+
+// Analysis module (lazy-loaded so its charts/hooks don't weigh down other routes)
+const AnalysisOverviewPage = lazy(() => import('./pages/analysis/AnalysisOverviewPage'))
+const BudgetVsActualPage = lazy(() => import('./pages/analysis/BudgetVsActualPage'))
+const ExpensesByCategoryPage = lazy(() => import('./pages/analysis/ExpensesByCategoryPage'))
+const MonthlySpendingPage = lazy(() => import('./pages/analysis/MonthlySpendingPage'))
+const BudgetUtilizationPage = lazy(() => import('./pages/analysis/BudgetUtilizationPage'))
 
 function AppRoutes() {
   const { isLoading } = useAuth()
@@ -43,7 +52,9 @@ function AppRoutes() {
   }
 
   return (
+    <SmoothScroll>
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         <Route path="/" element={<LoginPage />} />
         <Route path="/dashboard" element={<DashboardLayout />}>
@@ -55,7 +66,48 @@ function AppRoutes() {
           <Route path="request/new" element={<NewRequestPage />} />
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="approvals" element={<ApprovalsPage />} />
-          <Route path="ai-analysis" element={<AiAnalysisPage />} />
+          {/* Backwards-compatible redirect: old AI Analysis route now points at the Analysis module */}
+          <Route path="ai-analysis" element={<Navigate to="/dashboard/analysis" replace />} />
+          <Route
+            path="analysis"
+            element={
+              <Suspense fallback={<LoadingScreen />}>
+                <AnalysisOverviewPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="analysis/budget-vs-actual"
+            element={
+              <Suspense fallback={<LoadingScreen />}>
+                <BudgetVsActualPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="analysis/expenses-by-category"
+            element={
+              <Suspense fallback={<LoadingScreen />}>
+                <ExpensesByCategoryPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="analysis/monthly-spending"
+            element={
+              <Suspense fallback={<LoadingScreen />}>
+                <MonthlySpendingPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="analysis/budget-utilization"
+            element={
+              <Suspense fallback={<LoadingScreen />}>
+                <BudgetUtilizationPage />
+              </Suspense>
+            }
+          />
           <Route path="receipts" element={<ReceiptsPage />} />
           <Route path="audit-trail" element={<AuditTrailPage />} />
           <Route path="backup-restore" element={<BackupRestorePage />} />
@@ -70,6 +122,7 @@ function AppRoutes() {
           <Route path="profile">
             <Route index element={<ProfilePage />} />
             <Route path="update-details" element={<UpdateDetailsPage />} />
+            <Route path="biodata" element={<BiodataPage />} />
             <Route path="change-password" element={<ChangePasswordPage />} />
             <Route path="update-otp" element={<UpdateOtpPage />} />
             <Route path="update-email" element={<UpdateEmailPage />} />
@@ -79,6 +132,7 @@ function AppRoutes() {
       </Routes>
       <ChatWidget />
     </BrowserRouter>
+    </SmoothScroll>
   )
 }
 

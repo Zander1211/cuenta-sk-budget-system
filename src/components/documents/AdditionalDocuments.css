@@ -88,8 +88,8 @@
 .add-row-table input:focus,
 .add-row-table select:focus {
   outline: none;
-  border-color: rgba(255, 107, 61, 0.6);
-  box-shadow: 0 0 0 3px rgba(255, 107, 61, 0.12);
+  border-color: rgba(18, 128, 92, 0.6);
+  box-shadow: 0 0 0 3px rgba(18, 128, 92, 0.12);
 }
 
 .add-row-actions {
@@ -114,8 +114,8 @@
 }
 
 .add-row-btn:hover {
-  border-color: rgba(255, 107, 61, 0.5);
-  color: var(--coral-dark);
+  border-color: rgba(18, 128, 92, 0.5);
+  color: var(--sea);
   transform: translateY(-1px);
 }
 
