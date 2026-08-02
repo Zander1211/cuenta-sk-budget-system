@@ -126,7 +126,9 @@ function getInitialState() {
         });
       }
     }
-    const requests = (parsed.requests ?? defaultRequests).map((item) => {
+    const requests = (parsed.requests ?? defaultRequests)
+      .filter(r => !r.notes?.includes('Cuenta sample seed data') && !r.description?.includes('approved expenditure for'))
+      .map((item) => {
         const breakdown = Array.isArray(item.breakdown) ? item.breakdown : []
         const expensesBreakdown = Array.isArray(item.expensesBreakdown) ? item.expensesBreakdown : []
         return {
@@ -144,7 +146,11 @@ function getInitialState() {
           })),
         }
       })
-    const expenses = parsed.expenses ?? []
+    const expenses = (parsed.expenses ?? []).filter(e =>
+      !e.notes?.includes('Cuenta sample seed data') &&
+      !e.description?.includes('approved expenditure for') &&
+      !e.receiptUrl?.includes('example-receipts.local')
+    )
 
     return {
       budgets,
@@ -193,9 +199,15 @@ function BudgetProvider({ children }) {
         throw error
       }
 
-      if (Array.isArray(data) && data.length) {
+      if (Array.isArray(data)) {
         setExpenses(data.map(mapExpenseRow))
-        setExpensesSyncStatus('loaded')
+        if (data.length === 0) {
+          setRequests([])
+          if (typeof window !== 'undefined') {
+            window.localStorage.removeItem(STORAGE_KEY)
+          }
+        }
+        setExpensesSyncStatus(data.length ? 'loaded' : 'empty')
       } else {
         setExpensesSyncStatus('empty')
       }
@@ -229,7 +241,7 @@ function BudgetProvider({ children }) {
           createdAt: item.created_at || new Date().toISOString(),
         }));
         
-        setBudgets(prevBudgets => {
+        setBudgets(() => {
           const currentYear = new Date().getFullYear();
           const mergedBudgets = [];
           
@@ -238,21 +250,15 @@ function BudgetProvider({ children }) {
             if (found) {
               mergedBudgets.push(found);
             } else {
-              // Preserve local budget if Supabase doesn't have it (e.g. if insert failed due to schema issues)
-              const localFound = prevBudgets.find(b => b.month === i && b.year === currentYear);
-              if (localFound && localFound.amount > 0) {
-                mergedBudgets.push(localFound);
-              } else {
-                mergedBudgets.push({
-                  id: `default-${currentYear}-${i}`,
-                  month: i,
-                  quarter: Math.floor((i - 1) / 3) + 1,
-                  year: currentYear,
-                  amount: 0,
-                  source: '',
-                  createdAt: new Date().toISOString()
-                });
-              }
+              mergedBudgets.push({
+                id: `default-${currentYear}-${i}`,
+                month: i,
+                quarter: Math.floor((i - 1) / 3) + 1,
+                year: currentYear,
+                amount: 0,
+                source: '',
+                createdAt: new Date().toISOString()
+              });
             }
           }
           
@@ -273,13 +279,10 @@ function BudgetProvider({ children }) {
     return loadExpensesFromSupabase()
   }
 
-
-  // Attempt to sync expenses and budgets from Supabase (read-only) when authenticated
+  // Sync expenses and budgets from Supabase on mount and when auth state changes
   useEffect(() => {
-    if (isAuthenticated) {
-      loadExpensesFromSupabase()
-      loadBudgetsFromSupabase()
-    }
+    loadExpensesFromSupabase()
+    loadBudgetsFromSupabase()
   }, [isAuthenticated])
 
   async function addMonthlyBudget({ month, year, amount, source }) {

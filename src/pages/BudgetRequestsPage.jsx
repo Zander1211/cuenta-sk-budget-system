@@ -80,16 +80,16 @@ function BudgetRequestsPage() {
     return (
       <Fragment key={request.id}>
         <tr>
-          <td>{request.event}</td>
-          <td>{request.category}</td>
-          <td>{currency.format(totalAmount)}</td>
-          <td>
+          <td data-label="Event">{request.event}</td>
+          <td data-label="Category">{request.category}</td>
+          <td data-label="Total Amount">{currency.format(totalAmount)}</td>
+          <td data-label="Event Date">
             {request.eventDate
               ? new Date(request.eventDate).toLocaleDateString()
               : '\u2014'}
           </td>
-          <td>{request.venue || '\u2014'}</td>
-          <td>
+          <td data-label="Venue">{request.venue || '\u2014'}</td>
+          <td data-label="Status">
             <span
               className={`status-pill status-${(
                 request.status || 'Pending'
@@ -98,15 +98,15 @@ function BudgetRequestsPage() {
               {request.status || 'Pending'}
             </span>
           </td>
-          <td>
+          <td data-label="Project Status">
             <span
               className={`status-pill status-${projectStatus.toLowerCase()}`}
             >
               {projectStatus}
             </span>
           </td>
-          <td>{request.requestedBy}</td>
-          <td className="table-actions">
+          <td data-label="Requested By">{request.requestedBy}</td>
+          <td data-label="Actions" className="table-actions">
             <button
               className="secondary-button"
               type="button"

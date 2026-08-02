@@ -30,7 +30,7 @@ import { getDeviceInfo } from '../utils/deviceInfo'
 
 const AuditLogContext = createContext(null)
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 15
 
 const DEFAULT_FILTERS = {
   search:     '',

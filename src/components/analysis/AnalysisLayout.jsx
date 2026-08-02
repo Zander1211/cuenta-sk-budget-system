@@ -5,7 +5,12 @@ import { monthOptions } from '../../utils/analytics'
 import { ExportButton } from './AnalysisUI'
 import YearSpinner from '../YearSpinner'
 
-const ANALYSIS_ROLES = ['SK Chairman', 'SK Treasurer']
+// Every role sees the same analysis: the overview charts, the drill-down
+// graph pages, and the AI Insights panel. Keep this in sync with the
+// `Analysis` entry in DashboardLayout's navItems — if a role is listed
+// there but missing here, its nav link renders and then bounces the user
+// back to /dashboard.
+const ANALYSIS_ROLES = ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']
 
 function Breadcrumb({ trail }) {
   return (

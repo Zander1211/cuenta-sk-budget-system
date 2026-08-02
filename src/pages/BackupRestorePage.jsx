@@ -131,7 +131,7 @@ function BackupRestorePage() {
         
         {/* BACKUP SECTION */}
         <div className="overview-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div className="card-header-bar">
             <div>
               <p className="eyebrow">System Snapshots</p>
               <h2>Create Backup</h2>
@@ -182,15 +182,15 @@ function BackupRestorePage() {
               {backups.length ? (
                 backups.map(b => (
                   <tr key={b.id}>
-                    <td>
+                    <td data-label="Filename">
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <FileJson size={16} style={{ color: 'var(--ink-soft)' }} />
                         <span style={{ fontWeight: 500 }}>{b.filename}</span>
                       </div>
                     </td>
-                    <td>{formatBytes(b.backup_size)}</td>
-                    <td>{b.created_by_name}</td>
-                    <td style={{ color: 'var(--ink-soft)' }}>{formatDate(b.created_at)}</td>
+                    <td data-label="Size">{formatBytes(b.backup_size)}</td>
+                    <td data-label="Created By">{b.created_by_name}</td>
+                    <td data-label="Date" style={{ color: 'var(--ink-soft)' }}>{formatDate(b.created_at)}</td>
                   </tr>
                 ))
               ) : (

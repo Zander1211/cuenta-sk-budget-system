@@ -358,16 +358,16 @@ function UserManagementPage() {
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan="5" className="empty-state">
+                    <td colSpan="4" className="empty-state">
                       Loading accounts...
                     </td>
                   </tr>
                 ) : accounts.length ? (
                   accounts.map((user) => (
                     <tr key={user.id} style={{ opacity: user.is_active ? 1 : 0.55 }}>
-                      <td>{user.full_name}</td>
-                      <td>{user.email}</td>
-                      <td>
+                      <td data-label="Name">{user.full_name}</td>
+                      <td data-label="Email">{user.email}</td>
+                      <td data-label="Role">
                         {editingRoleId === user.id ? (
                           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                             <select
@@ -403,7 +403,7 @@ function UserManagementPage() {
                         )}
                       </td>
 
-                      <td style={{ textAlign: 'right' }}>
+                      <td data-label="Actions" style={{ textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                           <button
                             type="button"

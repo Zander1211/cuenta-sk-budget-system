@@ -37,13 +37,15 @@ export default function YearSpinner({ year, onYearChange }) {
 
   return (
     <div style={{ 
-      display: 'flex', 
+      display: 'inline-flex', 
       alignItems: 'center', 
-      background: 'white', 
-      border: '1.5px solid #e2e8f0', 
-      borderRadius: '8px', 
-      overflow: 'hidden',
-      transition: 'border-color 0.15s',
+      background: '#ffffff', 
+      border: '1px solid #e2e8f0', 
+      borderRadius: '16px', 
+      padding: '4px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+      gap: '4px',
+      userSelect: 'none',
     }}>
       <button
         type="button"
@@ -53,20 +55,23 @@ export default function YearSpinner({ year, onYearChange }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '6px 10px',
-          background: '#f8fafc',
-          borderRight: '1.5px solid #e2e8f0',
-          color: year <= 2000 ? '#cbd5e1' : '#64748b',
+          width: '32px',
+          height: '32px',
+          background: '#f1f5f9',
+          borderRadius: '10px',
+          color: year <= 2000 ? '#cbd5e1' : '#334155',
           cursor: year <= 2000 ? 'not-allowed' : 'pointer',
-          transition: 'all 0.15s',
+          transition: 'all 0.15s ease',
           border: 'none',
+          outline: 'none',
         }}
-        onMouseOver={(e) => { if (year > 2000) { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#334155' } }}
-        onMouseOut={(e) => { if (year > 2000) { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b' } }}
+        onMouseOver={(e) => { if (year > 2000) { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' } }}
+        onMouseOut={(e) => { if (year > 2000) { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#334155' } }}
         aria-label="Previous Year"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m15 18-6-6 6-6"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
       </button>
+
       <input
         type="text"
         value={inputValue}
@@ -74,18 +79,20 @@ export default function YearSpinner({ year, onYearChange }) {
         onBlur={() => commitYear(inputValue)}
         onKeyDown={handleKeyDown}
         style={{
-          width: '60px',
+          width: '56px',
           textAlign: 'center',
-          fontSize: '13px',
-          fontWeight: 600,
+          fontSize: '15px',
+          fontWeight: 700,
           color: '#0f172a',
           border: 'none',
           outline: 'none',
-          padding: '6px 4px',
-          background: 'transparent'
+          padding: '0 4px',
+          background: 'transparent',
+          fontFamily: 'inherit',
         }}
         aria-label="Enter Year"
       />
+
       <button
         type="button"
         onClick={handleIncrement}
@@ -94,19 +101,21 @@ export default function YearSpinner({ year, onYearChange }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '6px 10px',
-          background: '#f8fafc',
-          borderLeft: '1.5px solid #e2e8f0',
-          color: year >= 2100 ? '#cbd5e1' : '#64748b',
+          width: '32px',
+          height: '32px',
+          background: '#f1f5f9',
+          borderRadius: '10px',
+          color: year >= 2100 ? '#cbd5e1' : '#334155',
           cursor: year >= 2100 ? 'not-allowed' : 'pointer',
-          transition: 'all 0.15s',
+          transition: 'all 0.15s ease',
           border: 'none',
+          outline: 'none',
         }}
-        onMouseOver={(e) => { if (year < 2100) { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#334155' } }}
-        onMouseOut={(e) => { if (year < 2100) { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b' } }}
+        onMouseOver={(e) => { if (year < 2100) { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' } }}
+        onMouseOut={(e) => { if (year < 2100) { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#334155' } }}
         aria-label="Next Year"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
       </button>
     </div>
   )

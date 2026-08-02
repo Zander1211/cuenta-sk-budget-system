@@ -672,9 +672,9 @@ function AiAnalysisPage() {
               </div>
             ) : (
               <>
-                <div style={{ marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+                <div className="ai-risk-guide" style={{ marginTop: '16px', padding: 'clamp(12px, 3vw, 16px)', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
                   <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>Risk Level Guide</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                  <div className="ai-risk-guide-grid">
                     <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '4px solid #ef4444', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                         <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#ef4444' }}></span>
@@ -740,7 +740,7 @@ function AiAnalysisPage() {
               </div>
               <span className="ai-chip">Actionable</span>
             </div>
-            <div className="ai-insight-list" style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+            <div className="ai-insight-list ai-recommendation-grid" style={{ marginTop: '1rem' }}>
               {noData ? (
                 <p className="ai-empty">No recommendations available because there is no financial data to analyze for the selected month and year.</p>
               ) : recommendations.length ? (
@@ -748,9 +748,9 @@ function AiAnalysisPage() {
                   <div
                     key={`${item.title}-${index}`}
                     className={`ai-insight-item ${item.severity}`}
-                    style={{ borderLeft: `4px solid var(--${item.severity === 'high' ? 'cherry' : item.severity === 'medium' ? 'sun' : 'ocean'})`, background: 'var(--surface-sunken)', padding: '1rem', borderRadius: '8px' }}
+                    style={{ borderLeft: `4px solid var(--${item.severity === 'high' ? 'cherry' : item.severity === 'medium' ? 'sun' : 'ocean'})`, background: 'var(--surface-sunken)', padding: 'clamp(12px, 3vw, 1rem)', borderRadius: '8px', minWidth: 0 }}
                   >
-                    <div className="ai-insight-head" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                    <div className="ai-insight-head" style={{ marginBottom: '0.5rem' }}>
                       <span className="ai-insight-title" style={{ fontWeight: '600' }}>{item.title}</span>
                       <span
                         className={`ai-severity ai-severity-${item.severity}`}

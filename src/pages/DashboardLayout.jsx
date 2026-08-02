@@ -91,7 +91,7 @@ const navItems = [
   {
     label: 'Analysis',
     path: '/dashboard/analysis',
-    roles: ['SK Chairman', 'SK Treasurer'],
+    roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
     icon: BarChart3
   },
   {
@@ -187,7 +187,10 @@ function DashboardLayout() {
   return (
     <div className="dashboard">
       <div className="dashboard-shell">
-        <div className="dashboard-mobile-header">
+        <div
+          className={`dashboard-mobile-header ${isSidebarOpen ? 'is-hidden' : ''}`}
+          aria-hidden={isSidebarOpen}
+        >
           <button
             className="mobile-icon-button"
             type="button"

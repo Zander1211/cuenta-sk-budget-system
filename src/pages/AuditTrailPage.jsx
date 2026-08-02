@@ -1,6 +1,6 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState } from 'react'
 import {
-  Search, Download, ChevronLeft, ChevronRight,
+  Search, ChevronLeft, ChevronRight,
   Shield, Clock, Users, Activity,
   ChevronDown, ChevronUp, Info,
 } from 'lucide-react'
@@ -232,55 +232,6 @@ function AuditTrailPage() {
     setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
-  const handleExportCsv = useCallback(() => {
-    if (!logs.length) return
-
-    const headers = [
-      'Date & Time', 'User Name', 'Role', 'Action', 'Action Type',
-      'Module', 'Record Type', 'Record ID', 'Description',
-      'Previous Value', 'New Value', 'IP Address', 'Device Info',
-      'Status', 'Remarks',
-    ]
-
-    function csvField(v) {
-      if (v === null || v === undefined) return '""'
-      if (typeof v === 'object') return `"${JSON.stringify(v).replace(/"/g, '""')}"`
-      return `"${String(v).replace(/"/g, '""')}"`
-    }
-
-    const rows = logs.map(log => [
-      csvField(new Date(log.created_at).toLocaleString('en-US', {
-        month: 'short', day: 'numeric', year: 'numeric',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-      })),
-      csvField(log.user_name),
-      csvField(log.user_role),
-      csvField(log.action),
-      csvField(log.action_type),
-      csvField(log.module),
-      csvField(log.record_type),
-      csvField(log.record_id),
-      csvField(log.description),
-      csvField(log.previous_value),
-      csvField(log.new_value),
-      csvField(log.ip_address),
-      csvField(log.device_info),
-      csvField(log.status),
-      csvField(log.remarks),
-    ].join(','))
-
-    const csvContent = [headers.map(h => `"${h}"`).join(','), ...rows].join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url  = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href  = url
-    link.setAttribute('download', `audit_trail_${new Date().toISOString().split('T')[0]}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-  }, [logs])
-
   function formatDateTime(iso) {
     if (!iso) return '—'
     return new Date(iso).toLocaleString('en-US', {
@@ -306,15 +257,6 @@ function AuditTrailPage() {
           <span className="items-found-badge">
             {totalCount.toLocaleString()} total records
           </span>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={handleExportCsv}
-            disabled={!logs.length}
-          >
-            <Download size={16} />
-            Export CSV
-          </button>
         </div>
       </header>
 
@@ -542,10 +484,10 @@ function AuditTrailPage() {
                         onKeyDown={e => { if (hasDetail && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleRow(log.id) } }}
                         aria-expanded={hasDetail ? isExpanded : undefined}
                       >
-                        <td className="audit-timestamp">
+                        <td className="audit-timestamp" data-label="Date & Time">
                           {formatDateTime(log.created_at)}
                         </td>
-                        <td>
+                        <td data-label="User / Role">
                           <div className="audit-user-cell">
                             <span className="audit-user-name">{log.user_name || '—'}</span>
                             {log.user_role && (
@@ -553,24 +495,26 @@ function AuditTrailPage() {
                             )}
                           </div>
                         </td>
-                        <td>
-                          <span className={`status-pill status-${badge.tone}`}>
-                            {badge.label}
-                          </span>
-                          <span className="audit-action-text">
-                            {(log.action_type || log.action || '').replace(/—.+$/, '').trim()}
-                          </span>
+                        <td data-label="Action Type">
+                          <div className="audit-action-cell">
+                            <span className={`status-pill status-${badge.tone}`}>
+                              {badge.label}
+                            </span>
+                            <span className="audit-action-text">
+                              {(log.action_type || log.action || '').replace(/—.+$/, '').trim()}
+                            </span>
+                          </div>
                         </td>
-                        <td className="audit-module">{log.module || '—'}</td>
-                        <td>
+                        <td className="audit-module" data-label="Module">{log.module || '—'}</td>
+                        <td data-label="Record Type">
                           {log.record_type ? (
                             <span className="audit-record-type-badge">{log.record_type}</span>
                           ) : '—'}
                         </td>
-                        <td className="audit-description" title={log.description || log.action}>
+                        <td className="audit-description" data-label="Description" title={log.description || log.action}>
                           {log.description || log.action || '—'}
                         </td>
-                        <td>
+                        <td data-label="Status">
                           <span className={`status-pill status-${statusTone}`} style={{ fontSize: '0.7rem' }}>
                             {log.status || 'Success'}
                           </span>

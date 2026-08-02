@@ -169,16 +169,16 @@ function ApprovalsPage() {
     return (
       <Fragment key={request.id}>
         <tr>
-          <td>{request.event}</td>
-          <td>{request.category}</td>
-          <td>{currency.format(totalAmount)}</td>
-          <td>
+          <td data-label="Event">{request.event}</td>
+          <td data-label="Category">{request.category}</td>
+          <td data-label="Total Amount">{currency.format(totalAmount)}</td>
+          <td data-label="Event Date">
             {request.eventDate
               ? new Date(request.eventDate).toLocaleDateString()
               : '—'}
           </td>
-          <td>{request.venue || '—'}</td>
-          <td>
+          <td data-label="Venue">{request.venue || '—'}</td>
+          <td data-label="Project Status">
             {isApproved ? (
               <select
                 className="project-status-select"
@@ -199,13 +199,13 @@ function ApprovalsPage() {
             )}
           </td>
           {showArchivedAt ? (
-            <td>
+            <td data-label="Archived">
               {request.archivedAt
                 ? new Date(request.archivedAt).toLocaleDateString()
                 : '—'}
             </td>
           ) : null}
-          <td className="table-actions">
+          <td data-label="Actions" className="table-actions">
             <button
               className="secondary-button"
               type="button"

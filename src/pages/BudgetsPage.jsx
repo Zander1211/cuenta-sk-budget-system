@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useBudget } from '../context/BudgetContext'
 import CurrencyInput from '../components/CurrencyInput'
+import YearSpinner from '../components/YearSpinner'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -146,14 +147,9 @@ function BudgetsPage() {
                 </label>
                 <label className="field">
                   <span>Year</span>
-                  <input
-                    type="number"
-                    value={year}
-                    min="2000"
-                    max="2100"
-                    onChange={(event) => setYear(Number(event.target.value))}
-                    required
-                  />
+                  <div style={{ marginTop: '4px' }}>
+                    <YearSpinner year={year} onYearChange={setYear} />
+                  </div>
                 </label>
                 <label className="field">
                   <span>Total budget (PHP)</span>
@@ -208,13 +204,13 @@ function BudgetsPage() {
         )}
 
         <div className="overview-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div className="card-header-bar">
             <div>
               <p className="eyebrow">History</p>
               <h2 style={{ margin: 0 }}>Recorded budgets</h2>
             </div>
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: '8px' }}>
+            <div className="card-header-controls">
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <select
                   value={viewMode === 'monthly' ? filterMonth : filterQuarter}
                   onChange={(e) => {
@@ -225,8 +221,7 @@ function BudgetsPage() {
                       setFilterQuarter(val);
                     }
                   }}
-                  className="filter-select"
-                  style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d5db' }}
+                  className="filter-select panel-select"
                 >
                   {viewMode === 'monthly' ? monthOptions.map(m => (
                     <option key={m.value} value={m.value}>{m.label}</option>
@@ -234,13 +229,7 @@ function BudgetsPage() {
                     <option key={q.value} value={q.value}>{q.label}</option>
                   ))}
                 </select>
-                <input
-                  type="number"
-                  value={filterYear}
-                  onChange={(e) => setFilterYear(Number(e.target.value))}
-                  className="filter-input"
-                  style={{ width: '80px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d5db' }}
-                />
+                <YearSpinner year={filterYear} onYearChange={setFilterYear} />
               </div>
               <div className="page-tabs" role="tablist">
                 <button
@@ -278,13 +267,13 @@ function BudgetsPage() {
               {displayedBudgets.length ? (
                 displayedBudgets.map((budget) => (
                   <tr key={budget.id}>
-                    <td>{budget.periodLabel}</td>
-                    <td>{budget.year}</td>
-                    <td>{currency.format(budget.amount)}</td>
+                    <td data-label={viewMode === 'monthly' ? 'Month' : 'Quarter'}>{budget.periodLabel}</td>
+                    <td data-label="Year">{budget.year}</td>
+                    <td data-label="Total Budget">{currency.format(budget.amount)}</td>
                     {viewMode === 'monthly' && (
-                      <td>{budget.source || 'Not Specified'}</td>
+                      <td data-label="Source">{budget.source || 'Not Specified'}</td>
                     )}
-                    <td>{new Date(budget.createdAt).toLocaleDateString()}</td>
+                    <td data-label={viewMode === 'monthly' ? 'Date Added' : 'Last Updated'}>{new Date(budget.createdAt).toLocaleDateString()}</td>
                   </tr>
                 ))
               ) : (

@@ -7,6 +7,7 @@ import { supabase } from '../supabase/supabaseClient'
 import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
 import ReceiptPrintPreview from '../components/ReceiptPrintPreview'
 import CurrencyInput from '../components/CurrencyInput'
+import YearSpinner from '../components/YearSpinner'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -477,10 +478,10 @@ function ExpensesPage() {
                   <tbody>
                     {breakdownItems.map((item, index) => (
                       <tr key={`${expense.id}-item-${index}`}>
-                        <td>{item.itemName || '—'}</td>
-                        <td>{item.quantity || 0}</td>
-                        <td>{currency.format(item.unitCost || 0)}</td>
-                        <td>
+                        <td data-label="Item">{item.itemName || '—'}</td>
+                        <td data-label="Quantity">{item.quantity || 0}</td>
+                        <td data-label="Unit Cost">{currency.format(item.unitCost || 0)}</td>
+                        <td data-label="Total Cost">
                           {currency.format(
                             (item.quantity || 0) * (item.unitCost || 0)
                           )}
@@ -522,12 +523,12 @@ function ExpensesPage() {
                     const hasAddReceipt = addEx.receiptUrl || addEx.receipt_url || receiptLinks[addEx.id]
                     return (
                     <tr key={`${expense.id}-add-${index}`}>
-                      <td>{addEx.date ? new Date(addEx.date).toLocaleDateString() : '—'}</td>
-                      <td>{addEx.category || '—'}</td>
-                      <td>{addEx.description || '—'}</td>
-                      <td>{addEx.remarks || '—'}</td>
-                      <td>{currency.format(Number(addEx.amount) || 0)}</td>
-                      <td>
+                      <td data-label="Date">{addEx.date ? new Date(addEx.date).toLocaleDateString() : '—'}</td>
+                      <td data-label="Category">{addEx.category || '—'}</td>
+                      <td data-label="Description">{addEx.description || '—'}</td>
+                      <td data-label="Remarks">{addEx.remarks || '—'}</td>
+                      <td data-label="Amount">{currency.format(Number(addEx.amount) || 0)}</td>
+                      <td data-label="Receipt">
                         {hasAddReceipt ? (
                           <>
                             {receiptLinks[addEx.id] ? (
@@ -868,14 +869,14 @@ function ExpensesPage() {
                     return (
                       <Fragment key={expense.id}>
                         <tr>
-                          <td>
+                          <td data-label="Date">
                             {expense.date || expense.approvedAt
                               ? new Date(
                                   expense.date || expense.approvedAt
                                 ).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                               : '—'}
                           </td>
-                          <td>
+                          <td data-label="Description">
                             <div>
                               {expense.project || expense.event || 'Untitled'}
                               {expense.description ? (
@@ -885,15 +886,15 @@ function ExpensesPage() {
                               ) : null}
                             </div>
                           </td>
-                          <td>
+                          <td data-label="Category">
                             <span className="category-tag">
                               {expense.category || 'Uncategorized'}
                             </span>
                           </td>
-                          <td style={{ fontFamily: 'var(--font-mono, monospace)' }}>
+                          <td data-label="Amount" style={{ fontFamily: 'var(--font-mono, monospace)' }}>
                             {currency.format(expense.amount || 0)}
                           </td>
-                          <td>
+                          <td data-label="Receipt">
                             {hasReceipt ? (
                               <span className="status-pill status-approved">Uploaded</span>
                             ) : (
@@ -953,30 +954,30 @@ function ExpensesPage() {
                   archivedExpenses.map((expense) => (
                     <Fragment key={expense.id}>
                       <tr>
-                        <td>
+                        <td data-label="Date">
                           {expense.date || expense.approvedAt
                             ? new Date(
                                 expense.date || expense.approvedAt
                               ).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                             : '—'}
                         </td>
-                        <td>
+                        <td data-label="Description">
                           {expense.project || expense.event || 'Untitled'}
                         </td>
-                        <td>
+                        <td data-label="Category">
                           <span className="category-tag">
                             {expense.category || 'Uncategorized'}
                           </span>
                         </td>
-                        <td style={{ fontFamily: 'var(--font-mono, monospace)' }}>
+                        <td data-label="Amount" style={{ fontFamily: 'var(--font-mono, monospace)' }}>
                           {currency.format(expense.amount || 0)}
                         </td>
-                        <td>
+                        <td data-label="Archived">
                           {expense.archivedAt
                             ? new Date(expense.archivedAt).toLocaleDateString()
                             : '—'}
                         </td>
-                        <td className="table-actions">
+                        <td data-label="Actions" className="table-actions">
                           <button
                             className="secondary-button"
                             type="button"
@@ -1030,15 +1031,7 @@ function ExpensesPage() {
                     <option key={q.value} value={q.value}>{q.label}</option>
                   ))}
                 </select>
-                <select
-                  className="panel-select"
-                  value={breakdownYear}
-                  onChange={(e) => setBreakdownYear(Number(e.target.value))}
-                >
-                  {[2024, 2025, 2026, 2027].map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
+                <YearSpinner year={breakdownYear} onYearChange={setBreakdownYear} />
               </div>
             </div>
             <p style={{ color: 'var(--ink-soft)', fontSize: '0.9rem', margin: '4px 0 16px' }}>

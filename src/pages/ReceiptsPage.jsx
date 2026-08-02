@@ -332,15 +332,15 @@ function ReceiptsPage() {
                 {approvedExpenses.length > 0 ? (
                   approvedExpenses.map((expense) => (
                     <tr key={expense.id}>
-                      <td>{expense.event || expense.project || 'Untitled'}</td>
-                      <td>{expense.category || 'Uncategorized'}</td>
-                      <td>{`₱${Number(expense.amount || 0).toLocaleString()}`}</td>
-                      <td>
+                      <td data-label="Event">{expense.event || expense.project || 'Untitled'}</td>
+                      <td data-label="Category">{expense.category || 'Uncategorized'}</td>
+                      <td data-label="Amount">{`₱${Number(expense.amount || 0).toLocaleString()}`}</td>
+                      <td data-label="Approved">
                         {expense.approvedAt
                           ? new Date(expense.approvedAt).toLocaleDateString()
                           : '—'}
                       </td>
-                      <td>
+                      <td data-label="Receipt">
                         {receiptLinks[expense.id] ? (
                           <a
                             className="file-link"
@@ -354,7 +354,7 @@ function ReceiptsPage() {
                           <span className="status-pill status-pending">Missing</span>
                         )}
                       </td>
-                      <td>
+                      <td data-label="Actions">
                         {role !== 'Barangay Treasurer' ? (
                           <div className="field-row" style={{ gap: '8px' }}>
                             <button

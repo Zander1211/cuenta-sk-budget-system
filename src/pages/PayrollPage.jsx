@@ -207,10 +207,10 @@ function PayrollPage() {
                   return (
                     <Fragment key={project.id}>
                       <tr>
-                        <td>{project.project || project.event || 'Untitled'}</td>
-                        <td>{project.description || '—'}</td>
-                        <td>{currency.format(approvedBudget)}</td>
-                        <td>
+                        <td data-label="Payroll Title">{project.project || project.event || 'Untitled'}</td>
+                        <td data-label="Purpose">{project.description || '—'}</td>
+                        <td data-label="Total Budget">{currency.format(approvedBudget)}</td>
+                        <td data-label="Utilization">
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <div style={{ flex: 1, height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
                               <div style={{ height: '100%', background: utilization > 100 ? 'var(--danger-color)' : 'var(--primary-color)', width: `${Math.min(utilization, 100)}%` }} />
@@ -218,7 +218,7 @@ function PayrollPage() {
                             <span style={{ fontSize: '0.75rem' }}>{utilization}%</span>
                           </div>
                         </td>
-                        <td>
+                        <td data-label="Status">
                           {role === 'SK Chairman' ? (
                             <select
                               className="project-status-select"
@@ -235,7 +235,7 @@ function PayrollPage() {
                             </span>
                           )}
                         </td>
-                        <td className="table-actions">
+                        <td data-label="Actions" className="table-actions">
                           <button
                             className="secondary-button"
                             type="button"

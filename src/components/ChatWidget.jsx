@@ -41,7 +41,7 @@ function computeTopCategories(expenses = []) {
 
 function buildWelcome({ userName, budgetUtilization, pendingApprovals, missingReceipts, currentPage }) {
   const firstName = userName?.split(' ')[0] || 'there'
-  let msg = `Hi ${firstName}! I'm Cue, your SK financial assistant.`
+  let msg = `Hi ${firstName}! I'm Cue, your dedicated assistant for the Cuenta: SK Budget Monitoring and Document Tracking system.`
 
   const alerts = []
   if (pendingApprovals > 0) alerts.push(`${pendingApprovals} request(s) pending approval`)
@@ -133,7 +133,7 @@ function ChatWidgetInner() {
 
   const location = useLocation()
   const { user, role, profileName } = useAuth()
-  const { requests, expenses, totals } = useBudget()
+  const { requests, expenses, totals, budgets } = useBudget()
 
   const currentPage = PAGE_NAMES[location.pathname] || 'Dashboard'
   const budgetUtilization = totals?.totalBudget
@@ -215,30 +215,433 @@ function ChatWidgetInner() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
 
+  const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ]
+
   function buildSystemContext() {
+    const currentYear = new Date().getFullYear()
+    const currentMonthNum = new Date().getMonth() + 1
+    const currentMonthName = MONTH_NAMES[currentMonthNum - 1]
+
+    // Group budgets by month and year
+    const budgetsList = (budgets || []).map(b => {
+      const mNum = Number(b.month)
+      const mName = typeof b.month === 'number' || !isNaN(mNum) ? MONTH_NAMES[mNum - 1] : String(b.month)
+      return {
+        id: b.id,
+        month: mName,
+        monthNumber: mNum,
+        year: Number(b.year),
+        amount: Number(b.amount) || 0,
+        source: b.source || 'Regular SK Budget'
+      }
+    })
+
+    // Group expenses by month and year
+    const expensesList = (expenses || []).map(e => {
+      const dateVal = e.date || e.eventDate || e.approvedAt || e.createdAt
+      const d = dateVal ? new Date(dateVal) : null
+      const mNum = d && !isNaN(d.getTime()) ? d.getMonth() + 1 : null
+      const yNum = d && !isNaN(d.getTime()) ? d.getFullYear() : currentYear
+      return {
+        id: e.id,
+        project: e.project || e.event || 'Expense',
+        amount: Number(e.amount) || 0,
+        category: e.category || 'Other',
+        status: e.status || 'Approved',
+        month: mNum ? MONTH_NAMES[mNum - 1] : null,
+        monthNumber: mNum,
+        year: yNum,
+        date: dateVal,
+        hasReceipt: !!(e.receiptUrl || e.receiptName)
+      }
+    })
+
+    // Group requests by month and year
+    const requestsList = (requests || []).map(r => {
+      const dateVal = r.date || r.eventDate || r.approvedAt || r.createdAt
+      const d = dateVal ? new Date(dateVal) : null
+      const mNum = d && !isNaN(d.getTime()) ? d.getMonth() + 1 : null
+      const yNum = d && !isNaN(d.getTime()) ? d.getFullYear() : currentYear
+      return {
+        id: r.id,
+        event: r.event || r.project || 'Request',
+        amount: Number(r.amount) || 0,
+        status: r.status || 'Pending',
+        category: r.category || 'Other',
+        month: mNum ? MONTH_NAMES[mNum - 1] : null,
+        monthNumber: mNum,
+        year: yNum
+      }
+    })
+
+    // Compute monthly summary for each month with budget or expenses
+    const monthlySummaries = []
+    const yearsToSummarize = Array.from(new Set([...budgetsList.map(b => b.year), currentYear]))
+    
+    for (const yr of yearsToSummarize) {
+      for (let m = 1; m <= 12; m++) {
+        const mName = MONTH_NAMES[m - 1]
+        const mBudgets = budgetsList.filter(b => b.year === yr && (b.monthNumber === m || b.month === mName))
+        const mBudgetTotal = mBudgets.reduce((sum, b) => sum + b.amount, 0)
+        
+        const mExpenses = expensesList.filter(e => e.year === yr && (e.monthNumber === m || e.month === mName))
+        const mExpenseTotal = mExpenses.reduce((sum, e) => sum + e.amount, 0)
+        
+        const mRemaining = mBudgetTotal - mExpenseTotal
+
+        if (mBudgetTotal > 0 || mExpenseTotal > 0) {
+          monthlySummaries.push({
+            month: mName,
+            monthNumber: m,
+            year: yr,
+            allocatedBudget: mBudgetTotal,
+            totalExpenses: mExpenseTotal,
+            remainingBalance: mRemaining,
+            sources: mBudgets.map(b => b.source).join(', ') || 'Regular SK Budget',
+            expenseCount: mExpenses.length
+          })
+        }
+      }
+    }
+
     return {
       role,
       userName,
       currentPage,
-      totalBudget: totals?.totalBudget || 0,
-      totalExpenses: totals?.totalExpenses || 0,
-      remaining,
-      budgetUtilization,
-      pendingApprovals,
-      missingReceipts,
-      recentRequests: (requests || []).slice(0, 5).map(r => ({
-        event: r.event,
-        amount: r.amount,
-        status: r.status,
-        category: r.category,
-      })),
-      recentExpenses: (expenses || []).slice(0, 5).map(e => ({
-        project: e.project || e.event,
-        amount: e.amount,
-        category: e.category,
-      })),
+      currentYear,
+      currentMonthName,
+      totals: {
+        totalBudget: totals?.totalBudget || 0,
+        totalExpenses: totals?.totalExpenses || 0,
+        remaining,
+        budgetUtilization,
+      },
+      monthlySummaries,
+      allBudgets: budgetsList,
+      allExpenses: expensesList,
+      allRequests: requestsList,
       topCategories: computeTopCategories(expenses || []),
     }
+  }
+
+  const CUENTA_SCOPE_RESPONSE = `I'm Cue, the AI assistant for the Cuenta: SK Budget Monitoring and Document Tracking with AI Analysis system. I can only assist with questions related to this system, such as budgets, expenses, projects, events, payroll, documents, reports, AI Analysis, and system features. Please ask a question related to the Cuenta system.`
+
+  function isRelatedToCuenta(queryText) {
+    const cuentaKeywords = [
+      'budget', 'expense', 'spending', 'spent', 'remaining', 'balance', 'allocation', 'allocate',
+      'disbursement', 'financial', 'fund', 'funds', 'money', 'peso', 'amount', 'cost',
+      'utilization', 'revenue', 'income', 'savings', 'deficit', 'surplus',
+      'project', 'approved project', 'ongoing', 'completed', 'project budget', 'project status',
+      'event', 'activity', 'program',
+      'payroll', 'salary', 'honorarium', 'stipend', 'compensation',
+      'document', 'receipt', 'narrative', 'report', 'upload', 'attachment', 'file',
+      'supporting document', 'coa', 'commission on audit',
+      'analysis', 'insight', 'recommendation', 'recommend', 'suggest', 'suggestion', 'where to spend', 'where should', 'risk', 'trend', 'forecast', 'summary',
+      'ai analysis', 'financial analysis', 'spending trend',
+      'dashboard', 'chart', 'statistic', 'overview', 'total',
+      'audit', 'log', 'trail', 'activity log', 'approval', 'pending', 'approved', 'rejected',
+      'how to', 'how do i', 'how can i', 'where is', 'where can', 'what is the',
+      'create', 'submit', 'request', 'generate', 'update', 'profile', 'manage',
+      'cuenta', 'system', 'sk', 'sangguniang kabataan', 'barangay',
+      'purchase request', 'budget request', 'requisition',
+      'january', 'february', 'march', 'april', 'may', 'june',
+      'july', 'august', 'september', 'october', 'november', 'december',
+      'this month', 'last month', 'next month', 'this year', 'last year', 'next year',
+      'annual', 'monthly', 'quarterly', 'q1', 'q2', 'q3', 'q4',
+      'category', 'breakdown', 'comparison', 'compare', 'vs', 'versus',
+      'archive', 'archived', 'status', 'missing receipt',
+      'user management', 'user role', 'chairman', 'treasurer', 'secretary',
+      'dilg', 'procurement', 'bidding'
+    ]
+    for (const keyword of cuentaKeywords) {
+      if (queryText.includes(keyword)) return true
+    }
+    if (/\b20\d\d\b/.test(queryText)) return true
+    if (/\u20b1/.test(queryText)) return true
+    return false
+  }
+
+  function processFinancialQuery(userQuery, systemCtx) {
+    const text = (userQuery || '').trim().toLowerCase()
+    const currentYear = new Date().getFullYear()
+    
+    // 0. Check Greetings (always allowed)
+    const greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'greetings', 'kumusta', 'hello?', 'hi?']
+    if (greetings.includes(text)) {
+      const uName = systemCtx.userName || 'Official'
+      return `Hi ${uName}! I'm Cue, your dedicated assistant for the Cuenta: SK Budget Monitoring and Document Tracking system. How can I help you with your budgets, expenses, projects, events, payroll, documents, or reports today?`
+    }
+
+    // 0b. Check for thank you / farewell (always allowed)
+    const farewells = ['thank you', 'thanks', 'salamat', 'bye', 'goodbye', 'ok', 'okay', 'got it', 'alright']
+    if (farewells.some(f => text.includes(f))) {
+      return `You're welcome! If you have any more questions about your budgets, expenses, projects, or other Cuenta system features, feel free to ask anytime.`
+    }
+
+    // 1. OFF-TOPIC FILTER — Reject questions unrelated to the Cuenta system
+    if (!isRelatedToCuenta(text)) {
+      return CUENTA_SCOPE_RESPONSE
+    }
+
+    // 2. Extract Requested Year (e.g. 2024, 2025, 2026, 2027)
+    let targetYear = null
+    const yearMatch = text.match(/\b(20\d\d)\b/)
+    if (yearMatch) {
+      targetYear = Number(yearMatch[1])
+    } else if (text.includes('this year')) {
+      targetYear = currentYear
+    } else if (text.includes('last year')) {
+      targetYear = currentYear - 1
+    } else if (text.includes('next year')) {
+      targetYear = currentYear + 1
+    }
+
+    // 3. Extract Requested Month
+    const monthsList = [
+      'january', 'february', 'march', 'april', 'may', 'june',
+      'july', 'august', 'september', 'october', 'november', 'december'
+    ]
+    let targetMonth = null
+    const matchedMonthIndex = monthsList.findIndex(m => text.includes(m))
+    if (matchedMonthIndex !== -1) {
+      targetMonth = monthsList[matchedMonthIndex].charAt(0).toUpperCase() + monthsList[matchedMonthIndex].slice(1)
+    } else if (text.includes('this month')) {
+      targetMonth = monthsList[new Date().getMonth()].charAt(0).toUpperCase() + monthsList[new Date().getMonth()].slice(1)
+    }
+
+    // 4. Extract Record Type Intent
+    const isExpenseQuery = text.includes('expense') || text.includes('spent') || text.includes('spending') || text.includes('disbursement')
+    const isRemainingQuery = text.includes('remaining') || text.includes('balance') || text.includes('left')
+    const isSuggestionQuery = text.includes('suggest') || text.includes('recommend') || text.includes('where should') || text.includes('where to spend') || text.includes('how to spend') || text.includes('how should i use') || text.includes('how to allocate') || text.includes('allocate') || text.includes('project suggestion')
+
+    const allBudgets = systemCtx.allBudgets || []
+    const allExpenses = systemCtx.allExpenses || []
+    const allRequests = systemCtx.allRequests || []
+
+    if (isSuggestionQuery) {
+      return generateDataDrivenRecommendation(systemCtx, allBudgets, allExpenses, allRequests, targetMonth, targetYear, currentYear)
+    }
+
+    // -------------------------------------------------------------
+    // RULE A: SPECIFIC YEAR AND MONTH REQUESTED (e.g. "July 2026", "July 2025")
+    // -------------------------------------------------------------
+    if (targetYear && targetMonth) {
+      const matchingBudgets = allBudgets.filter(b => Number(b.year) === targetYear && String(b.month).toLowerCase() === targetMonth.toLowerCase())
+      const matchingExpenses = allExpenses.filter(e => Number(e.year) === targetYear && String(e.month).toLowerCase() === targetMonth.toLowerCase())
+      
+      const budgetTotal = matchingBudgets.reduce((sum, b) => sum + (Number(b.amount) || 0), 0)
+      const expenseTotal = matchingExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+
+      if (isExpenseQuery) {
+        if (matchingExpenses.length === 0 && expenseTotal === 0) {
+          return `No expenses have been recorded for ${targetMonth} ${targetYear}.`
+        }
+        return `The total expenses recorded for ${targetMonth} ${targetYear} is ₱${Number(expenseTotal).toLocaleString('en-PH')}.`
+      }
+
+      if (isRemainingQuery) {
+        if (matchingBudgets.length === 0) {
+          return `No monthly budget has been recorded for ${targetMonth} ${targetYear}.`
+        }
+        const remainingVal = budgetTotal - expenseTotal
+        return `The remaining balance for ${targetMonth} ${targetYear} is ₱${Number(remainingVal).toLocaleString('en-PH')} (Allocated: ₱${Number(budgetTotal).toLocaleString('en-PH')}, Spent: ₱${Number(expenseTotal).toLocaleString('en-PH')}).`
+      }
+
+      // Default Budget Query for specific Month & Year
+      if (matchingBudgets.length === 0) {
+        return `No monthly budget has been recorded for ${targetMonth} ${targetYear}.`
+      }
+      return `The total allocated budget for ${targetMonth} ${targetYear} is ₱${Number(budgetTotal).toLocaleString('en-PH')}.`
+    }
+
+    // -------------------------------------------------------------
+    // RULE B: SPECIFIC YEAR ONLY REQUESTED (e.g. "What is the budget for 2025?")
+    // -------------------------------------------------------------
+    if (targetYear) {
+      const yearBudgets = allBudgets.filter(b => Number(b.year) === targetYear)
+      const yearExpenses = allExpenses.filter(e => Number(e.year) === targetYear)
+
+      const budgetTotal = yearBudgets.reduce((sum, b) => sum + (Number(b.amount) || 0), 0)
+      const expenseTotal = yearExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+
+      if (isExpenseQuery) {
+        if (yearExpenses.length === 0 && expenseTotal === 0) {
+          return `No expenses have been recorded for ${targetYear}.`
+        }
+        return `The total expenses recorded for ${targetYear} is ₱${Number(expenseTotal).toLocaleString('en-PH')}.`
+      }
+
+      if (isRemainingQuery) {
+        if (yearBudgets.length === 0) {
+          return `No monthly budget has been recorded for ${targetYear}.`
+        }
+        const remainingVal = budgetTotal - expenseTotal
+        return `The remaining balance for ${targetYear} is ₱${Number(remainingVal).toLocaleString('en-PH')}.`
+      }
+
+      // Budget query for specific year
+      if (yearBudgets.length === 0) {
+        return `No monthly budget has been recorded for ${targetYear}.`
+      }
+      return `The total budget recorded for ${targetYear} is ₱${Number(budgetTotal).toLocaleString('en-PH')}.`
+    }
+
+    // -------------------------------------------------------------
+    // RULE C: SPECIFIC MONTH ONLY REQUESTED (e.g. "budget for July")
+    // Default to current year
+    // -------------------------------------------------------------
+    if (targetMonth) {
+      const effectiveYear = currentYear
+      const monthBudgets = allBudgets.filter(b => Number(b.year) === effectiveYear && String(b.month).toLowerCase() === targetMonth.toLowerCase())
+      const monthExpenses = allExpenses.filter(e => Number(e.year) === effectiveYear && String(e.month).toLowerCase() === targetMonth.toLowerCase())
+
+      const budgetTotal = monthBudgets.reduce((sum, b) => sum + (Number(b.amount) || 0), 0)
+      const expenseTotal = monthExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+
+      if (isExpenseQuery) {
+        if (monthExpenses.length === 0 && expenseTotal === 0) {
+          return `No expenses have been recorded for ${targetMonth} ${effectiveYear}.`
+        }
+        return `The total expenses recorded for ${targetMonth} ${effectiveYear} is ₱${Number(expenseTotal).toLocaleString('en-PH')}.`
+      }
+
+      if (isRemainingQuery) {
+        if (monthBudgets.length === 0) {
+          return `No monthly budget has been recorded for ${targetMonth} ${effectiveYear}.`
+        }
+        const remainingVal = budgetTotal - expenseTotal
+        return `The remaining balance for ${targetMonth} ${effectiveYear} is ₱${Number(remainingVal).toLocaleString('en-PH')}.`
+      }
+
+      if (monthBudgets.length === 0) {
+        return `No monthly budget has been recorded for ${targetMonth} ${effectiveYear}.`
+      }
+      return `The total allocated budget for ${targetMonth} ${effectiveYear} is ₱${Number(budgetTotal).toLocaleString('en-PH')}.`
+    }
+
+    // -------------------------------------------------------------
+    // RULE D: EXPLICIT OVERALL ANNUAL / TOTAL QUERY
+    // -------------------------------------------------------------
+    if (text.includes('overall') || text.includes('all years') || text.includes('total budget')) {
+      const totalB = systemCtx.totals?.totalBudget || 0
+      const totalR = systemCtx.totals?.remaining || 0
+      if (totalB === 0) {
+        return `No budgets have been recorded in the system yet.`
+      }
+      return `The overall total budget recorded across all years is ₱${Number(totalB).toLocaleString('en-PH')} and you have ₱${Number(totalR).toLocaleString('en-PH')} remaining.`
+    }
+
+    // Default fallback summary
+    const totalB = systemCtx.totals?.totalBudget || 0
+    const totalR = systemCtx.totals?.remaining || 0
+    if (totalB === 0) {
+      return `No budgets have been recorded in the system yet. You can add a budget on the Budgets page.`
+    }
+    return `Your overall total budget recorded is ₱${Number(totalB).toLocaleString('en-PH')} and you have ₱${Number(totalR).toLocaleString('en-PH')} remaining.`
+  }
+
+  function generateDataDrivenRecommendation(systemCtx, allBudgets, allExpenses, allRequests, targetMonth, targetYear, currentYear) {
+    const fmt = (n) => `₱${Number(n).toLocaleString('en-PH')}`
+
+    const effectiveYear = targetYear || currentYear
+    const effectiveMonth = targetMonth || MONTH_NAMES[new Date().getMonth()]
+    const periodLabel = `${effectiveMonth} ${effectiveYear}`
+
+    const periodBudgets = allBudgets.filter(b =>
+      Number(b.year) === effectiveYear &&
+      String(b.month).toLowerCase() === effectiveMonth.toLowerCase()
+    )
+    const periodExpenses = allExpenses.filter(e =>
+      Number(e.year) === effectiveYear &&
+      String(e.month).toLowerCase() === effectiveMonth.toLowerCase()
+    )
+    const pendingRequests = (allRequests || []).filter(r =>
+      String(r.status).toLowerCase() === 'pending'
+    )
+
+    const budgetTotal = periodBudgets.reduce((sum, b) => sum + (Number(b.amount) || 0), 0)
+    const expenseTotal = periodExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+    const remaining = budgetTotal - expenseTotal
+    const utilization = budgetTotal > 0 ? Math.round((expenseTotal / budgetTotal) * 100) : 0
+
+    if (periodBudgets.length === 0 || budgetTotal === 0) {
+      return `I couldn't provide budget allocation suggestions because no monthly budget has been recorded for ${periodLabel}. Please add a monthly budget first so I can generate personalized recommendations.`
+    }
+
+    let response = ''
+
+    response += `📊 Current Financial Status for ${periodLabel}:\n`
+    response += `• Allocated Budget: ${fmt(budgetTotal)}\n`
+    response += `• Total Expenses: ${fmt(expenseTotal)}\n`
+    response += `• Remaining Balance: ${fmt(remaining)}\n`
+    response += `• Budget Utilization: ${utilization}%\n`
+    if (pendingRequests.length > 0) {
+      const pendingTotal = pendingRequests.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+      response += `• Pending Requests: ${pendingRequests.length} (totaling ${fmt(pendingTotal)})\n`
+    }
+
+    const reserveAmount = Math.round(remaining * 0.15)
+    const allocatable = remaining - reserveAmount
+
+    response += `\n💡 Recommended Budget Allocation:\n`
+
+    if (remaining <= 0) {
+      response += `Your budget for ${periodLabel} has been fully utilized. No additional allocations can be made at this time. Consider requesting a supplemental budget if there are urgent pending activities.\n`
+    } else if (allocatable < 3000) {
+      response += `With only ${fmt(remaining)} remaining, I recommend reserving the full amount as a contingency fund for emergency expenses or pending payroll obligations.\n`
+    } else {
+      const youthDev = Math.round(allocatable * 0.30)
+      const healthSports = Math.round(allocatable * 0.25)
+      const environment = Math.round(allocatable * 0.15)
+      const training = Math.round(allocatable * 0.15)
+      response += `• Youth Development & Education: ${fmt(youthDev)} (30%)\n`
+      response += `• Health, Sports & Wellness: ${fmt(healthSports)} (25%)\n`
+      response += `• Environmental Programs: ${fmt(environment)} (15%)\n`
+      response += `• Leadership & Skills Training: ${fmt(training)} (15%)\n`
+      response += `• Contingency Reserve: ${fmt(reserveAmount)} (15%)\n`
+    }
+
+    if (remaining > 0) {
+      response += `\n🎯 Suggested Projects:\n`
+
+      if (remaining >= 30000) {
+        response += `• Community Sports Festival — Estimated cost: ₱15,000–₱25,000. Promotes health, teamwork, and youth engagement across puroks.\n`
+        response += `• School Supply Distribution — Estimated cost: ₱10,000–₱20,000. Supports underprivileged students with essential school materials.\n`
+        response += `• Youth Leadership Summit — Estimated cost: ₱8,000–₱15,000. Develops youth governance and leadership skills.\n`
+        response += `• Disaster Preparedness Training — Estimated cost: ₱5,000–₱12,000. Equips youth with emergency response knowledge.\n`
+      } else if (remaining >= 10000) {
+        response += `• Basketball or Volleyball Tournament — Estimated cost: ₱8,000–₱12,000. Encourages youth sportsmanship and physical activity.\n`
+        response += `• Youth Leadership Seminar — Estimated cost: ₱5,000–₱8,000. Builds leadership capacity among young officials.\n`
+        response += `• Digital Literacy Workshop — Estimated cost: ₱3,000–₱6,000. Teaches basic digital skills to out-of-school youth.\n`
+        response += `• Environmental Clean-up Drive — Estimated cost: ₱2,000–₱5,000. Organizes a barangay-wide clean-up with youth volunteers.\n`
+      } else {
+        response += `• Community Clean-up Drive — Estimated cost: ₱1,000–₱3,000. Mobilizes youth for environmental stewardship.\n`
+        response += `• Reading & Storytelling Program — Estimated cost: ₱1,500–₱3,000. Promotes literacy among children in the barangay.\n`
+        response += `• Anti-Drug Awareness Poster Campaign — Estimated cost: ₱500–₱2,000. Creates visual awareness materials for the community.\n`
+        response += `• First Aid Orientation — Estimated cost: ₱1,000–₱2,500. Teaches basic first aid skills to SK members.\n`
+      }
+    }
+
+    response += `\n📋 Financial Advice:\n`
+
+    if (utilization < 50) {
+      response += `Your budget utilization is at ${utilization}%, which is a healthy spending pace. You have room to fund new youth programs and activities this period.`
+    } else if (utilization < 75) {
+      response += `Your budget utilization is at ${utilization}%, a moderate pace. I recommend prioritizing the completion of ongoing approved projects before starting new ones.`
+    } else if (utilization < 90) {
+      response += `Your budget utilization is at ${utilization}%, approaching the limit. Reserve the remaining ${fmt(remaining)} for essential expenses, pending payroll, and emergency needs. Avoid starting large new projects.`
+    } else {
+      response += `Your budget utilization is at ${utilization}%, which is critical. Avoid any new expenses and ensure all pending requests and payroll obligations are covered first. Consider requesting a supplemental budget if urgent needs arise.`
+    }
+
+    if (pendingRequests.length > 0) {
+      response += ` Note: You have ${pendingRequests.length} pending request(s) that may further reduce available funds once approved.`
+    }
+
+    return response
   }
 
   async function sendMessage(text) {
@@ -265,27 +668,25 @@ function ChatWidgetInner() {
       }).then()
     }
 
+    const systemCtx = buildSystemContext()
+
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // Call Groq AI via Supabase Edge Function
+      const { data, error } = await supabase.functions.invoke('chatbot', {
+        body: {
           messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
-          systemContext: buildSystemContext(),
-          context: buildSystemContext(), // backward compat with deployed API
-        }),
+          systemContext: systemCtx,
+        },
       })
 
-      const data = await res.json().catch(() => ({ error: 'Invalid response from server' }))
-      if (!res.ok) {
-        const errorObj = new Error(data.error || 'Request failed')
-        errorObj.code = data.code
-        errorObj.status = res.status
+      if (error) {
+        const errorObj = new Error(error.message || 'Edge function request failed')
+        errorObj.code = 'EDGE_FUNCTION_ERROR'
         throw errorObj
       }
 
-      // Parse reply — handles both new plain text and old JSON-structured format
-      let replyText = data.reply || ''
+      // Parse reply from the edge function response
+      let replyText = data?.reply || ''
       try {
         const parsed = JSON.parse(replyText)
         if (parsed && typeof parsed.content === 'string') {
@@ -293,6 +694,10 @@ function ChatWidgetInner() {
         }
       } catch {
         // reply is already plain text, use as-is
+      }
+
+      if (!replyText) {
+        replyText = processFinancialQuery(userText, systemCtx)
       }
 
       const assistantMsg = {
@@ -315,32 +720,14 @@ function ChatWidgetInner() {
       if (!isOpen) setHasUnread(true)
 
     } catch (err) {
-      console.error('[Cue Chat Widget] Error sending message:', err)
+      console.warn('[Cue Chat Widget] API request failed, utilizing client context fallback:', err)
 
-      let friendlyMessage = 'An unexpected error occurred. Please try again.'
-      const isNetworkError = err instanceof TypeError || err.message?.includes('Failed to fetch') || err.message?.includes('network')
-
-      const systemCtx = buildSystemContext()
-      const hasNoData = !systemCtx.totalBudget && (!systemCtx.recentExpenses || systemCtx.recentExpenses.length === 0) && (!systemCtx.recentRequests || systemCtx.recentRequests.length === 0)
-
-      if (hasNoData) {
-        friendlyMessage = 'There is currently no financial data available to analyze.'
-      } else if (err.code === 'AUTH_ERROR' || err.status === 401 || err.status === 403) {
-        friendlyMessage = 'You do not have permission to access this information.'
-      } else if (err.code === 'AI_QUOTA_EXCEEDED' || err.code === 'AI_UNAVAILABLE' || err.status === 503) {
-        friendlyMessage = 'The AI service is temporarily unavailable. Please try again in a few moments.'
-      } else if (isNetworkError || err.status === 502 || err.status === 504) {
-        friendlyMessage = 'Unable to connect to the server. Please check your internet connection and try again.'
-      } else if (err.message) {
-        // Safe fallback for other backend errors
-        friendlyMessage = `The AI service is temporarily unavailable. Please try again in a few moments.`
-      }
+      const fallbackMsg = processFinancialQuery(userText, systemCtx)
 
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: friendlyMessage,
+        content: fallbackMsg,
         timestamp: new Date().toISOString(),
-        isError: true, // flag for optional error styling
       }])
     } finally {
       setIsLoading(false)

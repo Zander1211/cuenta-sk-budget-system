@@ -51,7 +51,13 @@ body {
 	line-height: 1.55;
 	background: var(--bone);
 	-webkit-font-smoothing: antialiased;
-	overflow-x: hidden;
+	/* NOTE: do NOT set overflow-x here. `overflow-x: hidden` computes
+	   overflow-y to `auto`, which turns <body> into a scroll container —
+	   and that breaks `position: sticky` on the sidebar, because its
+	   scrollport becomes body's content box (full page height) instead of
+	   the viewport, so it never has anything to stick against.
+	   `html { overflow-x: hidden }` already propagates to the viewport and
+	   suppresses horizontal scrolling on its own. */
 }
 
 #root {
@@ -576,6 +582,9 @@ body {
 	background:
 		radial-gradient(circle at 85% 5%, rgba(18, 184, 154, 0.035), transparent 26%),
 		linear-gradient(180deg, #f7fafb 0%, #f0f6f7 100%);
+	/* Ultra-wide constraint — prevents content from stretching past 1920px */
+	max-width: 1920px;
+	margin-inline: auto;
 }
 
 .dashboard-shell {
@@ -584,9 +593,11 @@ body {
 	background: transparent;
 	border: none;
 	border-radius: 0;
-	padding: 32px 40px 48px;
+	/* Fluid padding: scales from 16px on phones to 48px on wide desktops */
+	padding: clamp(16px, 3.5vw, 48px) clamp(16px, 4vw, 40px);
 	box-shadow: none;
-	overflow: hidden;
+	/* NOTE: overflow must remain visible so the sticky mobile header works */
+	overflow: visible;
 }
 
 .dashboard-mobile-header {
@@ -632,8 +643,6 @@ body {
 }
 
 .dashboard-layout {
-	display: grid;
-	grid-template-columns: 240px 1fr;
 	display: flex;
 	gap: 28px;
 	align-items: start;
@@ -2332,9 +2341,7 @@ body {
 }
 
 @media (max-width: 900px) {
-	.dashboard-shell {
-		padding: 32px 24px 36px;
-	}
+	/* Remove .dashboard-shell padding override — clamp() in the base rule handles it */
 
 	.dashboard-layout {
 		display: block;
@@ -2442,14 +2449,65 @@ body {
 	}
 }
 
-@media (max-width: 900px) and (orientation: landscape) {
-	.dashboard {
-		padding: 16px 14px 28px;
+/* ─────────────────────────────────────────────────────────
+   Breakpoint: ≤ 768px  (iPad portrait / large phone)
+   Fills the gap between the 900px and 720px blocks.
+───────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+	/* Summary grid → 2-col for tablet portrait */
+	.summary-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
-	.dashboard-shell {
-		padding: 20px 18px 24px;
+	/* Stat/insight grids → 2-col */
+	.stat-grid,
+	.insights-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
+
+	/* Dashboard panels → 1-col stack */
+	.dashboard-panels {
+		grid-template-columns: 1fr;
+	}
+
+	/* Dashboard header stack */
+	.dashboard-header {
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	/* Hide the desktop search/user topbar — mobile header replaces it */
+	.dashboard-topbar {
+		display: none;
+	}
+
+	/* Show mobile header */
+	.dashboard-mobile-header {
+		display: flex;
+	}
+
+	/* Page tabs: allow horizontal scroll */
+	.page-tabs {
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		flex-wrap: nowrap;
+	}
+
+	/* Two-column content layout collapses to single */
+	.dashboard-content.two-column {
+		grid-template-columns: 1fr;
+	}
+
+	/* AI grids collapse */
+	.ai-main-grid,
+	.ai-bottom-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+	/* Remove hard-coded padding — clamp() base rule handles this */
 
 	.dashboard-mobile-header {
 		margin-bottom: 12px;
@@ -2478,17 +2536,11 @@ body {
 	}
 }
 
-@media (max-width: 600px) {
-	.dashboard {
-		padding: 32px 16px 48px;
-	}
-}
+/* Remove .dashboard padding override — absorbed into clamp() */ 
 
 @media (max-width: 720px) {
-	.dashboard-shell {
-		padding: 24px 18px 28px;
-		border-radius: 22px;
-	}
+	/* Remove dashboard-shell padding override — clamp() handles it */
+	/* Remove border-radius: 22px on shell — only child elements should be rounded */
 
 	.dashboard-sidebar {
 		padding: 16px;
@@ -2535,7 +2587,8 @@ body {
 	}
 
 	.summary-grid {
-		grid-template-columns: 1fr;
+		/* Keep 2-col on tablet so cards have breathing room */
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
 	.panel-card {
@@ -2600,14 +2653,7 @@ body {
 }
 
 @media (max-width: 480px) {
-	.dashboard {
-		padding: 24px 12px 36px;
-	}
-
-	.dashboard-shell {
-		padding: 20px 14px 24px;
-		border-radius: 20px;
-	}
+	/* Remove hard-coded dashboard / shell padding — clamp() base rule handles it */
 
 	.sidebar-nav {
 		grid-template-columns: 1fr;
@@ -2664,11 +2710,40 @@ body {
 @media (max-width: 600px) {
 	.login-page {
 		padding: 32px 16px;
+		/* Allow scrolling when login form is taller than viewport (landscape phones) */
+		align-items: flex-start;
+		padding-top: max(24px, 6vh);
 	}
 
 	.login-footer {
 		flex-direction: column;
 		align-items: flex-start;
+	}
+}
+
+/* Login page: landscape phone fix — allow scroll, prevent card from clipping */
+@media (max-height: 600px) and (orientation: landscape) {
+	.login-page {
+		align-items: flex-start;
+		padding: 16px;
+		overflow-y: auto;
+	}
+
+	.login-shell {
+		margin: auto;
+	}
+
+	.brand-panel,
+	.login-panel {
+		padding: 24px 28px;
+	}
+}
+
+/* ReCAPTCHA overflow fix for very narrow screens */
+@media (max-width: 340px) {
+	.captcha-container {
+		transform: scale(0.85);
+		transform-origin: center top;
 	}
 }
 
@@ -3574,6 +3649,7 @@ td.nr-info-label {
 
 
 
+/* Canonical .data-table base — merges the two previously conflicting definitions */
 .data-table,
 .user-table,
 .audit-table {
@@ -3581,40 +3657,8 @@ td.nr-info-label {
 	overflow-x: auto;
 	white-space: nowrap;
 	width: 100%;
-	-webkit-overflow-scrolling: touch;
-}
-
-.overview-card {
-	overflow: hidden;
-}
-
-@media (max-width: 720px) {
-
-	.data-table,
-	.user-table,
-	.audit-table {
-		padding-bottom: 8px;
-	}
-}
-
-.notification-item-message {
-	white-space: pre-wrap;
-	line-height: 1.4;
-	margin-top: 4px;
-	display: block;
-}
-
-.profile-edit-options {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	align-items: flex-start;
-}
-
-/* Fix table spacing */
-.data-table {
-	width: 100%;
 	border-collapse: collapse;
+	-webkit-overflow-scrolling: touch;
 }
 
 .data-table th,
@@ -3636,6 +3680,32 @@ td.nr-info-label {
 .data-table td {
 	color: var(--ink);
 	font-size: 0.97rem; /* was 0.95rem */
+}
+
+.overview-card {
+	overflow: hidden;
+}
+
+@media (max-width: 720px) {
+	.data-table,
+	.user-table,
+	.audit-table {
+		padding-bottom: 8px;
+	}
+}
+
+.notification-item-message {
+	white-space: pre-wrap;
+	line-height: 1.4;
+	margin-top: 4px;
+	display: block;
+}
+
+.profile-edit-options {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	align-items: flex-start;
 }
 
 /* Breakdown layout classes */
@@ -4213,6 +4283,21 @@ td.nr-info-label {
 		white-space: normal;
 	}
 
+	/* When data-label exists: show label on left, value on right */
+	.data-table td[data-label],
+	.user-table td[data-label],
+	.audit-table td[data-label] {
+		justify-content: space-between;
+	}
+
+	/* When data-label is MISSING: align value to the left, no empty space */
+	.data-table td:not([data-label]),
+	.user-table td:not([data-label]),
+	.audit-table td:not([data-label]) {
+		justify-content: flex-start;
+		text-align: left;
+	}
+
 	.data-table td:last-child,
 	.user-table td:last-child,
 	.audit-table td:last-child {
@@ -4231,6 +4316,13 @@ td.nr-info-label {
 		text-align: left;
 		flex-shrink: 0;
 		min-width: 100px;
+	}
+
+	/* Hide ::before when there's no data-label — prevents empty gap */
+	.data-table td:not([data-label])::before,
+	.user-table td:not([data-label])::before,
+	.audit-table td:not([data-label])::before {
+		display: none;
 	}
 
 	/* Reset the horizontal scroll behavior */
@@ -4308,12 +4400,13 @@ td.nr-info-label {
 		font-size: 1rem;
 	}
 
-	/* 5. Card & dashboard widgets → single column */
-	.summary-grid,
+	/* 5. Card & dashboard widgets — keep 2-col at 600px; single-col handled at ≤480px */
 	.stat-grid,
 	.insights-grid {
 		grid-template-columns: 1fr !important;
 	}
+
+	/* summary-grid stays 2-col here: repeat(2, 1fr) — single-col at ≤480px */
 
 	.expenses-breakdown-grid {
 		grid-template-columns: 1fr !important;
@@ -4426,8 +4519,9 @@ td.nr-info-label {
 		font-size: 1.15rem;
 	}
 
-	/* Buttons go full-width */
-	.secondary-button {
+	/* Buttons go full-width only inside footers/action groups — not globally inline */
+	.modal-footer .secondary-button,
+	.action-group.is-stacked .secondary-button {
 		width: 100%;
 	}
 
@@ -4750,7 +4844,13 @@ td.nr-info-label {
 	color: var(--ink-soft);
 }
 
-/* Action type column */
+/* Action type column — pill stacked above the action text, like the user cell */
+.audit-action-cell {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+}
+
 .audit-action-text {
 	display: block;
 	font-size: 0.8rem; /* was 0.75rem */
@@ -5528,6 +5628,814 @@ td.nr-info-label {
 		flex: 1;
 		min-width: 80px;
 		justify-content: center;
+	}
+}
+
+
+
+/* ═══════════════════════════════════════════════════════════════
+   SCALABLE CONTAINERS — System-wide responsive content scaling
+   Ensures every card, panel, and container looks consistent
+   between mobile and desktop.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Card header bars: title + controls layout ────────────── */
+.card-header-bar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 16px;
+	flex-wrap: wrap;
+}
+
+.card-header-controls {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+/* Panel-level select/input styling */
+.panel-select {
+	padding: 6px 10px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: #fff;
+	font-size: 0.88rem;
+	font-family: inherit;
+	color: var(--ink);
+	outline: none;
+	transition: border-color 0.15s;
+}
+
+.panel-select:focus {
+	border-color: var(--sea);
+	box-shadow: 0 0 0 3px rgba(0, 63, 76, 0.1);
+}
+
+@media (max-width: 768px) {
+	.card-header-bar {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 10px;
+	}
+
+	.card-header-controls {
+		width: 100%;
+	}
+}
+
+@media (max-width: 480px) {
+	.card-header-controls {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 8px;
+		width: 100%;
+	}
+
+	.card-header-controls .page-tabs {
+		width: 100%;
+		justify-content: stretch;
+	}
+
+	.card-header-controls .page-tab {
+		flex: 1;
+		text-align: center;
+	}
+}
+
+/* ── Universal fix: any inline flex inside cards wraps on mobile ── */
+@media (max-width: 768px) {
+	/* overview-card and panel-card direct children that are flex containers */
+	.overview-card > div[style*="display: flex"],
+	.overview-card > div[style*="display:flex"],
+	.panel-card > div[style*="display: flex"],
+	.panel-card > div[style*="display:flex"] {
+		flex-wrap: wrap !important;
+		gap: 10px !important;
+	}
+
+	/* Card header bars always stack on tablet/mobile */
+	.overview-card > div[style*="justify-content: space-between"],
+	.panel-card > div[style*="justify-content: space-between"] {
+		flex-direction: column !important;
+		align-items: flex-start !important;
+	}
+
+	/* Overview card internal layout */
+	.overview-card {
+		padding: clamp(16px, 4vw, 32px);
+	}
+
+	.overview-card h2 {
+		font-size: clamp(1.1rem, 4vw, 1.65rem);
+		word-break: break-word;
+	}
+
+	/* Panel card internal layout */
+	.panel-card {
+		padding: clamp(14px, 3.5vw, 24px);
+	}
+
+	/* All page-tabs scroll horizontally on mobile */
+	.page-tabs {
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		flex-wrap: nowrap;
+		width: 100%;
+		scrollbar-width: none;
+	}
+
+	.page-tabs::-webkit-scrollbar {
+		display: none;
+	}
+
+	/* Filter selects and inputs fill available space */
+	.overview-card select,
+	.overview-card input[type="number"],
+	.panel-card select,
+	.panel-card input[type="number"] {
+		min-width: 0;
+		flex: 1;
+	}
+
+	/* Filter row containers inside cards */
+	.overview-card .filter-group,
+	.panel-card .filter-group {
+		width: 100%;
+	}
+}
+
+@media (max-width: 600px) {
+	/* overview-card headers with side-by-side content fully stack */
+	.overview-card > div[style*="justify-content: space-between"],
+	.panel-card > div[style*="justify-content: space-between"] {
+		flex-direction: column !important;
+		align-items: stretch !important;
+		gap: 12px !important;
+	}
+
+	/* Nested flex rows inside card headers also wrap */
+	.overview-card > div > div[style*="display: flex"],
+	.panel-card > div > div[style*="display: flex"] {
+		flex-wrap: wrap !important;
+		gap: 8px !important;
+	}
+
+	/* Page tabs become full-width scrollable strip */
+	.page-tabs {
+		align-self: stretch;
+		width: 100%;
+	}
+
+	/* Cards tighter padding on phones */
+	.overview-card {
+		padding: 16px;
+	}
+
+	.panel-card {
+		padding: 14px;
+	}
+
+	/* Table inside cards — ensure proper mobile card view */
+	.overview-card .data-table,
+	.panel-card .data-table {
+		margin-top: 12px;
+	}
+
+	/* Two-column dashboard content → single column */
+	.dashboard-content.two-column {
+		grid-template-columns: 1fr !important;
+	}
+}
+
+@media (max-width: 480px) {
+	/* Tightest container padding */
+	.overview-card {
+		padding: 14px;
+		border-radius: 16px;
+	}
+
+	.panel-card {
+		padding: 12px;
+		border-radius: 16px;
+	}
+
+	/* Stat cards tighter */
+	.stat-card {
+		padding: 14px;
+	}
+
+	.summary-card {
+		padding: 16px;
+	}
+
+	/* Ensure heading text doesn't overflow */
+	.overview-card h2,
+	.panel-card h2,
+	.panel-header h2 {
+		font-size: clamp(1rem, 5vw, 1.3rem);
+		overflow-wrap: anywhere;
+	}
+
+	/* All buttons inside cards go full-width */
+	.overview-card .primary-button,
+	.panel-card .primary-button {
+		width: 100%;
+	}
+}
+
+
+/* ── Scalable grid layouts for all pages ───────────────── */
+
+/* Two-column page layout collapses predictably */
+@media (max-width: 1024px) {
+	.dashboard-content.two-column {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+@media (max-width: 768px) {
+	.dashboard-content.two-column {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* User management grid collapses */
+@media (max-width: 768px) {
+	.user-management-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Expenses breakdown grid collapses */
+@media (max-width: 768px) {
+	.expenses-breakdown-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Breakdown summary row stacks */
+@media (max-width: 600px) {
+	.breakdown-summary-row {
+		grid-template-columns: 1fr !important;
+		gap: 12px;
+	}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AI ANALYSIS — fluid grids
+   `minmax(<fixed>, 1fr)` never shrinks below its floor, so a 250px
+   or 280px track overflows a ~260px content box on a 320px phone.
+   `min(<fixed>, 100%)` lets the track collapse to the container.
+   ═══════════════════════════════════════════════════════════════ */
+.ai-risk-guide-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+	gap: clamp(10px, 2.5vw, 16px);
+}
+
+.ai-risk-guide-grid > * {
+	min-width: 0;
+}
+
+.ai-recommendation-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+	gap: clamp(10px, 2.5vw, 1rem);
+}
+
+/* Title + severity chip must wrap rather than squeeze the title */
+.ai-insight-head,
+.ai-alert-head {
+	flex-wrap: wrap;
+}
+
+.ai-insight-title,
+.ai-alert-title {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+/* AI card headers stack title above chip on phones */
+@media (max-width: 600px) {
+	.ai-card-header {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LOGIN — Vanta clouds backdrop + frosted sign-in card
+   The canvas is a fixed, non-interactive layer behind everything;
+   the gradient on .login-page stays as the fallback for reduced
+   motion or a WebGL failure, so the page is never bare.
+   ═══════════════════════════════════════════════════════════════ */
+.login-page {
+	position: relative;
+	isolation: isolate;
+	padding: clamp(20px, 5vw, 48px) clamp(16px, 4vw, 40px);
+	background:
+		radial-gradient(circle at 20% 15%, rgba(18, 184, 154, 0.10), transparent 45%),
+		linear-gradient(180deg, #eef5f7 0%, #dfeaee 100%);
+}
+
+.login-vanta {
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	pointer-events: none;
+}
+
+/* The shell reads as glass sitting on the sky */
+.login-shell {
+	width: min(460px, 100%);
+	background: rgba(255, 255, 255, 0.72);
+	backdrop-filter: blur(18px) saturate(140%);
+	-webkit-backdrop-filter: blur(18px) saturate(140%);
+	border: 1px solid rgba(255, 255, 255, 0.85);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.9),
+		0 2px 8px rgba(12, 46, 48, 0.06),
+		0 18px 40px rgba(12, 46, 48, 0.14),
+		0 40px 80px rgba(12, 46, 48, 0.10);
+}
+
+.login-panel {
+	background: transparent;
+	padding: clamp(28px, 6vw, 44px) clamp(22px, 5vw, 42px);
+	gap: 20px;
+}
+
+.login-logo {
+	height: clamp(84px, 14vw, 112px);
+	filter: drop-shadow(0 6px 14px rgba(12, 46, 48, 0.18));
+}
+
+.login-logo-container {
+	margin-bottom: 14px;
+}
+
+.login-header h2 {
+	margin: 6px 0 4px;
+	font-size: clamp(1.4rem, 4vw, 1.75rem);
+	letter-spacing: -0.01em;
+}
+
+.login-header .subcopy {
+	margin: 0;
+	color: var(--ink-soft);
+	font-size: 0.9rem;
+}
+
+/* Inputs read as inset wells against the frosted card */
+.login-form .field input {
+	background: rgba(255, 255, 255, 0.85);
+	border: 1px solid rgba(12, 46, 48, 0.14);
+	box-shadow: inset 0 1px 2px rgba(12, 46, 48, 0.06);
+	transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.login-form .field input:focus {
+	background: #fff;
+	border-color: var(--sea);
+	box-shadow:
+		inset 0 1px 2px rgba(12, 46, 48, 0.04),
+		0 0 0 3px rgba(18, 128, 92, 0.16);
+	outline: none;
+}
+
+.login-form .primary-button {
+	width: 100%;
+	min-height: 48px;
+	font-size: 0.98rem;
+	letter-spacing: 0.02em;
+	box-shadow: 0 8px 20px rgba(0, 143, 122, 0.28);
+}
+
+.login-form .captcha-instruction {
+	margin-top: 6px !important;
+}
+
+.login-footer {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	padding-top: 4px;
+	border-top: 1px solid rgba(12, 46, 48, 0.10);
+	font-size: 0.88rem;
+	color: var(--ink-soft);
+}
+
+/* reCAPTCHA is a fixed 304px widget — scale it down on narrow phones
+   rather than letting it push the card into horizontal overflow. */
+@media (max-width: 380px) {
+	.login-form .captcha-container {
+		transform: scale(0.86);
+		transform-origin: center;
+	}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ROUTE ERROR BOUNDARY — visible failure instead of a white screen
+   ═══════════════════════════════════════════════════════════════ */
+.route-error {
+	min-height: 100vh;
+	display: grid;
+	place-items: center;
+	padding: clamp(16px, 5vw, 48px);
+	background: linear-gradient(180deg, #f7fafb 0%, #f0f6f7 100%);
+}
+
+.route-error-card {
+	width: min(720px, 100%);
+	background: #fff;
+	border: 1px solid var(--border);
+	border-radius: 18px;
+	padding: clamp(20px, 4vw, 32px);
+	box-shadow: 0 18px 40px rgba(6, 10, 20, 0.10);
+}
+
+.route-error-message {
+	margin: 4px 0 16px;
+	color: var(--ink);
+	font-weight: 500;
+	overflow-wrap: anywhere;
+}
+
+.route-error-details {
+	margin-bottom: 18px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	padding: 12px 14px;
+	background: rgba(15, 31, 54, 0.03);
+}
+
+.route-error-details summary {
+	cursor: pointer;
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--ink-soft);
+}
+
+.route-error-details pre {
+	margin: 10px 0 0;
+	max-height: 260px;
+	overflow: auto;
+	font-size: 0.75rem;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	color: var(--ink-soft);
+}
+
+.route-error-actions {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+	align-items: center;
+}
+
+.route-error-actions .secondary-button {
+	text-decoration: none;
+	display: inline-flex;
+	align-items: center;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PASSWORD FIELD — eye toggle sits inside the input
+   Reusable: wrap the input in .password-field and add a
+   .password-toggle button as its sibling. The input reserves
+   right padding so typed text never runs under the icon.
+   ═══════════════════════════════════════════════════════════════ */
+.password-field {
+	position: relative;
+	display: block;
+	width: 100%;
+}
+
+.password-field input {
+	width: 100%;
+	padding-right: 46px;
+}
+
+/* Edge ships a native reveal control on password inputs — without this it
+   renders a second eye right beside ours. */
+.password-field input::-ms-reveal,
+.password-field input::-ms-clear {
+	display: none;
+}
+
+.password-toggle {
+	position: absolute;
+	top: 50%;
+	right: 6px;
+	transform: translateY(-50%);
+	width: 34px;
+	height: 34px;
+	padding: 0;
+	display: grid;
+	place-items: center;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--ink-soft);
+	cursor: pointer;
+	transition: color 0.16s ease, background 0.16s ease;
+}
+
+.password-toggle:hover {
+	color: var(--sea);
+	background: rgba(18, 128, 92, 0.10);
+}
+
+.password-toggle:focus-visible {
+	outline: 2px solid var(--sea);
+	outline-offset: 2px;
+	color: var(--sea);
+}
+
+/* Pressed state reads as "password is currently visible" */
+.password-toggle[aria-pressed='true'] {
+	color: var(--sea);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PROFILE — biodata shown inline under the account name
+   ═══════════════════════════════════════════════════════════════ */
+.profile-biodata {
+	margin-top: 20px;
+	padding-top: 18px;
+	border-top: 1px solid rgba(12, 46, 48, 0.10);
+}
+
+.profile-biodata-title {
+	margin: 0 0 12px;
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--sea);
+}
+
+.profile-biodata-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+	gap: 14px 20px;
+	margin: 0;
+}
+
+.profile-biodata-item {
+	min-width: 0;
+}
+
+.profile-biodata-item--wide {
+	grid-column: 1 / -1;
+}
+
+.profile-biodata-item dt {
+	font-size: 0.74rem;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--ink-soft);
+	margin-bottom: 3px;
+}
+
+.profile-biodata-item dd {
+	margin: 0;
+	font-size: 0.95rem;
+	font-weight: 500;
+	color: var(--ink);
+	overflow-wrap: anywhere;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE DRAWER — depth pass
+   The drawer read flat because every layer sat on one tone: the
+   panel, the brand block and the "C" chip were all near-#0C2E30,
+   and the chip's own fill (rgba(15,31,54,.92) navy) was darker than
+   the teal it sat on, so it vanished. Establish a light source from
+   the top-left: gradient ground, raised brand surface, bevelled chip.
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 720px) {
+	/* ── Layer 1: the drawer itself ── */
+	.dashboard-sidebar,
+	.dashboard-sidebar.is-collapsed {
+		background:
+			linear-gradient(
+				160deg,
+				var(--cuenta-sidebar-hover, #123F42) 0%,
+				var(--cuenta-sidebar, #0C2E30) 42%,
+				var(--cuenta-sidebar-deep, #0A2628) 100%
+			);
+		border: 1px solid rgba(255, 255, 255, 0.09);
+		box-shadow:
+			/* top-left inner highlight — catches the light */
+			inset 1px 1px 0 rgba(255, 255, 255, 0.07),
+			/* bottom inner shade — rolls the edge away */
+			inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+			/* lifted off the page */
+			0 18px 32px rgba(6, 10, 20, 0.28),
+			0 32px 64px rgba(6, 10, 20, 0.22);
+	}
+
+	/* ── Layer 2: brand block as a raised surface ──
+	   Flush to the panel's top and side edges, so there is ONE edge
+	   instead of a nested rectangle. Its top corners must match the
+	   panel's inner radius: 20px outer − 1px border = 19px. */
+	.dashboard-sidebar .sidebar-brand {
+		position: relative;
+		gap: 13px;
+		margin: -16px -16px 4px;
+		padding: 18px 16px 16px;
+		border-radius: 19px 19px 0 0;
+		border-bottom: none;
+		background: linear-gradient(
+			180deg,
+			rgba(255, 255, 255, 0.07) 0%,
+			rgba(255, 255, 255, 0.02) 100%
+		);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+	}
+
+	/* Carved 2-tone divider: shadow line above, highlight line below.
+	   Spans the full flush width — no inset, or it reads as a second edge. */
+	.dashboard-sidebar .sidebar-brand::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 2px;
+		background: linear-gradient(
+			180deg,
+			rgba(0, 0, 0, 0.28) 0 1px,
+			rgba(255, 255, 255, 0.10) 1px 2px
+		);
+	}
+
+	/* ── Layer 3: the "C" chip, bevelled and lit ── */
+	.dashboard-sidebar .brand-chip {
+		width: 42px;
+		height: 42px;
+		padding: 0;
+		display: grid;
+		place-items: center;
+		font-size: 0.9rem;
+		letter-spacing: 0.06rem;
+		font-weight: 700;
+		color: #06231f;
+		background: linear-gradient(155deg, #8ef0c9 0%, var(--mint, #6de3b7) 45%, var(--sea, #12805C) 100%);
+		box-shadow:
+			/* bevel: light on the top edge, shade underneath */
+			inset 0 1px 0 rgba(255, 255, 255, 0.65),
+			inset 0 -2px 3px rgba(0, 40, 30, 0.30),
+			/* contact shadow + soft halo against the dark panel */
+			0 4px 10px rgba(0, 0, 0, 0.35),
+			0 0 0 1px rgba(255, 255, 255, 0.10),
+			0 0 18px rgba(109, 227, 183, 0.22);
+	}
+
+	/* ── Layer 4: type lifts off the ground ── */
+	.dashboard-sidebar .sidebar-brand-text > span:first-child {
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+	}
+
+	.dashboard-sidebar .sidebar-role {
+		color: rgba(255, 255, 255, 0.72);
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+	}
+
+	/* ── Active nav item: keep its green glow, add a top bevel ── */
+	.dashboard-sidebar .sidebar-tab.is-active {
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.22),
+			inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+			0 6px 16px rgba(0, 143, 122, 0.35),
+			0 8px 18px rgba(0, 0, 0, 0.22);
+	}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE HEADER — hide while the nav drawer is open
+   The sticky white header sits at z-index 30 and floats over the
+   open drawer. Fade it out on open, fade it back in on close.
+   `visibility` (not `display`) keeps its layout box reserved so
+   the page content never jumps when the drawer closes.
+   ═══════════════════════════════════════════════════════════════ */
+.dashboard-mobile-header {
+	transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease;
+}
+
+.dashboard-mobile-header.is-hidden {
+	opacity: 0;
+	visibility: hidden;
+	transform: translateY(-12px);
+	pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.dashboard-mobile-header {
+		transition: none;
+	}
+
+	.dashboard-mobile-header.is-hidden {
+		transform: none;
+	}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TABLE CARD VIEW — "Actions" cell becomes a full-width footer
+   Buttons sit at the bottom of the card and stretch edge to edge
+   instead of being squeezed into the right-hand value column.
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+	/* Rows become flex columns so the actions cell can be pushed down */
+	.data-table tr,
+	.user-table tr {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.data-table td[data-label="Actions"],
+	.user-table td[data-label="Actions"] {
+		margin-top: auto;
+		flex-direction: column;
+		align-items: stretch;
+		justify-content: flex-start;
+		text-align: left !important;
+		gap: 10px;
+		padding-top: 14px !important;
+		border-bottom: none;
+	}
+
+	.data-table td[data-label="Actions"]::before,
+	.user-table td[data-label="Actions"]::before {
+		min-width: 0;
+	}
+
+	/* Button cluster fills the card width */
+	.data-table td[data-label="Actions"] .field-row,
+	.user-table td[data-label="Actions"] > div {
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		justify-content: stretch;
+		gap: 8px;
+	}
+
+	.data-table td[data-label="Actions"] .field-row > button,
+	.data-table td[data-label="Actions"] .field-row > a,
+	.user-table td[data-label="Actions"] > div > button {
+		width: 100%;
+		justify-content: center;
+		min-height: 44px;
+	}
+
+	/* A bare status pill (e.g. "View Only") must not stretch edge to edge */
+	.data-table td[data-label="Actions"] > .status-pill,
+	.user-table td[data-label="Actions"] > .status-pill {
+		align-self: flex-start;
+	}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AUDIT TRAIL — mobile card view refinements
+   The expand control is an action, not a value, so it carries no
+   data-label; centre it and drop it entirely when there's no detail.
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+	/* Action Type stacks pill over description, matching the desktop cell */
+	.audit-action-cell {
+		align-items: flex-end;
+	}
+
+	.audit-action-cell .audit-action-text {
+		text-align: right;
+	}
+
+	.audit-table td.audit-expand-cell {
+		justify-content: center;
+		padding-top: 12px !important;
+	}
+
+	.audit-table td.audit-expand-cell:empty {
+		display: none;
+	}
+
+	/* Expanded detail panel spans the card, no label gutter */
+	.audit-table .audit-detail-row td {
+		padding: 0 !important;
+		display: block;
+	}
+
+	.audit-row-detail {
+		padding: 14px 16px;
 	}
 }
 

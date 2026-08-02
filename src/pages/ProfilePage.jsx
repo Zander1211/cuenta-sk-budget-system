@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
 import { getUploadErrorMessage } from '../utils/uploadUtils'
 import ImageCropper from '../components/ImageCropper'
-import { isBiodataComplete } from '../utils/biodata'
+import { isBiodataComplete, formatBirthdate } from '../utils/biodata'
 
 function ProfilePage() {
   const { user, role, refreshSession } = useAuth()
@@ -30,6 +30,7 @@ function ProfilePage() {
   const [selectedSafeExt, setSelectedSafeExt] = useState('png')
 
   const [biodataComplete, setBiodataComplete] = useState(null) // null = loading
+  const [biodata, setBiodata] = useState({ status: 'loading', data: null })
 
   const email = user?.email || ''
   const metadataFullName = user?.user_metadata?.full_name?.trim() || ''
@@ -55,12 +56,14 @@ function ProfilePage() {
     let isMounted = true
     async function loadBiodataStatus() {
       if (!user?.id) return
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('member_biodata')
         .select('birthdate, sex, civil_status, citizenship, complete_address, mobile_number')
         .eq('id', user.id)
         .maybeSingle()
-      if (isMounted) setBiodataComplete(isBiodataComplete(data))
+      if (!isMounted) return
+      setBiodataComplete(isBiodataComplete(data))
+      setBiodata({ status: error ? 'error' : 'ready', data: error ? null : data })
     }
     loadBiodataStatus()
     return () => {
@@ -206,6 +209,49 @@ function ProfilePage() {
               {email ? <p className="profile-meta">{email}</p> : null}
             </div>
           </div>
+
+          {/* Personal records, shown inline under the account name */}
+          <div className="profile-biodata">
+            <p className="profile-biodata-title">Personal Information</p>
+            {biodata.status === 'loading' ? (
+              <p className="profile-hint">Loading biodata…</p>
+            ) : biodata.status === 'error' ? (
+              <p className="profile-hint">Unable to load biodata right now.</p>
+            ) : biodata.data ? (
+              <dl className="profile-biodata-grid">
+                <div className="profile-biodata-item">
+                  <dt>Birthdate</dt>
+                  <dd>{formatBirthdate(biodata.data.birthdate)}</dd>
+                </div>
+                <div className="profile-biodata-item">
+                  <dt>Sex</dt>
+                  <dd>{biodata.data.sex || '—'}</dd>
+                </div>
+                <div className="profile-biodata-item">
+                  <dt>Civil Status</dt>
+                  <dd>{biodata.data.civil_status || '—'}</dd>
+                </div>
+                <div className="profile-biodata-item">
+                  <dt>Citizenship</dt>
+                  <dd>{biodata.data.citizenship || '—'}</dd>
+                </div>
+                <div className="profile-biodata-item">
+                  <dt>Mobile Number</dt>
+                  <dd>{biodata.data.mobile_number || '—'}</dd>
+                </div>
+                <div className="profile-biodata-item profile-biodata-item--wide">
+                  <dt>Complete Address</dt>
+                  <dd>{biodata.data.complete_address || '—'}</dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="profile-hint">
+                You haven&apos;t filled out your biodata yet. Use{' '}
+                <strong>Complete Your Biodata</strong> below to add it.
+              </p>
+            )}
+          </div>
+
           <div className="profile-actions">
             <label
               className={`secondary-button profile-upload ${

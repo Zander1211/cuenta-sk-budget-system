@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Receipt, PieChart, TrendingUp, BarChart3, Download, Filter } from 'lucide-react'
+import { Receipt, PieChart, TrendingUp, BarChart3, Filter } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import YearSpinner from '../components/YearSpinner'
@@ -157,32 +157,6 @@ function ExpenseSummaryPage() {
     ? Math.max(...monthlyTrend.map((m) => m.value), 1)
     : 1
 
-  function handleExportCsv() {
-    if (!filteredExpenses.length) return
-
-    const headers = ['Project/Event', 'Category', 'Amount', 'Status', 'Date Approved']
-    const csvContent = [
-      headers.join(','),
-      ...filteredExpenses.map((e) => {
-        const project = `"${(e.project || e.event || '').replace(/"/g, '""')}"`
-        const category = `"${(e.category || '').replace(/"/g, '""')}"`
-        const amount = Number(e.amount || 0)
-        const status = e.status || 'Approved'
-        const date = e.approvedAt ? new Date(e.approvedAt).toLocaleDateString() : '—'
-        return [project, category, amount, status, date].join(',')
-      }),
-    ].join('\n')
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', `expense_summary_${periodLabel.replace(/\s+/g, '_')}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
-
   return (
     <RoleGate allow={['SK Kagawad', 'Barangay Treasurer']}>
       <header className="dashboard-header">
@@ -195,17 +169,6 @@ function ExpenseSummaryPage() {
               project, and monitor budget utilization.
             </p>
           </div>
-        </div>
-        <div className="header-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={handleExportCsv}
-            disabled={!filteredExpenses.length}
-          >
-            <Download size={16} />
-            Export CSV
-          </button>
         </div>
       </header>
 
@@ -518,7 +481,7 @@ function ExpenseSummaryPage() {
 
         {/* Expense List Table */}
         <div className="overview-card" style={{ marginTop: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div className="card-header-bar">
             <div>
               <p className="eyebrow">Records</p>
               <h2>Approved Expenses</h2>
@@ -540,17 +503,17 @@ function ExpenseSummaryPage() {
               {filteredExpenses.length ? (
                 filteredExpenses.map((expense) => (
                   <tr key={expense.id}>
-                    <td style={{ fontWeight: 500 }}>
+                    <td data-label="Project / Event" style={{ fontWeight: 500 }}>
                       {expense.project || expense.event || '—'}
                     </td>
-                    <td>{expense.category || '—'}</td>
-                    <td>{currency.format(Number(expense.amount || 0))}</td>
-                    <td>
+                    <td data-label="Category">{expense.category || '—'}</td>
+                    <td data-label="Amount">{currency.format(Number(expense.amount || 0))}</td>
+                    <td data-label="Status">
                       <span className="status-chip is-positive">
                         {expense.status || 'Approved'}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Date Approved">
                       {expense.approvedAt
                         ? new Date(expense.approvedAt).toLocaleDateString('en-US', {
                             month: 'short',

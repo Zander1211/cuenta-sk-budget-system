@@ -140,17 +140,17 @@ function RequestPage() {
                 {activeRequests.length ? (
                   activeRequests.map((request) => (
                     <tr key={request.id}>
-                      <td>{request.event}</td>
-                      {requestType !== 'Payroll' && <td>{request.category}</td>}
-                      <td>{currency.format(request.amount)}</td>
-                      <td>
+                      <td data-label={requestType === 'Payroll' ? 'Payroll Title' : 'Title'}>{request.event}</td>
+                      {requestType !== 'Payroll' && <td data-label="Category">{request.category}</td>}
+                      <td data-label="Amount">{currency.format(request.amount)}</td>
+                      <td data-label="Status">
                         <span className={`status-pill status-${(request.status || 'Pending').toLowerCase()}`}>
                           {request.status || 'Pending'}
                         </span>
                       </td>
-                      <td>{request.rejectionReason || '—'}</td>
-                      <td>{new Date(request.submittedAt || new Date()).toLocaleDateString()}</td>
-                      <td className="table-actions">
+                      <td data-label="Note">{request.rejectionReason || '—'}</td>
+                      <td data-label="Submitted">{new Date(request.submittedAt || new Date()).toLocaleDateString()}</td>
+                      <td data-label="Actions" className="table-actions">
                         {request.status === 'Rejected' && (
                           <button
                             className="text-button"
@@ -202,18 +202,18 @@ function RequestPage() {
                 {archivedRequests.length ? (
                   archivedRequests.map((request) => (
                     <tr key={request.id}>
-                      <td>{request.event}</td>
-                      {requestType !== 'Payroll' && <td>{request.category}</td>}
-                      <td>{currency.format(request.amount)}</td>
-                      <td>
+                      <td data-label={requestType === 'Payroll' ? 'Payroll Title' : 'Title'}>{request.event}</td>
+                      {requestType !== 'Payroll' && <td data-label="Category">{request.category}</td>}
+                      <td data-label="Amount">{currency.format(request.amount)}</td>
+                      <td data-label="Status">
                         <span className={`status-pill status-${(request.status || 'Pending').toLowerCase()}`}>
                           {request.status || 'Pending'}
                         </span>
                       </td>
-                      <td>{request.rejectionReason || '—'}</td>
-                      <td>{new Date(request.archivedAt).toLocaleDateString()}</td>
-                      <td>{request.archivedBy || '—'}</td>
-                      <td className="table-actions">
+                      <td data-label="Note">{request.rejectionReason || '—'}</td>
+                      <td data-label="Archived Date">{new Date(request.archivedAt).toLocaleDateString()}</td>
+                      <td data-label="Archived By">{request.archivedBy || '—'}</td>
+                      <td data-label="Actions" className="table-actions">
                         <button className="secondary-button" type="button" onClick={() => setSelectedArchivedRequest(request)}>
                           View Details
                         </button>

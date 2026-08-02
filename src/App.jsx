@@ -35,6 +35,7 @@ import { BackupRestoreProvider } from './context/BackupRestoreContext'
 import { DocumentProvider } from './context/DocumentContext'
 import ChatWidget from './components/ChatWidget'
 import SmoothScroll, { ScrollToTop } from './components/SmoothScroll'
+import RouteErrorBoundary from './components/RouteErrorBoundary'
 import { NotificationProvider } from './context/NotificationContext'
 
 // Analysis module (lazy-loaded so its charts/hooks don't weigh down other routes)
@@ -55,6 +56,7 @@ function AppRoutes() {
     <SmoothScroll>
     <BrowserRouter>
       <ScrollToTop />
+      <RouteErrorBoundary>
       <Routes>
         <Route path="/" element={<LoginPage />} />
         <Route path="/dashboard" element={<DashboardLayout />}>
@@ -130,6 +132,7 @@ function AppRoutes() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </RouteErrorBoundary>
       <ChatWidget />
     </BrowserRouter>
     </SmoothScroll>

@@ -6,6 +6,7 @@ import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import AnnualReportPreview from '../components/documents/AnnualReportPreview'
 import { useAuth } from '../context/AuthContext'
+import YearSpinner from '../components/YearSpinner'
 
 const currentYear = new Date().getFullYear()
 
@@ -189,15 +190,7 @@ function AnnualReportPage() {
               <p className="eyebrow">System Reference</p>
               <h2>{selectedYear} Data Overview</h2>
             </div>
-            <select 
-              className="panel-select" 
-              value={selectedYear} 
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-            >
-              {[currentYear, currentYear - 1, currentYear - 2].map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
+            <YearSpinner year={selectedYear} onYearChange={setSelectedYear} />
           </div>
           <div className="breakdown-summary-row" style={{ marginTop: '16px' }}>
             <div>

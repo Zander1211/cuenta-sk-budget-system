@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReCAPTCHA from 'react-google-recaptcha'
+import { Eye, EyeOff } from 'lucide-react'
 import { loginUser } from '../services/authService'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
 import logo from '../assets/logo.png'
+import VantaClouds from '../components/VantaClouds'
 
 function LoginPage() {
   const [email, setEmail] = useState('')
@@ -82,6 +84,7 @@ function LoginPage() {
 
   return (
     <div className="login-page">
+      <VantaClouds />
       <div className="login-shell">
         <section className="login-panel">
           <header className="login-header">
@@ -107,7 +110,7 @@ function LoginPage() {
 
             <label className="field">
               <span>Password</span>
-              <div className="field-row">
+              <div className="password-field">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Enter your password"
@@ -117,10 +120,13 @@ function LoginPage() {
                 />
                 <button
                   type="button"
-                  className="text-button"
+                  className="password-toggle"
                   onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  title={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {showPassword ? 'Hide' : 'Show'}
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </label>
