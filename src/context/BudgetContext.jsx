@@ -51,6 +51,35 @@ function mapExpenseRow(row) {
   }
 }
 
+function mapRequestRow(row) {
+  return {
+    id: String(row.id),
+    type: row.type || 'Project',
+    event: row.event || '',
+    category: row.category || '',
+    amount: Number(row.amount || 0),
+    eventDate: row.event_date || null,
+    venue: row.venue || '',
+    description: row.description || '',
+    notes: row.notes || '',
+    breakdown: Array.isArray(row.breakdown) ? row.breakdown : [],
+    expensesBreakdown: Array.isArray(row.expenses_breakdown) ? row.expenses_breakdown : [],
+    requestedBy: row.requested_by || '',
+    status: row.status || 'Pending',
+    projectStatus: row.project_status || 'Pending',
+    submittedAt: row.submitted_at || row.created_at,
+    approvedAt: row.approved_at || null,
+    rejectedAt: row.rejected_at || null,
+    rejectionReason: row.rejection_reason || null,
+    resubmittedAt: row.resubmitted_at || null,
+    revisionHistory: Array.isArray(row.revision_history) ? row.revision_history : [],
+    archivedAt: row.archived_at || null,
+    archivedBy: row.archived_by || null,
+    cancelledAt: row.cancelled_at || null,
+    cancellationReason: row.cancellation_reason || null,
+  }
+}
+
 function getInitialState() {
   const year = new Date().getFullYear();
   const defaultBudgets = Array.from({ length: 12 }, (_, i) => ({
@@ -169,7 +198,7 @@ function getInitialState() {
 function BudgetProvider({ children }) {
   const { addLog } = useAuditLog()
   const { addNotification } = useNotifications()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user, role } = useAuth()
   const [budgets, setBudgets] = useState(() => getInitialState().budgets)
   const [requests, setRequests] = useState(() => getInitialState().requests)
   const [expenses, setExpenses] = useState(() => getInitialState().expenses)
@@ -275,14 +304,32 @@ function BudgetProvider({ children }) {
     }
   }
 
+  async function loadRequestsFromSupabase() {
+    if (typeof window === 'undefined' || !isAuthenticated) return
+
+    try {
+      const { data, error } = await supabase
+        .from('budget_requests')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      if (Array.isArray(data)) setRequests(data.map(mapRequestRow))
+    } catch (error) {
+      console.warn('Supabase budget request sync failed', error?.message || error)
+    }
+  }
+
   function refreshExpensesFromSupabase() {
     return loadExpensesFromSupabase()
   }
 
   // Sync expenses and budgets from Supabase on mount and when auth state changes
   useEffect(() => {
+    if (!isAuthenticated) return
     loadExpensesFromSupabase()
     loadBudgetsFromSupabase()
+    loadRequestsFromSupabase()
   }, [isAuthenticated])
 
   async function addMonthlyBudget({ month, year, amount, source }) {
@@ -609,7 +656,7 @@ function BudgetProvider({ children }) {
     })
   }
 
-  function addRequest({
+  async function addRequest({
     type = 'Project',
     event,
     category,
@@ -626,38 +673,69 @@ function BudgetProvider({ children }) {
         ? crypto.randomUUID()
         : `${Date.now()}`
 
-    setRequests((prev) => [
-      {
-        id,
-        type,
-        event,
-        category,
-        amount: Number(amount) || 0,
-        eventDate,
-        venue,
-        description,
-        notes,
-        archivedAt: null,
-        breakdown: Array.isArray(breakdown)
+    const request = {
+      id,
+      type,
+      event,
+      category,
+      amount: Number(amount) || 0,
+      eventDate,
+      venue,
+      description,
+      notes,
+      archivedAt: null,
+      breakdown: Array.isArray(breakdown)
           ? breakdown.map((entry) => ({
               ...entry,
               quantity: Number(entry.quantity) || 0,
               unitCost: Number(entry.unitCost) || 0,
             }))
           : [],
-        expensesBreakdown: Array.isArray(expensesBreakdown)
+      expensesBreakdown: Array.isArray(expensesBreakdown)
           ? expensesBreakdown.map((entry) => ({
               ...entry,
               quantity: Number(entry.quantity) || 0,
               unitCost: Number(entry.unitCost) || 0,
             }))
           : [],
-        requestedBy: 'SK Treasurer',
-        status: 'Pending',
-        projectStatus: 'Pending',
-        submittedAt: new Date().toISOString(),
-      },
-      ...prev,
+      requestedBy: role || 'SK Treasurer',
+      status: 'Pending',
+      projectStatus: 'Pending',
+      submittedAt: new Date().toISOString(),
+    }
+
+    const { data, error } = await supabase
+      .from('budget_requests')
+      .insert({
+        id: request.id,
+        type: request.type,
+        event: request.event,
+        category: request.category,
+        amount: request.amount,
+        event_date: request.eventDate || null,
+        venue: request.venue,
+        description: request.description,
+        notes: request.notes,
+        breakdown: request.breakdown,
+        expenses_breakdown: request.expensesBreakdown,
+        requested_by: request.requestedBy,
+        created_by: user?.id || null,
+        status: request.status,
+        project_status: request.projectStatus,
+        submitted_at: request.submittedAt,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Failed to save budget request to Supabase:', error)
+      return { error }
+    }
+
+    const savedRequest = mapRequestRow(data)
+    setRequests((prev) => [
+      savedRequest,
+      ...prev.filter((item) => item.id !== savedRequest.id),
     ])
 
     addLog({
@@ -674,6 +752,8 @@ function BudgetProvider({ children }) {
       title: 'New Budget Request Pending',
       message: `Project: ${event}\nRequested: ₱${Number(amount || 0).toLocaleString()}\nDate Submitted: ${new Date().toLocaleDateString()}\nBy: SK Treasurer`,
     })
+
+    return { data: savedRequest, error: null }
   }
 
   function resubmitRequest(requestId, updatedData) {

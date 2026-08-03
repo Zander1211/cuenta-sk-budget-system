@@ -31,6 +31,20 @@
 	--mint: #6de3b7;
 	--border: rgba(17, 27, 43, 0.12);
 	--shadow: 0 4px 12px rgba(24, 51, 39, 0.08);
+
+	/* Typography hierarchy — 4-step scale */
+	--text-page-title: clamp(1.75rem, 2.4vw, 2.4rem);
+	--text-section-title: clamp(1.25rem, 1.8vw, 1.5rem);
+	--text-subsection-title: clamp(1.05rem, 1.4vw, 1.2rem);
+	--text-label: 0.8rem;
+	--weight-title: 700;
+	--weight-section: 650;
+	--weight-label: 600;
+
+	/* Border radius tokens — curved edges */
+	--radius-sm: 10px;
+	--radius-md: 14px;
+	--radius-lg: 20px;
 }
 
 html {
@@ -277,7 +291,7 @@ body {
 .field select,
 .data-table input {
 	padding: 12px 14px;
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	border: 1px solid var(--border);
 	background: #fff;
 	font-size: 1rem; /* was 0.95rem — improved input readability */
@@ -303,7 +317,7 @@ body {
 	vertical-align: middle;
 	box-sizing: border-box;
 	padding: 12px 20px;
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	border: none;
 	background: var(--cuenta-gradient-primary, linear-gradient(90deg, #0a706d 0%, #2c986c 55%, #12b89a 100%));
 	color: #ffffff;
@@ -339,7 +353,7 @@ body {
 	border: 1px solid var(--border);
 	background: #fff;
 	padding: 10px 16px;
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	font-size: 0.95rem;
 	font-weight: 600;
 	cursor: pointer;
@@ -961,7 +975,7 @@ body {
 
 .topbar-greeting h1 {
 	margin: 0;
-	font-size: clamp(1.8rem, 2.4vw, 2.4rem);
+	font-size: var(--text-page-title);
 }
 
 .topbar-greeting p {
@@ -1182,7 +1196,7 @@ body {
 
 .panel-header h2 {
 	margin: 6px 0 0;
-	font-size: 1.2rem; /* was 1.15rem */
+	font-size: var(--text-section-title);
 }
 
 .panel-title-row {
@@ -1193,7 +1207,7 @@ body {
 
 .panel-title-row h2 {
 	margin: 0;
-	font-size: 1.15rem; /* was 1.1rem */
+	font-size: var(--text-section-title);
 }
 
 .panel-eyebrow {
@@ -1508,7 +1522,7 @@ body {
 
 .header-left h1 {
 	margin: 0 0 6px;
-	font-size: clamp(2rem, 2.6vw, 2.6rem);
+	font-size: var(--text-page-title);
 }
 
 .header-left p {
@@ -1674,7 +1688,7 @@ body {
 	font-weight: 500;
 	cursor: pointer;
 	padding: 6px 12px;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	transition: all 0.2s ease;
 	display: inline-flex;
 	align-items: center;
@@ -1923,7 +1937,7 @@ body {
 
 .overview-card h2 {
 	margin: 12px 0 12px;
-	font-size: 1.65rem; /* was 1.6rem */
+	font-size: var(--text-section-title);
 }
 
 .overview-card ul {
@@ -1976,7 +1990,7 @@ body {
 
 .insight-card h3 {
 	margin: 0;
-	font-size: 1.1rem; /* was 1.05rem */
+	font-size: var(--text-subsection-title);
 }
 
 .insight-card p {
@@ -2367,7 +2381,7 @@ body {
 		bottom: 0;
 		width: 260px;
 		height: 100vh;
-		border-radius: 0;
+		border-radius: 0 20px 20px 0;
 		z-index: 100;
 		transform: translateX(-100%);
 		transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -2571,7 +2585,7 @@ body {
 	}
 
 	.header-left h1 {
-		font-size: clamp(1.6rem, 7vw, 2rem);
+		font-size: clamp(1.5rem, 7vw, 2rem);
 	}
 
 	.overview-card {
@@ -3451,7 +3465,7 @@ td.nr-info-label {
 	background: #ffffff;
 	width: 100%;
 	max-width: 640px;
-	border-radius: 12px;
+	border-radius: 18px;
 	box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15);
 	overflow: hidden;
 	display: flex;
@@ -3609,7 +3623,7 @@ td.nr-info-label {
 
 .modal-header h2 {
 	margin: 0;
-	font-size: 1.4rem;
+	font-size: var(--text-section-title);
 }
 
 .modal-header p {
@@ -3821,7 +3835,7 @@ td.nr-info-label {
 	padding: 4px 10px;
 	background: rgba(15, 31, 54, 0.06);
 	color: var(--ink);
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	font-size: 0.75rem;
 	font-weight: 600;
 }
@@ -4117,7 +4131,7 @@ td.nr-info-label {
   margin-top: 8px;
   background: #ffffff;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow);
   z-index: 10;
   min-width: 220px;
@@ -4406,7 +4420,10 @@ td.nr-info-label {
 		grid-template-columns: 1fr !important;
 	}
 
-	/* summary-grid stays 2-col here: repeat(2, 1fr) — single-col at ≤480px */
+	/* summary-grid goes single-col on phones for breathing room */
+	.summary-grid {
+		grid-template-columns: 1fr;
+	}
 
 	.expenses-breakdown-grid {
 		grid-template-columns: 1fr !important;
@@ -4544,7 +4561,7 @@ td.nr-info-label {
 
 	/* Header title adjustments */
 	.header-left h1 {
-		font-size: clamp(1.3rem, 6vw, 1.8rem);
+		font-size: clamp(1.5rem, 6vw, 1.8rem);
 	}
 
 	/* Backup card tighter */
@@ -4769,7 +4786,7 @@ td.nr-info-label {
 .audit-table-wrapper {
 	overflow-x: auto;
 	-webkit-overflow-scrolling: touch;
-	border-radius: 12px;
+	border-radius: 16px;
 	border: 1px solid var(--border);
 }
 
@@ -5452,7 +5469,7 @@ td.nr-info-label {
 
 	/* ── Header typography ── */
 	.header-left h1 {
-		font-size: clamp(1.35rem, 6vw, 2rem);
+		font-size: clamp(1.5rem, 6vw, 2rem);
 	}
 
 	.header-left p {
@@ -5543,7 +5560,7 @@ td.nr-info-label {
 	}
 
 	.header-left h1 {
-		font-size: clamp(1.2rem, 7vw, 1.75rem);
+		font-size: clamp(1.4rem, 7vw, 1.75rem);
 	}
 
 	.action-group .primary-button,
@@ -5835,8 +5852,23 @@ td.nr-info-label {
 	.overview-card h2,
 	.panel-card h2,
 	.panel-header h2 {
-		font-size: clamp(1rem, 5vw, 1.3rem);
+		font-size: clamp(1.05rem, 5vw, 1.3rem);
 		overflow-wrap: anywhere;
+	}
+
+	/* Page title must stay clearly larger than section titles */
+	.header-left h1 {
+		font-size: clamp(1.45rem, 6vw, 1.8rem);
+	}
+
+	/* Label weight boost for mobile — clearer distinction from body text */
+	.filter-label,
+	.details-label,
+	.breakdown-summary-label,
+	.allocation-label,
+	.audit-date-label,
+	.backup-card-label {
+		font-weight: 700;
 	}
 
 	/* All buttons inside cards go full-width */
@@ -6252,7 +6284,7 @@ td.nr-info-label {
 		gap: 13px;
 		margin: -16px -16px 4px;
 		padding: 18px 16px 16px;
-		border-radius: 19px 19px 0 0;
+		border-radius: 0 19px 0 0;
 		border-bottom: none;
 		background: linear-gradient(
 			180deg,
@@ -6462,5 +6494,160 @@ td.nr-info-label {
 
 	.dashboard-shell {
 		padding: 0 !important;
+	}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE BOTTOM NAVIGATION BAR
+   Fixed tab bar for quick access to top 4 pages + "More" overflow.
+   Hidden on desktop, shown on tablet/phone viewports.
+   ═══════════════════════════════════════════════════════════════ */
+.mobile-bottom-nav {
+	display: none;
+}
+
+@media (max-width: 768px) {
+	.mobile-bottom-nav {
+		display: flex;
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		background: rgba(255, 255, 255, 0.92);
+		backdrop-filter: blur(16px) saturate(140%);
+		-webkit-backdrop-filter: blur(16px) saturate(140%);
+		border-top: 1px solid rgba(15, 31, 54, 0.08);
+		padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+		z-index: 50;
+		justify-content: space-around;
+		box-shadow: 0 -4px 20px rgba(6, 10, 20, 0.08);
+	}
+
+	.mobile-bottom-nav-item {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 3px;
+		padding: 6px 8px;
+		border: none;
+		background: transparent;
+		color: var(--ink-soft);
+		font-size: 0.62rem;
+		font-weight: 600;
+		letter-spacing: 0.02rem;
+		text-decoration: none;
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: color 0.2s ease, background 0.2s ease;
+		min-width: 52px;
+		text-align: center;
+		font-family: inherit;
+		line-height: 1.2;
+	}
+
+	.mobile-bottom-nav-item:hover {
+		color: var(--sea);
+		background: rgba(18, 128, 92, 0.06);
+	}
+
+	.mobile-bottom-nav-item.is-active {
+		color: var(--sea);
+		background: var(--sea-light);
+	}
+
+	.mobile-bottom-nav-item.is-active svg {
+		filter: drop-shadow(0 1px 3px rgba(18, 128, 92, 0.25));
+	}
+
+	/* Add bottom padding to main content so it's not hidden behind the bar */
+	.dashboard-main {
+		padding-bottom: 76px;
+	}
+
+	/* Hide the bottom nav when sidebar drawer is open */
+	.mobile-bottom-nav.is-nav-hidden {
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.22s ease;
+	}
+}
+
+/* Chat Widget Responsive Placement */
+.chat-widget-fab {
+	bottom: 24px; /* Default Desktop */
+}
+
+@media (max-width: 768px) {
+	.chat-widget-fab {
+		right: max(16px, env(safe-area-inset-right)) !important;
+		bottom: calc(82px + env(safe-area-inset-bottom));
+		width: 52px !important;
+		height: 52px !important;
+	}
+
+	/* The chat becomes a mobile sheet and stays clear of the fixed tab bar. */
+	.chat-widget-panel {
+		left: max(12px, env(safe-area-inset-left)) !important;
+		right: max(12px, env(safe-area-inset-right)) !important;
+		bottom: calc(78px + env(safe-area-inset-bottom)) !important;
+		width: auto !important;
+		height: min(620px, calc(100dvh - 102px - env(safe-area-inset-bottom))) !important;
+		max-height: calc(100dvh - 102px - env(safe-area-inset-bottom));
+		border-radius: 16px !important;
+	}
+
+	/* A floating action must never sit over the navigation drawer or its scrim. */
+	body:has(.dashboard-layout.is-sidebar-open) .chat-widget-fab,
+	body:has(.dashboard-layout.is-sidebar-open) .chat-widget-panel {
+		opacity: 0 !important;
+		visibility: hidden;
+		pointer-events: none !important;
+		transform: translateY(12px) scale(0.96);
+	}
+}
+
+@media (max-width: 720px) {
+	/* Phone drawer: use the viewport, not desktop sidebar dimensions. */
+	.dashboard-sidebar,
+	.dashboard-sidebar.is-collapsed {
+		top: max(12px, env(safe-area-inset-top));
+		left: max(12px, env(safe-area-inset-left));
+		bottom: max(12px, env(safe-area-inset-bottom));
+		width: min(320px, calc(100vw - 24px)) !important;
+		height: auto;
+		max-height: none;
+		border-radius: 20px;
+		overscroll-behavior: contain;
+		padding-bottom: calc(16px + env(safe-area-inset-bottom));
+	}
+
+	/* The persisted desktop collapsed state must not center mobile nav content. */
+	.dashboard-sidebar .sidebar-tab,
+	.dashboard-sidebar.is-collapsed .sidebar-tab,
+	.dashboard-sidebar .logout-button,
+	.dashboard-sidebar.is-collapsed .logout-button {
+		justify-content: flex-start;
+		text-align: left;
+	}
+
+	.dashboard-sidebar .sidebar-brand {
+		border-radius: 19px 19px 0 0;
+	}
+}
+
+@media (max-width: 380px) {
+	.mobile-bottom-nav {
+		padding-inline: 4px;
+	}
+
+	.mobile-bottom-nav-item {
+		min-width: 0;
+		padding-inline: 5px;
+		flex: 1 1 0;
+	}
+
+	.chat-widget-panel {
+		left: 8px !important;
+		right: 8px !important;
 	}
 }

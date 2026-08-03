@@ -266,7 +266,11 @@ function NewRequestPage() {
     if (editId) {
       resubmitRequest(editId, payload)
     } else {
-      addRequest(payload)
+      const { error } = await addRequest(payload)
+      if (error) {
+        setFormError(`The request could not be saved: ${error.message}`)
+        return
+      }
     }
 
     navigate('/dashboard/request')

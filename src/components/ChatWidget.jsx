@@ -747,7 +747,7 @@ function ChatWidgetInner() {
       <button
         id="cue-chat-fab"
         onClick={() => setIsOpen(prev => !prev)}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-[9999] transition-all duration-300 cursor-pointer border-none"
+        className="chat-widget-fab fixed right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-[9999] transition-all duration-300 cursor-pointer border-none"
         style={{
           background: 'linear-gradient(135deg, #0C2E30 0%, #12805C 50%, #12b89a 100%)',
           boxShadow: '0 12px 24px rgba(18, 128, 92, 0.3), inset 0 2px 4px rgba(255,255,255,0.2)',
@@ -782,7 +782,7 @@ function ChatWidgetInner() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.97 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="fixed flex flex-col z-[9999] overflow-hidden"
+            className="chat-widget-panel fixed flex flex-col z-[9999] overflow-hidden"
             style={{
               bottom: '96px',
               right: '24px',

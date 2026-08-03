@@ -271,6 +271,36 @@ function DashboardLayout() {
             </div>
           </aside>
 
+          {/* Mobile Bottom Navigation Bar */}
+          <nav
+            className={`mobile-bottom-nav ${isSidebarOpen ? 'is-nav-hidden' : ''}`}
+            aria-label="Quick navigation"
+          >
+            {visibleItems.slice(0, 4).map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                end={item.end}
+                className={({ isActive }) =>
+                  `mobile-bottom-nav-item ${isActive ? 'is-active' : ''}`
+                }
+                onClick={handleNavClick}
+              >
+                <item.icon size={20} />
+                <span>{item.label.split(' ')[0]}</span>
+              </NavLink>
+            ))}
+            <button
+              className="mobile-bottom-nav-item"
+              type="button"
+              onClick={() => setSidebarOpen((open) => !open)}
+              aria-label="More pages"
+            >
+              <Menu size={20} />
+              <span>More</span>
+            </button>
+          </nav>
+
           <main className="dashboard-main">
             <Outlet />
           </main>
