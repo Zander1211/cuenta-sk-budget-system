@@ -25,7 +25,13 @@ export default async function handler(req, res) {
 
   const verifyData = await verifyResponse.json()
   if (!verifyData.success) {
-    return res.status(400).json({ error: 'reCAPTCHA verification failed. Please try again.' })
+    const errorCodes = Array.isArray(verifyData['error-codes'])
+      ? verifyData['error-codes'].join(', ')
+      : 'unknown-error'
+    console.warn('reCAPTCHA verification failed:', errorCodes)
+    return res.status(400).json({
+      error: `reCAPTCHA verification failed (${errorCodes}). Please try again.`,
+    })
   }
 
   // CAPTCHA verified, now authenticate with Supabase

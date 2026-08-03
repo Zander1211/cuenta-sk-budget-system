@@ -231,10 +231,10 @@ function BudgetProvider({ children }) {
       if (Array.isArray(data)) {
         setExpenses(data.map(mapExpenseRow))
         if (data.length === 0) {
-          setRequests([])
-          if (typeof window !== 'undefined') {
-            window.localStorage.removeItem(STORAGE_KEY)
-          }
+          // An empty expenses table says nothing about budget requests.
+          // Clearing requests here caused a race with loadRequestsFromSupabase.
+          setExpensesSyncStatus('empty')
+          return
         }
         setExpensesSyncStatus(data.length ? 'loaded' : 'empty')
       } else {
@@ -330,6 +330,30 @@ function BudgetProvider({ children }) {
     loadExpensesFromSupabase()
     loadBudgetsFromSupabase()
     loadRequestsFromSupabase()
+
+    const refreshRequests = () => {
+      if (document.visibilityState === 'visible') {
+        loadRequestsFromSupabase()
+      }
+    }
+
+    window.addEventListener('focus', refreshRequests)
+    document.addEventListener('visibilitychange', refreshRequests)
+
+    const channel = supabase
+      .channel('budget-requests-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'budget_requests' },
+        () => loadRequestsFromSupabase()
+      )
+      .subscribe()
+
+    return () => {
+      window.removeEventListener('focus', refreshRequests)
+      document.removeEventListener('visibilitychange', refreshRequests)
+      supabase.removeChannel(channel)
+    }
   }, [isAuthenticated])
 
   async function addMonthlyBudget({ month, year, amount, source }) {
