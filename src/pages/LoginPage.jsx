@@ -146,6 +146,10 @@ function LoginPage() {
                   setCaptchaToken('')
                   setCaptchaError('CAPTCHA expired. Please verify again.')
                 }}
+                onErrored={() => {
+                  setCaptchaToken('')
+                  setCaptchaError('CAPTCHA could not load correctly. Please refresh the page and try again.')
+                }}
               />
             </div>
             {captchaError && (

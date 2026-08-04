@@ -30,7 +30,7 @@ function ReceiptsPage() {
   const approvedExpenses = useMemo(
     () => expenses.filter((expense) =>
       (expense.status || 'Approved') === 'Approved'
-      && ['Project', 'Event'].includes(expense.type || 'Project')
+      && ['Project', 'Event', 'Payroll'].includes(expense.type || 'Project')
     ),
     [expenses]
   )
@@ -95,8 +95,8 @@ function ReceiptsPage() {
   }, [scanStatus])
 
   async function uploadReceipt(expense, file, { appendedNotes = '' } = {}) {
-    if (!expense || !['Project', 'Event'].includes(expense.type || 'Project')) {
-      const message = 'Select a valid approved Project or Event before uploading.'
+    if (!expense || !['Project', 'Event', 'Payroll'].includes(expense.type || 'Project')) {
+      const message = 'Select a valid approved Project, Event, or Payroll record before uploading.'
       setFeedback({ type: 'error', message })
       return { error: new Error(message) }
     }
@@ -113,8 +113,6 @@ function ReceiptsPage() {
     setFeedback(null)
 
     const filePath = generateReceiptPath(expense, file)
-    const previousPath = expense.receiptUrl || expense.receipt_url || null
-
     try {
       const { error: uploadError } = await supabase.storage
         .from(RECEIPTS_BUCKET)
@@ -125,7 +123,7 @@ function ReceiptsPage() {
       }
 
       // 2. Best-effort insert to receipt_records auxiliary table
-      const { data: receiptData, error: dbError } = await insertReceiptRecord(
+      const { error: dbError } = await insertReceiptRecord(
         supabase,
         expense,
         file,
@@ -167,15 +165,6 @@ function ReceiptsPage() {
         .createSignedUrl(filePath, 60 * 60)
       if (signedData?.signedUrl) {
         setReceiptLinks((prev) => ({ ...prev, [expense.id]: signedData.signedUrl }))
-      }
-
-      if (previousPath && previousPath !== filePath) {
-        try {
-          await supabase.storage.from(RECEIPTS_BUCKET).remove([previousPath])
-          await supabase.from('receipt_records').delete().eq('file_path', previousPath)
-        } catch {
-          // Ignore cleanup errors
-        }
       }
 
       await refreshExpensesFromSupabase()
@@ -248,21 +237,23 @@ function ReceiptsPage() {
   }
 
   async function handleFileSelected(event) {
-    const file = event.target.files?.[0]
+    const files = Array.from(event.target.files || [])
     const expense = pendingUploadExpenseRef.current
     event.target.value = ''
     pendingUploadExpenseRef.current = null
 
-    if (!file) return
+    if (!files.length) return
     if (!expense) {
       setFeedback({
         type: 'error',
-        message: 'No Project or Event was selected. Please choose Upload again.',
+        message: 'No Project, Event, or Payroll record was selected. Please choose Upload again.',
       })
       return
     }
 
-    await uploadReceipt(expense, file)
+    for (const file of files) {
+      await uploadReceipt(expense, file)
+    }
   }
 
   async function confirmScanUpload() {
@@ -297,13 +288,14 @@ function ReceiptsPage() {
         <div className="header-left">
           <div>
             <p className="eyebrow">Receipts</p>
-            <h1>Approved Project and Event receipts</h1>
-            <p>Upload and manage receipts for approved Projects and Events.</p>
+            <h1>Approved Project, Event, and Payroll receipts</h1>
+            <p>Upload and manage multiple receipts for approved Projects, Events, and Payroll records. Maximum 20 MB per file.</p>
           </div>
         </div>
         <div className="header-actions">
           <input
             type="file"
+            multiple
             accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
             ref={uploadInputRef}
             onChange={handleFileSelected}
@@ -324,9 +316,9 @@ function ReceiptsPage() {
         ) : null}
         <div className="overview-card">
           <p className="eyebrow">Receipts</p>
-          <h2>Attach receipts to approved Projects and Events</h2>
+          <h2>Attach receipts to approved Projects, Events, and Payroll</h2>
           {expensesSyncStatus === 'loading' ? (
-            <p className="form-note">Syncing approved Projects and Events...</p>
+            <p className="form-note">Syncing approved Projects, Events, and Payroll records...</p>
           ) : null}
 
             <table className="data-table">

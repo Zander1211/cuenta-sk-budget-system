@@ -5,7 +5,7 @@ export const ALLOWED_FILE_TYPES = [
   'application/pdf'
 ]
 
-export const MAX_FILE_SIZE_MB = 5
+export const MAX_FILE_SIZE_MB = 20
 export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 /**
@@ -53,7 +53,7 @@ export function getUploadErrorMessage(error) {
   }
 
   if (status === '413' || msg.includes('payload too large') || msg.includes('entity too large')) {
-    return 'File size exceeded. Maximum upload size is 5MB.'
+    return `File size exceeded. Maximum upload size is ${MAX_FILE_SIZE_MB}MB per receipt.`
   }
   
   if (msg.includes('fetch') || msg.includes('network')) {

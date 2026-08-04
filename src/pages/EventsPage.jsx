@@ -76,8 +76,6 @@ function EventsPage() {
     setErrorsById(prev => ({ ...prev, [expense.id]: '' }))
 
     const filePath = generateReceiptPath(expense, file)
-    const previousPath = expense.receiptUrl || expense.receipt_url || null
-
     try {
       const { error: uploadError } = await supabase.storage
         .from(RECEIPTS_BUCKET)
@@ -86,7 +84,7 @@ function EventsPage() {
       if (uploadError) throw Object.assign(uploadError, { uploadStep: 'storage' })
 
       // 2. Best-effort insert to receipt_records auxiliary table
-      const { data: receiptData, error: dbError } = await insertReceiptRecord(
+      const { error: dbError } = await insertReceiptRecord(
         supabase, expense, file, filePath, user, role
       )
       if (dbError) {
@@ -113,15 +111,6 @@ function EventsPage() {
       const { data: signedData } = await supabase.storage.from(RECEIPTS_BUCKET).createSignedUrl(filePath, 60 * 60)
       if (signedData?.signedUrl) {
         setReceiptLinks(prev => ({ ...prev, [expense.id]: { url: signedData.signedUrl, name: file.name } }))
-      }
-
-      if (previousPath && previousPath !== filePath) {
-        try {
-          await supabase.storage.from(RECEIPTS_BUCKET).remove([previousPath])
-          await supabase.from('receipt_records').delete().eq('file_path', previousPath)
-        } catch {
-          // Ignore cleanup errors
-        }
       }
 
       await refreshExpensesFromSupabase()
@@ -170,12 +159,14 @@ function EventsPage() {
   }
 
   async function handleFileSelected(event) {
-    const file = event.target.files?.[0]
+    const files = Array.from(event.target.files || [])
     const expense = pendingUploadExpenseRef.current
     event.target.value = ''
     pendingUploadExpenseRef.current = null
-    if (!file || !expense) return
-    await uploadReceipt(expense, file)
+    if (!files.length || !expense) return
+    for (const file of files) {
+      await uploadReceipt(expense, file)
+    }
   }
 
   async function confirmScanUpload() {
@@ -469,7 +460,7 @@ function EventsPage() {
         </div>
       </section>
 
-      <input type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" ref={uploadInputRef} onChange={handleFileSelected} style={{ display: 'none' }} />
+      <input type="file" multiple accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" ref={uploadInputRef} onChange={handleFileSelected} style={{ display: 'none' }} />
       {scanModalOpen ? (
         <div className="modal-overlay">
           <div className="modal-content">
