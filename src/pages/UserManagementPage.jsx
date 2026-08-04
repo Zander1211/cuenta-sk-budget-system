@@ -8,6 +8,7 @@ import { formatBirthdate } from '../utils/biodata'
 const roles = ['SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']
 const adminClient = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
+    storageKey: 'cuenta-admin-auth-storage',
     persistSession: false,
     autoRefreshToken: false,
     detectSessionInUrl: false,

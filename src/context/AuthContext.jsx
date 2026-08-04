@@ -8,6 +8,7 @@ function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true)
   const [profileName, setProfileName] = useState('')
   const [profileSurname, setProfileSurname] = useState('')
+  const [role, setRole] = useState('SK Chairman')
 
   async function refreshSession() {
     const { data, error } = await supabase.auth.getSession()
@@ -109,72 +110,91 @@ function AuthProvider({ children }) {
       getSurnameFromEmail(session?.user?.email) ||
       getSurnameFromName(emailFallbackName)
 
-    if (metadataName || metadataSurname) {
-      setProfileName(metadataName || emailFallbackName)
-      setProfileSurname(
-        metadataSurname || getSurnameFromName(metadataName) || emailFallbackSurname
-      )
-      return () => {
-        isMounted = false
-      }
+    const initialName = metadataName || emailFallbackName
+    const initialSurname =
+      metadataSurname || getSurnameFromName(metadataName) || emailFallbackSurname
+    const metadataRole =
+      session?.user?.app_metadata?.role || session?.user?.user_metadata?.role
+
+    setProfileName(initialName)
+    setProfileSurname(initialSurname)
+    if (metadataRole) {
+      setRole(metadataRole)
     }
 
-    async function loadProfileName() {
+    async function loadProfileAndRole() {
       if (!session?.user) {
         if (isMounted) {
           setProfileName('')
           setProfileSurname('')
+          setRole('SK Chairman')
         }
         return
       }
 
       const userId = session.user.id
       const userEmail = session.user.email
-      let resolvedName = ''
+      let resolvedName = metadataName || ''
+      let resolvedRole = metadataRole || ''
 
       if (userId) {
         const { data, error } = await supabase
           .from('created_accounts')
-          .select('full_name')
+          .select('full_name, role')
           .eq('id', userId)
           .maybeSingle()
 
-        if (!error) {
-          resolvedName = data?.full_name?.trim() || ''
+        if (!error && data) {
+          if (data.full_name?.trim()) resolvedName = data.full_name.trim()
+          if (data.role?.trim()) resolvedRole = data.role.trim()
         }
       }
 
-      if (!resolvedName && userEmail) {
+      if ((!resolvedName || !resolvedRole) && userEmail) {
         const { data, error } = await supabase
           .from('created_accounts')
-          .select('full_name')
+          .select('full_name, role')
           .eq('email', userEmail)
           .maybeSingle()
 
-        if (!error) {
-          resolvedName = data?.full_name?.trim() || ''
+        if (!error && data) {
+          if (!resolvedName && data.full_name?.trim()) resolvedName = data.full_name.trim()
+          if (!resolvedRole && data.role?.trim()) resolvedRole = data.role.trim()
         }
       }
 
       if (!isMounted) return
 
-      if (resolvedName) {
-        setProfileName(resolvedName)
-        const resolvedSurname = getSurnameFromName(resolvedName)
-        setProfileSurname(resolvedSurname)
-        await supabase.auth.updateUser({
-          data: {
-            full_name: resolvedName,
-            last_name: resolvedSurname,
-          },
-        })
-      } else {
-        setProfileName(emailFallbackName)
-        setProfileSurname(emailFallbackSurname)
+      const finalRole = resolvedRole || metadataRole || 'SK Chairman'
+      const finalName = resolvedName || initialName
+      const finalSurname = getSurnameFromName(finalName) || initialSurname
+
+      setRole(finalRole)
+      setProfileName(finalName)
+      setProfileSurname(finalSurname)
+
+      // Sync role and name to Supabase Auth user_metadata if not already in sync
+      const currentMeta = session.user.user_metadata || {}
+      if (
+        currentMeta.role !== finalRole ||
+        currentMeta.full_name !== finalName ||
+        currentMeta.last_name !== finalSurname
+      ) {
+        try {
+          await supabase.auth.updateUser({
+            data: {
+              role: finalRole,
+              full_name: finalName,
+              last_name: finalSurname,
+            },
+          })
+        } catch (err) {
+          console.warn('Could not sync user_metadata to auth:', err)
+        }
       }
     }
 
-    loadProfileName()
+    loadProfileAndRole()
     return () => {
       isMounted = false
     }
@@ -182,12 +202,11 @@ function AuthProvider({ children }) {
     session?.user?.id,
     session?.user?.email,
     session?.user?.user_metadata?.full_name,
-    session?.user?.user_metadata?.name,
-    session?.user?.user_metadata?.first_name,
-    session?.user?.user_metadata?.last_name,
+    session?.user?.user_metadata?.role,
   ])
 
-  const role =
+  const effectiveRole =
+    role ||
     session?.user?.app_metadata?.role ||
     session?.user?.user_metadata?.role ||
     'SK Chairman'
@@ -196,14 +215,14 @@ function AuthProvider({ children }) {
     () => ({
       session,
       user: session?.user ?? null,
-      role,
+      role: effectiveRole,
       profileName,
       profileSurname,
       refreshSession,
       isLoading,
       isAuthenticated: Boolean(session?.user),
     }),
-    [session, role, profileName, profileSurname, refreshSession, isLoading]
+    [session, effectiveRole, profileName, profileSurname, refreshSession, isLoading]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

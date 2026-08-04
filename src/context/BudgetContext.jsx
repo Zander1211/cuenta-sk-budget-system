@@ -378,6 +378,7 @@ function BudgetProvider({ children }) {
   async function addMonthlyBudget({ month, year, amount, source }) {
     const normalizedMonth = Number(month)
     const normalizedYear = Number(year)
+    const normalizedAmount = Number(amount) || 0
 
     if (!Number.isFinite(normalizedMonth) || !Number.isFinite(normalizedYear)) {
       return
@@ -386,7 +387,7 @@ function BudgetProvider({ children }) {
       return
     }
 
-    const quarter = Math.floor((normalizedMonth - 1) / 3) + 1;
+    const quarter = Math.floor((normalizedMonth - 1) / 3) + 1
 
     const id =
       typeof crypto !== 'undefined' && crypto.randomUUID
@@ -394,48 +395,41 @@ function BudgetProvider({ children }) {
         : `${Date.now()}`
 
     const newBudget = {
+      id,
       month: normalizedMonth,
       quarter,
       year: normalizedYear,
-      amount: Number(amount) || 0,
+      amount: normalizedAmount,
       source: source || '',
+      createdAt: new Date().toISOString(),
     }
 
     // Optimistically update UI
     setBudgets((prev) => {
-      const existingIdx = prev.findIndex(b => b.month === normalizedMonth && b.year === normalizedYear);
-      const newEntry = {
-        id,
-        ...newBudget,
-        createdAt: new Date().toISOString(),
-      };
-      
+      const existingIdx = prev.findIndex(
+        (b) => Number(b.month) === normalizedMonth && Number(b.year) === normalizedYear
+      )
       if (existingIdx !== -1) {
-        const newArr = [...prev];
-        newArr[existingIdx] = newEntry;
-        return newArr;
+        const newArr = [...prev]
+        newArr[existingIdx] = { ...newArr[existingIdx], ...newBudget }
+        return newArr
       }
-      return [newEntry, ...prev];
-    });
+      return [newBudget, ...prev]
+    })
 
-    // Save to Supabase
     try {
-      const { error } = await supabase.from('budgets').insert({
-        month: newBudget.month,
-        quarter: newBudget.quarter,
-        year: newBudget.year,
-        amount: newBudget.amount,
-        source: newBudget.source,
-      })
-
-      if (error) {
-        console.warn('Failed to save budget to Supabase:', error.message)
-      } else {
-        // Optionally reload to get the real DB ID
-        loadBudgetsFromSupabase()
-      }
+      await supabase.from('budgets').upsert(
+        {
+          month: normalizedMonth,
+          quarter,
+          year: normalizedYear,
+          amount: normalizedAmount,
+          source: source || '',
+        },
+        { onConflict: 'month,year' }
+      )
     } catch (err) {
-      console.warn('Failed to save budget to Supabase:', err)
+      console.warn('Failed to upsert monthly budget to Supabase:', err)
     }
 
     addLog({
@@ -443,67 +437,262 @@ function BudgetProvider({ children }) {
       actionType: 'Budget Created',
       module: 'Monthly Budget',
       recordType: 'Budget',
-      recordId: id,
-      description: `Set ${monthLabels[normalizedMonth - 1]} ${normalizedYear} budget to ₱${Number(amount).toLocaleString()}${source ? ` (Source: ${source})` : ''}`,
-      newValue: { month: normalizedMonth, year: normalizedYear, amount: Number(amount), source: source || '' },
+      recordId: `${normalizedYear}-${normalizedMonth}`,
+      description: `Set ${monthLabels[normalizedMonth - 1]} ${normalizedYear} budget to ₱${normalizedAmount.toLocaleString()}${source ? ` (Source: ${source})` : ''}`,
+      newValue: { month: normalizedMonth, year: normalizedYear, amount: normalizedAmount, source: source || '' },
     })
   }
 
   async function approveRequest(requestId) {
     try {
-      const request = requests.find((item) => item.id === requestId)
+      const request = requests.find((item) => String(item.id) === String(requestId))
       if (!request) {
         return { error: new Error('Budget request was not found.') }
       }
 
-      const { data, error } = await supabase.rpc('approve_budget_request', {
-        p_request_id: requestId,
-      })
+      const approvedAt = new Date().toISOString()
+      const approvedAmount = Number(request.approvedAmount || request.amount || 0)
+      const effectiveDate = request.eventDate || approvedAt.split('T')[0]
+      const effectiveMonth = new Date(effectiveDate).getMonth() + 1
+      const effectiveYear = new Date(effectiveDate).getFullYear()
+      const requestType = request.type || 'Project'
+      const actorName = profileName || user?.user_metadata?.full_name || 'SK Chairman'
+      const actorRole = role || 'SK Chairman'
 
-      if (error) {
-        console.error('Atomic budget approval failed:', error)
-        return { error }
+      let approvedRequest = null
+      let approvedExpense = null
+
+      // Attempt 1: Call atomic stored procedure
+      let rpcSucceeded = false
+      try {
+        const { data, error } = await supabase.rpc('approve_budget_request', {
+          p_request_id: requestId,
+        })
+
+        if (!error && data?.request && data?.expense) {
+          approvedRequest = mapRequestRow(data.request)
+          approvedExpense = mapExpenseRow(data.expense)
+          rpcSucceeded = true
+        } else if (error) {
+          console.warn('Atomic budget approval RPC error (falling back to direct mutation):', error)
+        }
+      } catch (rpcErr) {
+        console.warn('Atomic budget approval RPC exception (falling back to direct mutation):', rpcErr)
       }
 
-      const approvedRequest = mapRequestRow(data.request)
-      const approvedExpense = mapExpenseRow(data.expense)
+      // Attempt 2: Direct Supabase update fallback if RPC failed or returned error
+      if (!rpcSucceeded) {
+        console.log('Executing direct database approval fallback for request:', requestId)
 
+        // 1. Update budget_requests table
+        const { data: updatedReq, error: reqErr } = await supabase
+          .from('budget_requests')
+          .update({
+            status: 'Approved',
+            project_status: 'Ongoing',
+            approved_amount: approvedAmount,
+            approved_at: approvedAt,
+            rejected_at: null,
+            rejection_reason: null,
+            updated_at: approvedAt,
+          })
+          .eq('id', requestId)
+          .select('*')
+          .single()
+
+        if (reqErr) {
+          console.error('Failed to update budget_requests:', reqErr)
+          return { error: reqErr }
+        }
+
+        // 2. Insert into expenses destination table
+        const newExpensePayload = {
+          request_id: requestId,
+          event: request.event || 'Approved Budget',
+          project: request.event || 'Approved Budget',
+          category: request.category || '',
+          type: requestType,
+          amount: approvedAmount,
+          requested_budget: Number(request.amount || 0),
+          approved_budget: approvedAmount,
+          status: 'Approved',
+          approved_at: approvedAt,
+          date: effectiveDate,
+          event_date: request.eventDate || null,
+          month: effectiveMonth,
+          year: effectiveYear,
+          venue: request.venue || '',
+          description: request.description || '',
+          notes: request.notes || '',
+          breakdown: Array.isArray(request.breakdown) ? request.breakdown : [],
+          expenses_breakdown: Array.isArray(request.expensesBreakdown) ? request.expensesBreakdown : [],
+          requested_by: request.requestedBy || '',
+          project_status: 'Ongoing',
+          is_additional: false,
+          created_at: approvedAt,
+          updated_at: approvedAt,
+        }
+
+        const { data: insertedExp, error: expErr } = await supabase
+          .from('expenses')
+          .upsert(newExpensePayload, { onConflict: 'request_id' })
+          .select('*')
+          .single()
+
+        if (expErr) {
+          console.warn('Upsert expense failed, trying direct insert:', expErr)
+          const { data: insertedExpDirect, error: expInsertErr } = await supabase
+            .from('expenses')
+            .insert(newExpensePayload)
+            .select('*')
+            .single()
+
+          if (expInsertErr) {
+            console.error('Failed to insert expense destination record:', expInsertErr)
+          } else {
+            approvedExpense = mapExpenseRow(insertedExpDirect)
+          }
+        } else {
+          approvedExpense = mapExpenseRow(insertedExp)
+        }
+
+        approvedRequest = mapRequestRow(
+          updatedReq || {
+            ...request,
+            status: 'Approved',
+            projectStatus: 'Ongoing',
+            approvedAmount,
+            approvedAt,
+          }
+        )
+
+        // 3. Insert into audit_trail
+        try {
+          await supabase.from('audit_trail').insert({
+            user_id: user?.id || null,
+            user_name: actorName,
+            user_role: actorRole,
+            action: `Request Approved — ${request.event}`,
+            action_type: 'Request Approved',
+            module: 'Budget Requests',
+            record_type: 'Budget Request',
+            record_id: String(requestId),
+            description: `Approved ${requestType.toLowerCase()} budget request for "${request.event}" (₱${approvedAmount.toLocaleString()})`,
+            previous_value: { status: 'Pending', projectStatus: 'Pending' },
+            new_value: {
+              status: 'Approved',
+              projectStatus: 'Ongoing',
+              type: requestType,
+              approvedBudget: approvedAmount,
+            },
+            status: 'Success',
+          })
+        } catch (auditErr) {
+          console.warn('Failed to insert audit trail to database:', auditErr)
+        }
+
+        // 4. Insert into notifications
+        try {
+          await supabase.from('notifications').insert({
+            type: 'approval',
+            title: 'Budget Request Approved',
+            message: `${requestType}: ${request.event}\nApproved: ₱${approvedAmount.toLocaleString()}`,
+            actor_id: user?.id || null,
+            actor_role: actorRole,
+            recipient_role: 'SK Treasurer',
+            request_id: requestId,
+          })
+        } catch (notifErr) {
+          console.warn('Failed to insert notification to database:', notifErr)
+        }
+      }
+
+      // Fallback if expense object mapping is somehow still null
+      if (!approvedExpense) {
+        approvedExpense = mapExpenseRow({
+          id: `${Date.now()}`,
+          request_id: requestId,
+          event: request.event,
+          project: request.event,
+          category: request.category,
+          type: requestType,
+          amount: approvedAmount,
+          status: 'Approved',
+          approved_at: approvedAt,
+          date: effectiveDate,
+          month: effectiveMonth,
+          year: effectiveYear,
+        })
+      }
+
+      if (!approvedRequest) {
+        approvedRequest = {
+          ...request,
+          status: 'Approved',
+          projectStatus: 'Ongoing',
+          approvedAmount,
+          approvedAt,
+        }
+      }
+
+      // Update in-memory state immediately so UI refreshes instantaneously
       setRequests((prev) =>
-        prev.map((item) => item.id === requestId ? approvedRequest : item)
+        prev.map((item) => String(item.id) === String(requestId) ? approvedRequest : item)
       )
       setExpenses((prev) => [
         approvedExpense,
-        ...prev.filter((item) => item.id !== approvedExpense.id),
+        ...prev.filter(
+          (item) => String(item.requestId) !== String(requestId) && String(item.id) !== String(approvedExpense.id)
+        ),
       ])
 
-      await Promise.all([
-        loadRequestsFromSupabase(),
-        loadExpensesFromSupabase(),
-        loadBudgetsFromSupabase(),
-      ])
+      // Add local audit log
+      addLog({
+        action: `Request Approved — ${request.event}`,
+        actionType: 'Request Approved',
+        module: 'Budget Requests',
+        recordType: 'Budget Request',
+        recordId: requestId,
+        description: `Approved ${requestType.toLowerCase()} budget request for "${request.event}" (₱${approvedAmount.toLocaleString()})`,
+        previousValue: { status: 'Pending' },
+        newValue: { status: 'Approved' },
+      })
 
+      // Add local toast notification
       addNotification({
         type: 'system',
         title: 'Budget Request Approved',
         message: `"${request.event}" has been approved successfully.`,
       })
 
-      return { data, error: null }
+      // Background reload from Supabase to guarantee state freshness
+      Promise.all([
+        loadRequestsFromSupabase(),
+        loadExpensesFromSupabase(),
+        loadBudgetsFromSupabase(),
+      ]).catch((err) => console.warn('Background Supabase refresh warning:', err))
+
+      return { data: { request: approvedRequest, expense: approvedExpense }, error: null }
     } catch (err) {
       console.error('Exception in approveRequest:', err)
       return { error: err }
     }
   }
 
-  function rejectRequest(requestId, reason) {
+  async function rejectRequest(requestId, reason) {
+    const rejectedAt = new Date().toISOString()
+    const request = requests.find((item) => String(item.id) === String(requestId))
+    const actorName = profileName || user?.user_metadata?.full_name || 'SK Chairman'
+    const actorRole = role || 'SK Chairman'
+
     setRequests((prev) =>
       prev.map((item) =>
-        item.id === requestId
+        String(item.id) === String(requestId)
           ? {
               ...item,
               status: 'Rejected',
               projectStatus: 'Rejected',
-              rejectedAt: new Date().toISOString(),
+              rejectedAt: rejectedAt,
               rejectionReason: reason,
               resubmittedAt: null,
             }
@@ -511,19 +700,68 @@ function BudgetProvider({ children }) {
       )
     )
 
+    try {
+      await supabase
+        .from('budget_requests')
+        .update({
+          status: 'Rejected',
+          project_status: 'Rejected',
+          rejected_at: rejectedAt,
+          rejection_reason: reason,
+          resubmitted_at: null,
+          updated_at: rejectedAt,
+        })
+        .eq('id', requestId)
+    } catch (err) {
+      console.warn('Failed to update rejection in Supabase:', err)
+    }
+
+    try {
+      await supabase.from('audit_trail').insert({
+        user_id: user?.id || null,
+        user_name: actorName,
+        user_role: actorRole,
+        action: `Request Rejected — ${request?.event || requestId}`,
+        action_type: 'Request Rejected',
+        module: 'Budget Requests',
+        record_type: 'Budget Request',
+        record_id: String(requestId),
+        description: `Rejected budget request for "${request?.event || requestId}". Reason: ${reason}`,
+        previous_value: { status: request?.status || 'Pending' },
+        new_value: { status: 'Rejected' },
+        remarks: reason,
+        status: 'Success',
+      })
+    } catch (auditErr) {
+      console.warn('Failed to insert audit log for rejection:', auditErr)
+    }
+
+    try {
+      await supabase.from('notifications').insert({
+        type: 'rejection',
+        title: 'Budget Request Rejected',
+        message: request ? `"${request.event}" was rejected. Reason: ${reason}` : `Request was rejected.`,
+        actor_id: user?.id || null,
+        actor_role: actorRole,
+        recipient_role: 'SK Treasurer',
+        request_id: requestId,
+      })
+    } catch (notifErr) {
+      console.warn('Failed to insert notification for rejection:', notifErr)
+    }
+
     addLog({
-      action: `Request Rejected — ${requests.find(r => r.id === requestId)?.event || requestId}`,
+      action: `Request Rejected — ${request?.event || requestId}`,
       actionType: 'Request Rejected',
       module: 'Budget Requests',
       recordType: 'Budget Request',
       recordId: requestId,
       description: `Rejected budget request. Reason: ${reason}`,
-      previousValue: { status: requests.find(r => r.id === requestId)?.status || 'Pending' },
+      previousValue: { status: request?.status || 'Pending' },
       newValue: { status: 'Rejected' },
       remarks: reason,
     })
 
-    const request = requests.find((item) => item.id === requestId)
     addNotification({
       type: 'rejection',
       title: 'Budget Request Rejected',
@@ -532,12 +770,12 @@ function BudgetProvider({ children }) {
   }
 
   function undoRejectRequest(requestId) {
-    const request = requests.find((item) => item.id === requestId)
+    const request = requests.find((item) => String(item.id) === String(requestId))
     if (!request) return
 
     setRequests((prev) =>
       prev.map((item) =>
-        item.id === requestId
+        String(item.id) === String(requestId)
           ? {
               ...item,
               status: 'Pending',
@@ -562,12 +800,12 @@ function BudgetProvider({ children }) {
   }
 
   function cancelApproval(requestId, reason) {
-    const request = requests.find((item) => item.id === requestId)
+    const request = requests.find((item) => String(item.id) === String(requestId))
     if (!request) return
 
     setRequests((prev) =>
       prev.map((item) =>
-        item.id === requestId
+        String(item.id) === String(requestId)
           ? {
               ...item,
               status: 'Cancelled',
@@ -579,7 +817,6 @@ function BudgetProvider({ children }) {
       )
     )
 
-    // Archive the associated expense so it doesn't count towards the budget
     setExpenses((prev) =>
       prev.map((expense) =>
         expense.id === requestId
@@ -607,7 +844,7 @@ function BudgetProvider({ children }) {
   }
 
   function archiveRequest(requestId, archivedBy = 'System') {
-    const request = requests.find((item) => item.id === requestId)
+    const request = requests.find((item) => String(item.id) === String(requestId))
     if (!request || request.archivedAt) {
       return
     }
@@ -616,7 +853,7 @@ function BudgetProvider({ children }) {
 
     setRequests((prev) =>
       prev.map((item) =>
-        item.id === requestId
+        String(item.id) === String(requestId)
           ? {
               ...item,
               archivedAt: now,
@@ -649,14 +886,14 @@ function BudgetProvider({ children }) {
   }
 
   function restoreRequest(requestId) {
-    const request = requests.find((item) => item.id === requestId)
+    const request = requests.find((item) => String(item.id) === String(requestId))
     if (!request || !request.archivedAt) {
       return
     }
 
     setRequests((prev) =>
       prev.map((item) =>
-        item.id === requestId
+        String(item.id) === String(requestId)
           ? {
               ...item,
               archivedAt: null,

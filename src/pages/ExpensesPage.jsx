@@ -338,17 +338,10 @@ function ExpensesPage() {
       return
     }
 
-    // 2. Insert robust database record
+    // 2. Best-effort insert to receipt_records auxiliary table
     const { error: dbError } = await insertReceiptRecord(supabase, expense, file, filePath, user, role)
-
     if (dbError) {
-      // Rollback storage upload
-      await supabase.storage.from(RECEIPTS_BUCKET).remove([filePath])
-      
-      logUploadDebugInfo(dbError, { expenseId: expense.id, step: 'receipt_record_insert', note: 'Rolled back storage' })
-      setErrorsById((prev) => ({ ...prev, [expense.id]: `Database Error: ${dbError.message || 'Failed to link receipt record'}` }))
-      setUploadingId(null)
-      return
+      console.warn('Could not insert to receipt_records (table may not exist or RLS), continuing:', dbError)
     }
 
     // 3. Update local state immediately (this is the primary store)

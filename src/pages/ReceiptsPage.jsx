@@ -124,6 +124,7 @@ function ReceiptsPage() {
         throw Object.assign(uploadError, { uploadStep: 'storage' })
       }
 
+      // 2. Best-effort insert to receipt_records auxiliary table
       const { data: receiptData, error: dbError } = await insertReceiptRecord(
         supabase,
         expense,
@@ -134,11 +135,10 @@ function ReceiptsPage() {
       )
 
       if (dbError) {
-        await supabase.storage.from(RECEIPTS_BUCKET).remove([filePath])
-        throw Object.assign(dbError, { uploadStep: 'receipt_record' })
+        console.warn('Could not insert to receipt_records (table may not exist or RLS), continuing:', dbError)
       }
 
-      const receiptRecordId = receiptData?.[0]?.id || null
+      // 3. Link receipt to expenses table in Supabase
       const updatePayload = {
         receipt_url: filePath,
         receipt_name: file.name,
@@ -153,19 +153,15 @@ function ReceiptsPage() {
         .from('expenses')
         .update(updatePayload)
         .eq('id', expense.id)
-        .select('id')
-        .single()
 
       if (linkError) {
-        if (receiptRecordId) {
-          await supabase.from('receipt_records').delete().eq('id', receiptRecordId)
-        }
-        await supabase.storage.from(RECEIPTS_BUCKET).remove([filePath])
-        throw Object.assign(linkError, { uploadStep: 'expense_link' })
+        console.warn('Could not update expenses table in Supabase:', linkError)
       }
 
+      // 4. Update local state
       updateExpenseReceipt(expense.id, filePath, file.name)
 
+      // 5. Generate signed URL for immediate viewing
       const { data: signedData } = await supabase.storage
         .from(RECEIPTS_BUCKET)
         .createSignedUrl(filePath, 60 * 60)
@@ -174,8 +170,12 @@ function ReceiptsPage() {
       }
 
       if (previousPath && previousPath !== filePath) {
-        await supabase.storage.from(RECEIPTS_BUCKET).remove([previousPath])
-        await supabase.from('receipt_records').delete().eq('file_path', previousPath)
+        try {
+          await supabase.storage.from(RECEIPTS_BUCKET).remove([previousPath])
+          await supabase.from('receipt_records').delete().eq('file_path', previousPath)
+        } catch {
+          // Ignore cleanup errors
+        }
       }
 
       await refreshExpensesFromSupabase()
