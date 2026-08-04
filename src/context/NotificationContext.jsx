@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useAuth } from './AuthContext'
+import { supabase } from '../supabase/supabaseClient'
 
 const NotificationContext = createContext(null)
 const STORAGE_KEY = 'cuenta.notifications.v2'
@@ -15,7 +16,7 @@ function getStoredNotifications() {
 }
 
 function NotificationProvider({ children }) {
-  const { role } = useAuth()
+  const { role, isAuthenticated } = useAuth()
   const [notifications, setNotifications] = useState(() => getStoredNotifications())
 
   useEffect(() => {
@@ -40,6 +41,56 @@ function NotificationProvider({ children }) {
       return () => window.removeEventListener('storage', handleStorageChange)
     }
   }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    let mounted = true
+
+    async function loadServerNotifications() {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100)
+
+      // The table is introduced by the approval migration. Older local
+      // environments can continue using local notifications until it is run.
+      if (error || !mounted) return
+
+      const serverNotifications = (data || []).map((item) => ({
+        id: item.id,
+        type: item.type,
+        title: item.title,
+        message: item.message || '',
+        timestamp: item.created_at,
+        read: false,
+        actorRole: item.actor_role || '',
+        serverBacked: true,
+      }))
+
+      setNotifications((prev) => [
+        ...serverNotifications,
+        ...prev.filter((item) =>
+          !serverNotifications.some((serverItem) => serverItem.id === item.id)
+        ),
+      ])
+    }
+
+    loadServerNotifications()
+    const channel = supabase
+      .channel('notifications-sync')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        loadServerNotifications
+      )
+      .subscribe()
+
+    return () => {
+      mounted = false
+      supabase.removeChannel(channel)
+    }
+  }, [isAuthenticated, role])
 
   const visibleNotifications = useMemo(() => {
     return notifications.filter((n) => n.actorRole !== role)

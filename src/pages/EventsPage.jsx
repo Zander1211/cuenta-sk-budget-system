@@ -239,7 +239,7 @@ function EventsPage() {
                             <select
                               className="project-status-select"
                               value={project.projectStatus || 'Ongoing'}
-                              onChange={(e) => updateProjectStatus(project.id, e.target.value)}
+                              onChange={(e) => updateProjectStatus(project.requestId || project.id, e.target.value)}
                               aria-label="Update Event Status"
                             >
                               <option value="Ongoing">Ongoing</option>

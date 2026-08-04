@@ -33,6 +33,19 @@ function ApprovalsPage() {
   const [editRejectNote, setEditRejectNote] = useState('')
   const [editingCancelReasonId, setEditingCancelReasonId] = useState(null)
   const [editCancelNote, setEditCancelNote] = useState('')
+  const [approvingId, setApprovingId] = useState(null)
+  const [approvalError, setApprovalError] = useState('')
+
+  async function handleApprove(requestId) {
+    if (approvingId) return
+    setApprovingId(requestId)
+    setApprovalError('')
+    const { error } = await approveRequest(requestId)
+    if (error) {
+      setApprovalError(error.message || 'The request could not be approved.')
+    }
+    setApprovingId(null)
+  }
 
   function startEditRejectReason(requestId, currentReason) {
     setEditingRejectReasonId(requestId)
@@ -460,7 +473,14 @@ function ApprovalsPage() {
                       <button className="secondary-button" type="button" style={{ color: '#e53e3e', borderColor: '#e53e3e' }} onClick={() => startReject(request.id)}>Reject</button>
                     ) : null}
                     {allowApprove ? (
-                      <button className="primary-button" type="button" onClick={() => approveRequest(request.id)}>Approve</button>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        disabled={approvingId === request.id}
+                        onClick={() => handleApprove(request.id)}
+                      >
+                        {approvingId === request.id ? 'Approving…' : 'Approve'}
+                      </button>
                     ) : null}
                   </div>
                 )}
@@ -531,6 +551,9 @@ function ApprovalsPage() {
       </header>
 
       <section className="dashboard-content">
+        {approvalError ? (
+          <p className="form-error" role="alert">{approvalError}</p>
+        ) : null}
         {activeTab === 'pending' ? (
           <div className="overview-card">
             <p className="eyebrow">Pending requests</p>

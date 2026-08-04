@@ -93,12 +93,16 @@ export function generateReceiptPath(record, file) {
   
   let folder = 'other'
   
-  if (record.project) {
+  if (record.type === 'Project') {
+    folder = 'projects'
+  } else if (record.type === 'Event') {
+    folder = 'events'
+  } else if (record.type === 'Payroll' || record.payroll_id || record.category?.toLowerCase() === 'payroll') {
+    folder = 'payroll'
+  } else if (record.project) {
     folder = 'projects'
   } else if (record.event) {
     folder = 'events'
-  } else if (record.payroll_id || record.category?.toLowerCase() === 'payroll') {
-    folder = 'payroll'
   } else if (record.category) {
     folder = record.category.toLowerCase().replace(/\s+/g, '-')
   }
@@ -112,7 +116,8 @@ export function generateReceiptPath(record, file) {
  */
 export async function insertReceiptRecord(supabase, record, file, filePath, user, userRole) {
   let recordType = 'Expense'
-  if (record.project) recordType = 'Project'
+  if (['Project', 'Event', 'Payroll'].includes(record.type)) recordType = record.type
+  else if (record.project) recordType = 'Project'
   else if (record.event) recordType = 'Event'
   else if (record.category?.toLowerCase() === 'payroll') recordType = 'Payroll'
 

@@ -188,8 +188,8 @@ function AuthProvider({ children }) {
   ])
 
   const role =
-    session?.user?.user_metadata?.role ||
     session?.user?.app_metadata?.role ||
+    session?.user?.user_metadata?.role ||
     'SK Chairman'
 
   const value = useMemo(

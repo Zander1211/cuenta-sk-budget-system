@@ -25,7 +25,10 @@ function ReceiptsPage() {
   const RECEIPTS_BUCKET = 'receipts'
 
   const approvedExpenses = useMemo(
-    () => expenses.filter((expense) => (expense.status || 'Approved') === 'Approved'),
+    () => expenses.filter((expense) =>
+      (expense.status || 'Approved') === 'Approved'
+      && ['Project', 'Event'].includes(expense.type || 'Project')
+    ),
     [expenses]
   )
 

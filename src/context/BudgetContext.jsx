@@ -36,7 +36,10 @@ function mapExpenseRow(row) {
     event: row.event || row.project || row.title || '',
     project: row.project || row.event || '',
     category: row.category || row.type || '',
+    type: row.type || 'Project',
     amount: Number(row.amount ?? row.total ?? 0),
+    requestedBudget: Number(row.requested_budget ?? row.amount ?? 0),
+    approvedBudget: Number(row.approved_budget ?? row.amount ?? 0),
     status: row.status || 'Approved',
     approvedAt,
     archivedAt: row.archived_at || row.archivedAt || null,
@@ -46,6 +49,16 @@ function mapExpenseRow(row) {
     description: row.description || '',
     notes: row.notes || '',
     breakdown: Array.isArray(row.breakdown) ? row.breakdown : [],
+    expensesBreakdown: Array.isArray(row.expenses_breakdown) ? row.expenses_breakdown : [],
+    requestedBy: row.requested_by || '',
+    createdBy: row.created_by || null,
+    requestId: row.request_id || row.requestId || null,
+    month: Number(row.month) || null,
+    year: Number(row.year) || null,
+    projectStatus: row.project_status || row.projectStatus || 'Ongoing',
+    isAdditional: Boolean(row.is_additional ?? row.isAdditional),
+    parentProjectId: row.parent_project_id || row.parentProjectId || null,
+    remarks: row.remarks || '',
     receiptUrl: row.receipt_url || row.receiptUrl || null,
     receiptName: row.receipt_name || row.receiptName || '',
   }
@@ -58,6 +71,7 @@ function mapRequestRow(row) {
     event: row.event || '',
     category: row.category || '',
     amount: Number(row.amount || 0),
+    approvedAmount: Number(row.approved_amount ?? row.amount ?? 0),
     eventDate: row.event_date || null,
     venue: row.venue || '',
     description: row.description || '',
@@ -341,11 +355,16 @@ function BudgetProvider({ children }) {
     document.addEventListener('visibilitychange', refreshRequests)
 
     const channel = supabase
-      .channel('budget-requests-sync')
+      .channel('budget-data-sync')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'budget_requests' },
         () => loadRequestsFromSupabase()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'expenses' },
+        () => loadExpensesFromSupabase()
       )
       .subscribe()
 
@@ -430,61 +449,39 @@ function BudgetProvider({ children }) {
     })
   }
 
-  function approveRequest(requestId) {
+  async function approveRequest(requestId) {
     const request = requests.find((item) => item.id === requestId)
     if (!request) {
-      return
+      return { error: new Error('Budget request was not found.') }
     }
 
+    const { data, error } = await supabase.rpc('approve_budget_request', {
+      p_request_id: requestId,
+    })
+
+    if (error) {
+      console.error('Atomic budget approval failed:', error)
+      return { error }
+    }
+
+    const approvedRequest = mapRequestRow(data.request)
+    const approvedExpense = mapExpenseRow(data.expense)
+
     setRequests((prev) =>
-      prev.map((item) =>
-        item.id === requestId
-          ? {
-              ...item,
-              status: 'Approved',
-              projectStatus: 'Ongoing',
-              approvedAt: new Date().toISOString(),
-            }
-          : item
-      )
+      prev.map((item) => item.id === requestId ? approvedRequest : item)
     )
     setExpenses((prev) => [
-      {
-        id: request.id,
-        event: request.event,
-        project: request.event,
-        category: request.category,
-        type: request.type || 'Project',
-        amount: request.amount,
-        requestedBy: request.requestedBy,
-        eventDate: request.eventDate,
-        venue: request.venue,
-        description: request.description,
-        notes: request.notes,
-        breakdown: request.breakdown,
-        expensesBreakdown: request.expensesBreakdown || [],
-        status: 'Approved',
-        projectStatus: 'Ongoing',
-        approvedAt: new Date().toISOString(),
-      },
-      ...prev,
+      approvedExpense,
+      ...prev.filter((item) => item.id !== approvedExpense.id),
     ])
 
-    addLog({
-      action: `Request Approved — ${request.event}`,
-      actionType: 'Request Approved',
-      module: 'Budget Requests',
-      recordType: 'Budget Request',
-      recordId: requestId,
-      description: `Approved budget request for ${request.event} (₱${Number(request.amount).toLocaleString()})`,
-      previousValue: { status: request.status, projectStatus: request.projectStatus },
-      newValue: { status: 'Approved', projectStatus: 'Ongoing' },
-    })
-    addNotification({
-      type: 'approval',
-      title: 'Budget Request Approved',
-      message: `Project: ${request.event}\nApproved: ₱${Number(request.amount).toLocaleString()}\nDate Approved: ${new Date().toLocaleDateString()}\nStatus: Approved`,
-    })
+    await Promise.all([
+      loadRequestsFromSupabase(),
+      loadExpensesFromSupabase(),
+      loadBudgetsFromSupabase(),
+    ])
+
+    return { data, error: null }
   }
 
   function rejectRequest(requestId, reason) {
@@ -856,7 +853,7 @@ function BudgetProvider({ children }) {
 
     setExpenses((prev) =>
       prev.map((item) =>
-        item.id === requestId
+        item.id === requestId || item.requestId === requestId
           ? { ...item, projectStatus: newStatus }
           : item
       )
