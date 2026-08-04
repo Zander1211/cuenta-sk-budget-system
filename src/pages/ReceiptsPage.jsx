@@ -4,14 +4,16 @@ import { useBudget } from '../context/BudgetContext'
 import { supabase } from '../supabase/supabaseClient'
 import CurrencyInput from '../components/CurrencyInput'
 import { useAuth } from '../context/AuthContext'
+import { useNotifications } from '../context/NotificationContext'
 import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
 
 function ReceiptsPage() {
   const { user, role } = useAuth()
+  const { addNotification } = useNotifications()
   const { expenses, refreshExpensesFromSupabase, expensesSyncStatus, updateExpenseReceipt } = useBudget()
-  const [filesById, setFilesById] = useState({})
   const [errorsById, setErrorsById] = useState({})
   const [uploadingId, setUploadingId] = useState(null)
+  const [feedback, setFeedback] = useState(null)
   const [receiptLinks, setReceiptLinks] = useState({})
   const [scanModalOpen, setScanModalOpen] = useState(false)
   const [scanFile, setScanFile] = useState(null)
@@ -20,6 +22,7 @@ function ReceiptsPage() {
   const [ocrData, setOcrData] = useState({ vendor: '', receiptNumber: '', date: '', amount: '', items: '' })
   
   const uploadInputRef = useRef(null)
+  const pendingUploadExpenseRef = useRef(null)
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const RECEIPTS_BUCKET = 'receipts'
@@ -31,13 +34,6 @@ function ReceiptsPage() {
     ),
     [expenses]
   )
-
-  const missingExpenses = useMemo(() => {
-    return approvedExpenses.filter(expense => {
-      const path = expense.receiptUrl || expense.receipt_url || expense.receiptName || expense.receipt_name;
-      return !path;
-    });
-  }, [approvedExpenses]);
 
   useEffect(() => {
     let mounted = true
@@ -98,78 +94,117 @@ function ReceiptsPage() {
     return () => stopCamera()
   }, [scanStatus])
 
-  function handleFileChange(expenseId, file) {
-    setFilesById((prev) => ({ ...prev, [expenseId]: file }))
-    setErrorsById((prev) => ({ ...prev, [expenseId]: '' }))
-  }
+  async function uploadReceipt(expense, file, { appendedNotes = '' } = {}) {
+    if (!expense || !['Project', 'Event'].includes(expense.type || 'Project')) {
+      const message = 'Select a valid approved Project or Event before uploading.'
+      setFeedback({ type: 'error', message })
+      return { error: new Error(message) }
+    }
 
-  async function handleUpload(expense) {
-    const file = filesById[expense.id]
-    
     const validationError = validateReceiptFile(file, role)
     if (validationError) {
-      setErrorsById((prev) => ({
-        ...prev,
-        [expense.id]: validationError,
-      }))
-      return
+      setErrorsById((prev) => ({ ...prev, [expense.id]: validationError }))
+      setFeedback({ type: 'error', message: validationError })
+      return { error: new Error(validationError) }
     }
 
     setUploadingId(expense.id)
     setErrorsById((prev) => ({ ...prev, [expense.id]: '' }))
-    
+    setFeedback(null)
+
     const filePath = generateReceiptPath(expense, file)
+    const previousPath = expense.receiptUrl || expense.receipt_url || null
 
-    const { error: uploadError } = await supabase.storage
-      .from(RECEIPTS_BUCKET)
-      .upload(filePath, file, { upsert: true })
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from(RECEIPTS_BUCKET)
+        .upload(filePath, file, { upsert: false })
 
-    if (uploadError) {
-      logUploadDebugInfo(uploadError, { expenseId: expense.id, filePath })
-      setErrorsById((prev) => ({ ...prev, [expense.id]: getUploadErrorMessage(uploadError) }))
+      if (uploadError) {
+        throw Object.assign(uploadError, { uploadStep: 'storage' })
+      }
+
+      const { data: receiptData, error: dbError } = await insertReceiptRecord(
+        supabase,
+        expense,
+        file,
+        filePath,
+        user,
+        role
+      )
+
+      if (dbError) {
+        await supabase.storage.from(RECEIPTS_BUCKET).remove([filePath])
+        throw Object.assign(dbError, { uploadStep: 'receipt_record' })
+      }
+
+      const receiptRecordId = receiptData?.[0]?.id || null
+      const updatePayload = {
+        receipt_url: filePath,
+        receipt_name: file.name,
+      }
+      if (appendedNotes) {
+        updatePayload.remarks = expense.remarks
+          ? `${expense.remarks}\n\n${appendedNotes}`
+          : appendedNotes
+      }
+
+      const { error: linkError } = await supabase
+        .from('expenses')
+        .update(updatePayload)
+        .eq('id', expense.id)
+        .select('id')
+        .single()
+
+      if (linkError) {
+        if (receiptRecordId) {
+          await supabase.from('receipt_records').delete().eq('id', receiptRecordId)
+        }
+        await supabase.storage.from(RECEIPTS_BUCKET).remove([filePath])
+        throw Object.assign(linkError, { uploadStep: 'expense_link' })
+      }
+
+      updateExpenseReceipt(expense.id, filePath, file.name)
+
+      const { data: signedData } = await supabase.storage
+        .from(RECEIPTS_BUCKET)
+        .createSignedUrl(filePath, 60 * 60)
+      if (signedData?.signedUrl) {
+        setReceiptLinks((prev) => ({ ...prev, [expense.id]: signedData.signedUrl }))
+      }
+
+      if (previousPath && previousPath !== filePath) {
+        await supabase.storage.from(RECEIPTS_BUCKET).remove([previousPath])
+        await supabase.from('receipt_records').delete().eq('file_path', previousPath)
+      }
+
+      await refreshExpensesFromSupabase()
+      const recordName = expense.event || expense.project || 'the selected record'
+      const message = `Receipt uploaded and attached to ${recordName}.`
+      setFeedback({ type: 'success', message })
+      addNotification({
+        type: 'system',
+        title: 'Receipt Uploaded',
+        message,
+      })
+      return { error: null }
+    } catch (error) {
+      logUploadDebugInfo(error, {
+        expenseId: expense.id,
+        filePath,
+        step: error.uploadStep || 'unknown',
+      })
+      const message = error.uploadStep === 'receipt_record'
+        ? `The file uploaded, but its receipt record could not be saved: ${error.message}`
+        : error.uploadStep === 'expense_link'
+          ? `The receipt could not be linked to the selected record: ${error.message}`
+          : getUploadErrorMessage(error)
+      setErrorsById((prev) => ({ ...prev, [expense.id]: message }))
+      setFeedback({ type: 'error', message })
+      return { error }
+    } finally {
       setUploadingId(null)
-      return
     }
-
-    // 2. Insert robust database record
-    const { error: dbError } = await insertReceiptRecord(supabase, expense, file, filePath, user, role)
-
-    if (dbError) {
-      // Rollback storage upload
-      await supabase.storage.from(RECEIPTS_BUCKET).remove([filePath])
-      
-      logUploadDebugInfo(dbError, { expenseId: expense.id, step: 'receipt_record_insert', note: 'Rolled back storage' })
-      setErrorsById((prev) => ({ ...prev, [expense.id]: `Database Error: ${dbError.message || 'Failed to link receipt record'}` }))
-      setUploadingId(null)
-      return
-    }
-
-    // 3. Update local state immediately (this is the primary store)
-    updateExpenseReceipt(expense.id, filePath, file.name)
-
-    // 4. Best-effort sync to minimal expenses table (only valid columns)
-    const { error: updateError } = await supabase
-      .from('expenses')
-      .update({ receipt_url: filePath, receipt_name: file.name })
-      .eq('id', expense.id)
-
-    if (updateError) {
-      // Log but don't fail — local state is already updated
-      logUploadDebugInfo(updateError, { expenseId: expense.id, step: 'supabase_sync', note: 'Local state already updated' })
-    }
-
-    // 3. Generate a signed URL to display the receipt immediately
-    const { data } = await supabase.storage
-      .from(RECEIPTS_BUCKET)
-      .createSignedUrl(filePath, 60 * 60)
-
-    if (data?.signedUrl) {
-      setReceiptLinks((prev) => ({ ...prev, [expense.id]: data.signedUrl }))
-    }
-
-    setFilesById((prev) => ({ ...prev, [expense.id]: null }))
-    setUploadingId(null)
-    await refreshExpensesFromSupabase()
   }
 
   function triggerCamera(expense) {
@@ -179,7 +214,12 @@ function ReceiptsPage() {
   }
 
   function triggerUpload(expense) {
+    if (uploadingId !== null) return
+    pendingUploadExpenseRef.current = expense
     setActiveExpense(expense)
+    setFeedback(null)
+    setErrorsById((prev) => ({ ...prev, [expense.id]: '' }))
+    if (uploadInputRef.current) uploadInputRef.current.value = ''
     uploadInputRef.current?.click()
   }
 
@@ -207,88 +247,48 @@ function ReceiptsPage() {
     }, 'image/jpeg')
   }
 
-  function handleFileSelected(event) {
+  async function handleFileSelected(event) {
     const file = event.target.files?.[0]
-    if (!file || !activeExpense) return
-    
-    const validationError = validateReceiptFile(file, role)
-    if (validationError) {
-      alert(validationError)
-      event.target.value = ''
+    const expense = pendingUploadExpenseRef.current
+    event.target.value = ''
+    pendingUploadExpenseRef.current = null
+
+    if (!file) return
+    if (!expense) {
+      setFeedback({
+        type: 'error',
+        message: 'No Project or Event was selected. Please choose Upload again.',
+      })
       return
     }
 
-    setScanFile(file)
-    setScanModalOpen(true)
-    setScanStatus('scanning')
-    
-    setTimeout(() => {
-      setOcrData({
-        vendor: 'Local Vendor Inc.',
-        receiptNumber: `RCP-${Math.floor(Math.random() * 10000)}`,
-        date: new Date().toISOString().split('T')[0],
-        amount: activeExpense.amount || '',
-        items: 'Office Supplies, Event Materials'
-      })
-      setScanStatus('review')
-    }, 2000)
-    
-    event.target.value = ''
+    await uploadReceipt(expense, file)
   }
 
   async function confirmScanUpload() {
-    if (!activeExpense || !scanFile) return
+    if (!activeExpense || !scanFile || scanStatus === 'uploading') return
+
     setScanStatus('uploading')
-    const expense = activeExpense
-    const filePath = generateReceiptPath(expense, scanFile)
+    const appendedNotes = [
+      ocrData.vendor ? `Vendor: ${ocrData.vendor}` : '',
+      ocrData.receiptNumber ? `Receipt #: ${ocrData.receiptNumber}` : '',
+      ocrData.date ? `Receipt date: ${ocrData.date}` : '',
+      ocrData.amount !== '' ? `Receipt amount: ${ocrData.amount}` : '',
+      ocrData.items ? `Items: ${ocrData.items}` : '',
+    ].filter(Boolean).join('\n')
 
-    const { error: uploadError } = await supabase.storage
-      .from(RECEIPTS_BUCKET)
-      .upload(filePath, scanFile, { upsert: true })
+    const { error } = await uploadReceipt(activeExpense, scanFile, {
+      appendedNotes,
+    })
 
-    if (uploadError) {
-      logUploadDebugInfo(uploadError, { expenseId: expense.id, filePath, isScan: true })
-      alert(getUploadErrorMessage(uploadError))
-      setScanModalOpen(false)
+    if (error) {
+      setScanStatus('review')
       return
-    }
-
-    // 1. Insert robust database record
-    const { error: dbError } = await insertReceiptRecord(supabase, expense, scanFile, filePath, user, role)
-
-    if (dbError) {
-      // Rollback storage upload
-      await supabase.storage.from(RECEIPTS_BUCKET).remove([filePath])
-      
-      logUploadDebugInfo(dbError, { expenseId: expense.id, step: 'receipt_record_insert', note: 'Rolled back storage' })
-      alert(`Database Error: ${dbError.message || 'Failed to link receipt record'}`)
-      setScanModalOpen(false)
-      return
-    }
-
-    // 2. Update local state immediately (primary store)
-    updateExpenseReceipt(expense.id, filePath, scanFile.name)
-
-    // 3. Build notes from OCR data to append to remarks
-    const appendedNotes = `Vendor: ${ocrData.vendor}\nReceipt #: ${ocrData.receiptNumber}\nItems: ${ocrData.items}`
-
-    // 4. Best-effort sync to minimal expenses table (only valid columns)
-    const { error: updateError } = await supabase
-      .from('expenses')
-      .update({ 
-        receipt_url: filePath, 
-        receipt_name: scanFile.name,
-        remarks: expense.remarks ? `${expense.remarks}\n\n${appendedNotes}` : appendedNotes
-      })
-      .eq('id', expense.id)
-
-    if (updateError) {
-      // Log error but don't block the user — local state is already updated
-      logUploadDebugInfo(updateError, { expenseId: expense.id, step: 'supabase_sync', isScan: true })
     }
 
     setScanModalOpen(false)
-    await refreshExpensesFromSupabase()
+    setScanFile(null)
+    setScanStatus('idle')
   }
 
   return (
@@ -297,14 +297,14 @@ function ReceiptsPage() {
         <div className="header-left">
           <div>
             <p className="eyebrow">Receipts</p>
-            <h1>Approved events receipts</h1>
-            <p>Upload receipts for events approved by the SK Chairman.</p>
+            <h1>Approved Project and Event receipts</h1>
+            <p>Upload and manage receipts for approved Projects and Events.</p>
           </div>
         </div>
         <div className="header-actions">
           <input
             type="file"
-            accept="image/*,application/pdf"
+            accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
             ref={uploadInputRef}
             onChange={handleFileSelected}
             style={{ display: 'none' }}
@@ -313,11 +313,20 @@ function ReceiptsPage() {
       </header>
 
       <section className="dashboard-content">
+        {feedback ? (
+          <div
+            className={feedback.type === 'success' ? 'form-success' : 'form-error'}
+            role={feedback.type === 'error' ? 'alert' : 'status'}
+            style={{ marginBottom: '16px' }}
+          >
+            {feedback.message}
+          </div>
+        ) : null}
         <div className="overview-card">
           <p className="eyebrow">Receipts</p>
-          <h2>Attach receipts to approved events</h2>
+          <h2>Attach receipts to approved Projects and Events</h2>
           {expensesSyncStatus === 'loading' ? (
-            <p className="form-note">Syncing approved events...</p>
+            <p className="form-note">Syncing approved Projects and Events...</p>
           ) : null}
 
             <table className="data-table">
@@ -363,6 +372,7 @@ function ReceiptsPage() {
                             <button
                               type="button"
                               className="secondary-button"
+                              disabled={uploadingId !== null}
                               onClick={() => triggerCamera(expense)}
                             >
                               📷 Scan Receipt
@@ -370,10 +380,25 @@ function ReceiptsPage() {
                             <button
                               type="button"
                               className="secondary-button"
+                              disabled={uploadingId !== null}
                               onClick={() => triggerUpload(expense)}
                             >
-                              📁 Upload
+                              {uploadingId === expense.id ? (
+                                <>
+                                  <span
+                                    className="spinner"
+                                    aria-hidden="true"
+                                    style={{ width: '14px', height: '14px', margin: 0 }}
+                                  />
+                                  Uploading…
+                                </>
+                              ) : '📁 Upload'}
                             </button>
+                            {errorsById[expense.id] ? (
+                              <span className="form-error" role="alert">
+                                {errorsById[expense.id]}
+                              </span>
+                            ) : null}
                           </div>
                         ) : (
                           <span className="status-pill status-neutral">View Only</span>
@@ -384,7 +409,7 @@ function ReceiptsPage() {
                 ) : (
                   <tr>
                     <td colSpan="6" className="empty-state">
-                      No approved events available yet.
+                      No approved Projects or Events are available yet.
                     </td>
                   </tr>
                 )}
@@ -413,7 +438,15 @@ function ReceiptsPage() {
               ) : scanStatus === 'camera_error' ? (
                 <div style={{ padding: '40px 0', textAlign: 'center' }}>
                   <p style={{ color: 'var(--cherry)', marginBottom: '16px' }}>Camera access denied or unavailable.</p>
-                  <button type="button" className="secondary-button" onClick={() => uploadInputRef.current?.click()}>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      pendingUploadExpenseRef.current = activeExpense
+                      if (uploadInputRef.current) uploadInputRef.current.value = ''
+                      uploadInputRef.current?.click()
+                    }}
+                  >
                     Upload File Instead
                   </button>
                 </div>
