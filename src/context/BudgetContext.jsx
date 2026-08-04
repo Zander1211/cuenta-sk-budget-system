@@ -212,7 +212,7 @@ function getInitialState() {
 function BudgetProvider({ children }) {
   const { addLog } = useAuditLog()
   const { addNotification } = useNotifications()
-  const { isAuthenticated, user, role } = useAuth()
+  const { isAuthenticated, user, role, profileName } = useAuth()
   const [budgets, setBudgets] = useState(() => getInitialState().budgets)
   const [requests, setRequests] = useState(() => getInitialState().requests)
   const [expenses, setExpenses] = useState(() => getInitialState().expenses)
@@ -338,6 +338,29 @@ function BudgetProvider({ children }) {
     return loadExpensesFromSupabase()
   }
 
+  async function refreshAllBudgetData() {
+    // Reload from localStorage first (rollback writes here before calling this)
+    try {
+      const stored = getInitialState()
+      if (stored) {
+        setBudgets(stored.budgets || [])
+        setRequests(stored.requests || [])
+        setExpenses(stored.expenses || [])
+      }
+    } catch (e) {
+      console.warn('Could not reload from localStorage:', e)
+    }
+
+    // Then reload authoritative data from Supabase
+    if (isAuthenticated) {
+      await Promise.allSettled([
+        loadExpensesFromSupabase(),
+        loadBudgetsFromSupabase(),
+        loadRequestsFromSupabase(),
+      ])
+    }
+  }
+
   // Sync expenses and budgets from Supabase on mount and when auth state changes
   useEffect(() => {
     if (!isAuthenticated) return
@@ -351,8 +374,13 @@ function BudgetProvider({ children }) {
       }
     }
 
+    const handleRollbackSync = () => {
+      refreshAllBudgetData()
+    }
+
     window.addEventListener('focus', refreshRequests)
     document.addEventListener('visibilitychange', refreshRequests)
+    window.addEventListener('cuenta:rollback-complete', handleRollbackSync)
 
     const channel = supabase
       .channel('budget-data-sync')
@@ -371,6 +399,7 @@ function BudgetProvider({ children }) {
     return () => {
       window.removeEventListener('focus', refreshRequests)
       document.removeEventListener('visibilitychange', refreshRequests)
+      window.removeEventListener('cuenta:rollback-complete', handleRollbackSync)
       supabase.removeChannel(channel)
     }
   }, [isAuthenticated])
@@ -1202,17 +1231,12 @@ function BudgetProvider({ children }) {
 
   function archiveExpense(expenseId) {
     const expense = expenses.find((item) => item.id === expenseId)
-    if (!expense || expense.archivedAt) {
-      return
-    }
+    if (!expense || expense.archivedAt) return
 
     setExpenses((prev) =>
       prev.map((item) =>
         item.id === expenseId
-          ? {
-              ...item,
-              archivedAt: new Date().toISOString(),
-            }
+          ? { ...item, archivedAt: new Date().toISOString() }
           : item
       )
     )
@@ -1231,17 +1255,12 @@ function BudgetProvider({ children }) {
 
   function restoreExpense(expenseId) {
     const expense = expenses.find((item) => item.id === expenseId)
-    if (!expense || !expense.archivedAt) {
-      return
-    }
+    if (!expense || !expense.archivedAt) return
 
     setExpenses((prev) =>
       prev.map((item) =>
         item.id === expenseId
-          ? {
-              ...item,
-              archivedAt: null,
-            }
+          ? { ...item, archivedAt: null }
           : item
       )
     )
@@ -1259,17 +1278,11 @@ function BudgetProvider({ children }) {
   }
 
   const totals = useMemo(() => {
-    const totalBudget = budgets.reduce(
-      (sum, item) => sum + Number(item.amount || 0),
-      0
-    )
-    const totalExpenses = expenses.reduce(
-      (sum, item) => {
-        if (item.archivedAt || item.status === 'Cancelled') return sum;
-        return sum + Number(item.amount || 0);
-      },
-      0
-    )
+    const totalBudget = budgets.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+    const totalExpenses = expenses.reduce((sum, item) => {
+      if (item.archivedAt || item.status === 'Cancelled') return sum
+      return sum + Number(item.amount || 0)
+    }, 0)
     return {
       totalBudget,
       totalExpenses,
@@ -1301,19 +1314,12 @@ function BudgetProvider({ children }) {
       updateCancellationReason,
       updateExpenseReceipt,
       refreshExpensesFromSupabase,
+      refreshAllBudgetData,
     }),
-    [
-      budgets,
-      requests,
-      expenses,
-      expensesSyncStatus,
-      totals,
-    ]
+    [budgets, requests, expenses, expensesSyncStatus, totals]
   )
 
-  return (
-    <BudgetContext.Provider value={value}>{children}</BudgetContext.Provider>
-  )
+  return <BudgetContext.Provider value={value}>{children}</BudgetContext.Provider>
 }
 
 function useBudget() {
@@ -1328,7 +1334,6 @@ export function useBudgetCalculations(month, year) {
   const { budgets, expenses } = useBudget()
 
   return useMemo(() => {
-    // 1. Calculate Budget
     const filteredBudgets = budgets.filter(b => {
       if (month !== null && month !== undefined) {
         return b.month === month && b.year === year
@@ -1337,7 +1342,6 @@ export function useBudgetCalculations(month, year) {
     })
     const totalBudgetAmount = filteredBudgets.reduce((sum, b) => sum + Number(b.amount || 0), 0)
 
-    // 2. Calculate Total Deductions (Approved Requests + Additional Expenses)
     const validExpenses = expenses.filter(e => {
        if (e.archivedAt || e.status === 'Cancelled') return false
        const eDate = new Date(e.approvedAt || e.createdAt || e.eventDate || e.date)
@@ -1353,7 +1357,7 @@ export function useBudgetCalculations(month, year) {
     const remainingBalanceAmount = totalBudgetAmount - totalExpensesAmount
 
     return {
-      monthlyBudget: totalBudgetAmount, // backwards compat name
+      monthlyBudget: totalBudgetAmount,
       totalBudget: totalBudgetAmount,
       totalExpenses: totalExpensesAmount,
       remainingBalance: remainingBalanceAmount,

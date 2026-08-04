@@ -1,5 +1,18 @@
 import { useState, useRef, useMemo } from 'react'
-import { DatabaseBackup, HardDriveDownload, HardDriveUpload, Clock, FileJson, CheckCircle2, XCircle, Loader2, Database, HardDrive } from 'lucide-react'
+import {
+  DatabaseBackup,
+  HardDriveDownload,
+  HardDriveUpload,
+  Clock,
+  FileJson,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Database,
+  HardDrive,
+  Trash2,
+  AlertTriangle
+} from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBackupRestore } from '../context/BackupRestoreContext'
 
@@ -24,12 +37,27 @@ function formatDate(dateStr) {
 }
 
 function BackupRestorePage() {
-  const { backups, restoreHistory, isLoading, createBackup, restoreFromBackup, backupStats } = useBackupRestore()
+  const {
+    backups,
+    restoreHistory,
+    isLoading,
+    createBackup,
+    restoreFromBackup,
+    deleteBackup,
+    deleteRestoreHistory,
+    isBackupRestored,
+    backupStats
+  } = useBackupRestore()
+
   const [dragActive, setDragActive] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
   const [parsedData, setParsedData] = useState(null)
   const [previewError, setPreviewError] = useState('')
   const fileInputRef = useRef(null)
+
+  // Delete confirmation modal state
+  const [deleteModal, setDeleteModal] = useState({ open: false, type: null, item: null })
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const handleDrag = (e) => {
     e.preventDefault()
@@ -100,18 +128,37 @@ function BackupRestorePage() {
 
     try {
       await restoreFromBackup(selectedFile, parsedData)
-      // Check if localStorage data was part of the backup — if so, reload
-      const hasLocalStorage = parsedData.localStorage && Object.keys(parsedData.localStorage).length > 0
-      alert('System successfully restored!' + (hasLocalStorage ? ' The page will now reload to apply all changes.' : ''))
-      if (hasLocalStorage) {
-        window.location.reload()
-        return
-      }
+      alert('System successfully restored! All modules have been updated with the backup data.')
       setSelectedFile(null)
       setParsedData(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
     } catch (err) {
-      alert('Restore failed. See console for details.')
+      console.error('Restore error:', err)
+      alert('Restore failed: ' + (err?.message || 'See console for details.'))
+    }
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModal.open || !deleteModal.item) return
+    setIsDeleting(true)
+    try {
+      if (deleteModal.type === 'backup') {
+        const result = await deleteBackup(deleteModal.item)
+        if (result?.rolledBack) {
+          alert('Backup deleted! Database state and all modules have been rolled back to their pre-restore state.')
+        } else {
+          alert('Backup deleted successfully.')
+        }
+      } else if (deleteModal.type === 'restore') {
+        await deleteRestoreHistory(deleteModal.item)
+        alert('Restore record deleted! Restored data has been removed and the database returned to its previous state.')
+      }
+      setDeleteModal({ open: false, type: null, item: null })
+    } catch (err) {
+      console.error('Deletion error:', err)
+      alert(err.message || 'Failed to delete record. Check console.')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -140,7 +187,7 @@ function BackupRestorePage() {
               type="button" 
               className="primary-button" 
               onClick={createBackup}
-              disabled={isLoading}
+              disabled={isLoading || isDeleting}
             >
               {isLoading ? <Loader2 size={16} className="spin-animation" /> : <HardDriveDownload size={16} />}
               Generate Backup
@@ -176,26 +223,54 @@ function BackupRestorePage() {
                 <th>Size</th>
                 <th>Created By</th>
                 <th>Date</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {backups.length ? (
-                backups.map(b => (
-                  <tr key={b.id}>
-                    <td data-label="Filename">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <FileJson size={16} style={{ color: 'var(--ink-soft)' }} />
-                        <span style={{ fontWeight: 500 }}>{b.filename}</span>
-                      </div>
-                    </td>
-                    <td data-label="Size">{formatBytes(b.backup_size)}</td>
-                    <td data-label="Created By">{b.created_by_name}</td>
-                    <td data-label="Date" style={{ color: 'var(--ink-soft)' }}>{formatDate(b.created_at)}</td>
-                  </tr>
-                ))
+                backups.map(b => {
+                  const restored = isBackupRestored(b.filename)
+                  return (
+                    <tr key={b.id || b.filename}>
+                      <td data-label="Filename">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <FileJson size={16} style={{ color: 'var(--ink-soft)' }} />
+                          <span style={{ fontWeight: 500 }}>{b.filename}</span>
+                          {restored && (
+                            <span className="status-pill status-approved" style={{ fontSize: '0.72rem', padding: '2px 6px' }}>
+                              Restored
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td data-label="Size">{formatBytes(b.backup_size)}</td>
+                      <td data-label="Created By">{b.created_by_name}</td>
+                      <td data-label="Date" style={{ color: 'var(--ink-soft)' }}>{formatDate(b.created_at)}</td>
+                      <td data-label="Actions" className="table-actions" style={{ textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          style={{
+                            color: '#dc2626',
+                            borderColor: '#fca5a5',
+                            backgroundColor: '#fef2f2',
+                            padding: '6px 12px',
+                            fontSize: '0.85rem',
+                          }}
+                          onClick={() => setDeleteModal({ open: true, type: 'backup', item: b })}
+                          disabled={isLoading || isDeleting}
+                          title="Delete Backup"
+                        >
+                          <Trash2 size={14} />
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })
               ) : (
                 <tr>
-                  <td colSpan="4" className="empty-state">No backups found.</td>
+                  <td colSpan="5" className="empty-state">No backups found.</td>
                 </tr>
               )}
             </tbody>
@@ -332,7 +407,7 @@ function BackupRestorePage() {
                   type="button" 
                   className="primary-button" 
                   onClick={handleRestore}
-                  disabled={isLoading}
+                  disabled={isLoading || isDeleting}
                   style={{ background: '#b91c1c' }}
                 >
                   {isLoading ? <Loader2 size={16} className="spin-animation" /> : null}
@@ -346,7 +421,7 @@ function BackupRestorePage() {
                     setParsedData(null)
                     if (fileInputRef.current) fileInputRef.current.value = ''
                   }}
-                  disabled={isLoading}
+                  disabled={isLoading || isDeleting}
                 >
                   Cancel
                 </button>
@@ -363,36 +438,163 @@ function BackupRestorePage() {
                 <th>Status</th>
                 <th>Restored By</th>
                 <th>Date</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {restoreHistory.length ? (
                 restoreHistory.map(r => (
-                  <tr key={r.id}>
-                    <td>
+                  <tr key={r.id || r.filename}>
+                    <td data-label="Filename">
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Clock size={16} style={{ color: 'var(--ink-soft)' }} />
                         <span style={{ fontWeight: 500 }}>{r.filename}</span>
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Status">
                       <span className={`status-pill ${r.restore_status === 'success' ? 'status-approved' : 'status-rejected'}`}>
                         {r.restore_status === 'success' ? 'Success' : 'Failed'}
                       </span>
                     </td>
-                    <td>{r.restored_by_name}</td>
-                    <td style={{ color: 'var(--ink-soft)' }}>{formatDate(r.restored_at)}</td>
+                    <td data-label="Restored By">{r.restored_by_name}</td>
+                    <td data-label="Date" style={{ color: 'var(--ink-soft)' }}>{formatDate(r.restored_at)}</td>
+                    <td data-label="Actions" className="table-actions" style={{ textAlign: 'right' }}>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        style={{
+                          color: '#dc2626',
+                          borderColor: '#fca5a5',
+                          backgroundColor: '#fef2f2',
+                          padding: '6px 12px',
+                          fontSize: '0.85rem',
+                        }}
+                        onClick={() => setDeleteModal({ open: true, type: 'restore', item: r })}
+                        disabled={isLoading || isDeleting}
+                        title="Delete Restore History"
+                      >
+                        <Trash2 size={14} />
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="4" className="empty-state">No restore history found.</td>
+                  <td colSpan="5" className="empty-state">No restore history found.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </section>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal.open && (
+        <div
+          className="modal-overlay"
+          onClick={() => !isDeleting && setDeleteModal({ open: false, type: null, item: null })}
+        >
+          <div
+            className="modal-content"
+            style={{ maxWidth: '480px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  backgroundColor: '#fee2e2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#dc2626',
+                  flexShrink: 0
+                }}
+              >
+                <Trash2 size={20} />
+              </div>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--ink)' }}>
+                  {deleteModal.type === 'restore' || isBackupRestored(deleteModal.item?.filename)
+                    ? 'Delete Restored Backup'
+                    : 'Delete Backup'}
+                </h2>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--ink-soft)' }}>
+                  {deleteModal.item?.filename}
+                </p>
+              </div>
+            </div>
+
+            <div className="modal-body" style={{ margin: '20px 0', lineHeight: 1.5 }}>
+              {deleteModal.type === 'restore' || isBackupRestored(deleteModal.item?.filename) ? (
+                <>
+                  <p style={{ color: 'var(--ink)', fontSize: '0.95rem', margin: '0 0 12px 0', fontWeight: 600 }}>
+                    Are you sure you want to delete this restored backup?
+                  </p>
+                  <p style={{ color: 'var(--ink-soft)', fontSize: '0.9rem', margin: '0 0 12px 0' }}>
+                    Deleting this backup will remove the restored data and return the system to the state it was in before the restore.
+                  </p>
+                  <div
+                    style={{
+                      backgroundColor: '#fffbeb',
+                      border: '1px solid #fef3c7',
+                      borderLeft: '4px solid #f59e0b',
+                      borderRadius: '6px',
+                      padding: '12px',
+                      marginTop: '8px',
+                      display: 'flex',
+                      gap: '10px',
+                      fontSize: '0.88rem',
+                      color: '#92400e'
+                    }}
+                  >
+                    <AlertTriangle size={20} style={{ flexShrink: 0, marginTop: '2px', color: '#d97706' }} />
+                    <div>
+                      <strong style={{ display: 'block', marginBottom: '2px' }}>Automatic System Rollback</strong>
+                      <span>
+                        All records imported from this backup will be removed, and your prior data will be restored across all modules. This action cannot be undone.
+                      </span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p style={{ color: 'var(--ink)', fontSize: '0.95rem', margin: '0 0 8px 0' }}>
+                    Are you sure you want to delete this backup?
+                  </p>
+                  <p style={{ color: 'var(--ink-soft)', fontSize: '0.88rem', margin: 0 }}>
+                    This action cannot be undone.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setDeleteModal({ open: false, type: null, item: null })}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                style={{ backgroundColor: '#dc2626', color: '#fff', borderColor: '#dc2626' }}
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? <Loader2 size={16} className="spin-animation" /> : <Trash2 size={16} />}
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </RoleGate>
   )
 }

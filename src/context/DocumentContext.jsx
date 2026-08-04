@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../supabase/supabaseClient'
 
 const DocumentContext = createContext(null)
@@ -6,37 +6,39 @@ const DocumentContext = createContext(null)
 export function DocumentProvider({ children }) {
   const [documents, setDocuments] = useState([])
 
-  useEffect(() => {
-    let mounted = true
+  const loadDocuments = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('documents')
+      .select('*')
+      .order('date_generated', { ascending: false })
 
-    async function loadDocuments() {
-      const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .order('date_generated', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching documents:', error)
-        return
-      }
-
-      if (mounted && data) {
-        const mapped = data.map((d) => ({
-          ...d,
-          dateGenerated: d.date_generated,
-          archivedAt: d.archived_at,
-          generatedBy: d.generated_by,
-        }))
-        setDocuments(mapped)
-      }
+    if (error) {
+      console.error('Error fetching documents:', error)
+      return
     }
 
-    loadDocuments()
-
-    return () => {
-      mounted = false
+    if (data) {
+      const mapped = data.map((d) => ({
+        ...d,
+        dateGenerated: d.date_generated,
+        archivedAt: d.archived_at,
+        generatedBy: d.generated_by,
+      }))
+      setDocuments(mapped)
     }
   }, [])
+
+  useEffect(() => {
+    loadDocuments()
+
+    const handleRollback = () => {
+      loadDocuments()
+    }
+    window.addEventListener('cuenta:rollback-complete', handleRollback)
+    return () => {
+      window.removeEventListener('cuenta:rollback-complete', handleRollback)
+    }
+  }, [loadDocuments])
 
   async function addDocument(doc) {
     // Generate a temporary ID for optimistic update
@@ -125,7 +127,16 @@ export function DocumentProvider({ children }) {
   }
 
   return (
-    <DocumentContext.Provider value={{ documents, addDocument, deleteDocument, archiveDocument, restoreDocument }}>
+    <DocumentContext.Provider
+      value={{
+        documents,
+        refreshDocuments: loadDocuments,
+        addDocument,
+        deleteDocument,
+        archiveDocument,
+        restoreDocument
+      }}
+    >
       {children}
     </DocumentContext.Provider>
   )

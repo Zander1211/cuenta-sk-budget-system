@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useAuth } from './AuthContext'
 import { supabase } from '../supabase/supabaseClient'
 
@@ -42,39 +42,37 @@ function NotificationProvider({ children }) {
     }
   }, [])
 
+  const loadServerNotifications = useCallback(async () => {
+    if (!isAuthenticated) return
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100)
+
+    if (error) return
+
+    const serverNotifications = (data || []).map((item) => ({
+      id: item.id,
+      type: item.type,
+      title: item.title,
+      message: item.message || '',
+      timestamp: item.created_at,
+      read: false,
+      actorRole: item.actor_role || '',
+      serverBacked: true,
+    }))
+
+    setNotifications((prev) => [
+      ...serverNotifications,
+      ...prev.filter((item) =>
+        !serverNotifications.some((serverItem) => serverItem.id === item.id)
+      ),
+    ])
+  }, [isAuthenticated])
+
   useEffect(() => {
     if (!isAuthenticated) return
-    let mounted = true
-
-    async function loadServerNotifications() {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100)
-
-      // The table is introduced by the approval migration. Older local
-      // environments can continue using local notifications until it is run.
-      if (error || !mounted) return
-
-      const serverNotifications = (data || []).map((item) => ({
-        id: item.id,
-        type: item.type,
-        title: item.title,
-        message: item.message || '',
-        timestamp: item.created_at,
-        read: false,
-        actorRole: item.actor_role || '',
-        serverBacked: true,
-      }))
-
-      setNotifications((prev) => [
-        ...serverNotifications,
-        ...prev.filter((item) =>
-          !serverNotifications.some((serverItem) => serverItem.id === item.id)
-        ),
-      ])
-    }
 
     loadServerNotifications()
     const channel = supabase
@@ -86,11 +84,17 @@ function NotificationProvider({ children }) {
       )
       .subscribe()
 
-    return () => {
-      mounted = false
-      supabase.removeChannel(channel)
+    const handleRollback = () => {
+      setNotifications(getStoredNotifications())
+      loadServerNotifications()
     }
-  }, [isAuthenticated, role])
+    window.addEventListener('cuenta:rollback-complete', handleRollback)
+
+    return () => {
+      supabase.removeChannel(channel)
+      window.removeEventListener('cuenta:rollback-complete', handleRollback)
+    }
+  }, [isAuthenticated, loadServerNotifications])
 
   const visibleNotifications = useMemo(() => {
     return notifications.filter((n) => n.actorRole !== role)
@@ -141,12 +145,13 @@ function NotificationProvider({ children }) {
     () => ({
       notifications: visibleNotifications,
       unreadCount,
+      refreshNotifications: loadServerNotifications,
       addNotification,
       markAsRead,
       markAllAsRead,
       clearAll,
     }),
-    [visibleNotifications, unreadCount, role]
+    [visibleNotifications, unreadCount, role, loadServerNotifications]
   )
 
   return (

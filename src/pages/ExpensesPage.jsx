@@ -44,6 +44,7 @@ function ExpensesPage() {
   const { user, role } = useAuth()
   const { addNotification } = useNotifications()
   const canUpload = ['SK Chairman', 'SK Treasurer'].includes(role)
+  const isTreasurer = ['SK Chairman', 'SK Treasurer'].includes(role)
 
   const [activeTab, setActiveTab] = useState('active')
   const [projectFilter, setProjectFilter] = useState('')

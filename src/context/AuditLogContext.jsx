@@ -147,6 +147,16 @@ function AuditLogProvider({ children }) {
       setTotalCount(0)
       setCurrentPage(1)
     }
+
+    const handleRollback = () => {
+      if (isAuthenticated) {
+        fetchLogs(DEFAULT_FILTERS, 1)
+      }
+    }
+    window.addEventListener('cuenta:rollback-complete', handleRollback)
+    return () => {
+      window.removeEventListener('cuenta:rollback-complete', handleRollback)
+    }
   }, [isAuthenticated, fetchLogs])
 
   // ── Add a log entry ──────────────────────────────────────────
