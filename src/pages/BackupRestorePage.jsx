@@ -150,8 +150,12 @@ function BackupRestorePage() {
           alert('Backup deleted successfully.')
         }
       } else if (deleteModal.type === 'restore') {
-        await deleteRestoreHistory(deleteModal.item)
-        alert('Restore record deleted! Restored data has been removed and the database returned to its previous state.')
+        const result = await deleteRestoreHistory(deleteModal.item)
+        if (result?.wasRolledBack) {
+          alert('Restore record deleted! Restored data has been removed and the database returned to its previous state.')
+        } else {
+          alert('Restore record removed from history. Current system data remains safe and intact.')
+        }
       }
       setDeleteModal({ open: false, type: null, item: null })
     } catch (err) {

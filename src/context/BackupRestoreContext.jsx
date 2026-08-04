@@ -925,7 +925,7 @@ export function BackupRestoreProvider({ children }) {
     }
   }
 
-  // ── Delete Restore History (with automatic rollback) ──────────────
+  // ── Delete Restore History (with automatic rollback if snapshot available) ──────────────
   const deleteRestoreHistory = async (restoreItem) => {
     setIsLoading(true)
     try {
@@ -936,53 +936,52 @@ export function BackupRestoreProvider({ children }) {
       let rolledBack = false
 
       if (isSuccessfulRestore) {
-        // A successful restore may only be undone with its exact pre-restore
-        // snapshot. Never guess from a different/older backup.
+        // Attempt to resolve the exact pre-restore snapshot
         const snapshot = await resolveSnapshot(restoreItem)
-        if (!snapshot || (!snapshot.supabase && !snapshot.localStorage)) {
-          throw new Error(
-            'The exact pre-restore snapshot is unavailable. Nothing was deleted so the current system data remains safe.'
-          )
-        }
+        if (snapshot && (snapshot.supabase || snapshot.localStorage)) {
+          // Attempt atomic PostgreSQL RPC execution
+          try {
+            const { data: rpcData, error: rpcError } = await supabase.rpc('rollback_restored_backup', {
+              p_restore_history_id: historyId || null,
+              p_filename: filename || null,
+              p_snapshot: snapshot,
+              p_delete_backup: false,
+            })
 
-        // Attempt atomic PostgreSQL RPC execution
-        try {
-          const { data: rpcData, error: rpcError } = await supabase.rpc('rollback_restored_backup', {
-            p_restore_history_id: historyId || null,
-            p_filename: filename || null,
-            p_snapshot: snapshot,
-            p_delete_backup: false,
-          })
-
-          if (!rpcError && rpcData?.success) {
-            rolledBack = true
-            if (rpcData.localStorage) {
-              for (const key of LOCAL_STORAGE_KEYS) {
-                if (rpcData.localStorage[key] !== undefined && rpcData.localStorage[key] !== null) {
-                  window.localStorage.setItem(key, JSON.stringify(rpcData.localStorage[key]))
-                } else {
-                  window.localStorage.removeItem(key)
+            if (!rpcError && rpcData?.success) {
+              rolledBack = true
+              if (rpcData.localStorage) {
+                for (const key of LOCAL_STORAGE_KEYS) {
+                  if (rpcData.localStorage[key] !== undefined && rpcData.localStorage[key] !== null) {
+                    window.localStorage.setItem(key, JSON.stringify(rpcData.localStorage[key]))
+                  } else {
+                    window.localStorage.removeItem(key)
+                  }
                 }
               }
+            } else if (rpcError) {
+              console.warn('[BackupRestore] Database RPC rollback error, falling back to client-side rollback:', rpcError.message)
             }
-          } else if (rpcError) {
-            console.warn('[BackupRestore] Database RPC rollback error, falling back to client-side rollback:', rpcError.message)
+          } catch (rpcEx) {
+            console.warn('[BackupRestore] RPC invocation exception, falling back to client-side rollback:', rpcEx)
           }
-        } catch (rpcEx) {
-          console.warn('[BackupRestore] RPC invocation exception, falling back to client-side rollback:', rpcEx)
-        }
 
-        // Fallback: Client-Side Transactional Rollback if RPC was not used
-        if (!rolledBack) {
-          console.log(`[BackupRestore] Executing client-side rollback for "${filename}"`)
-          await applySnapshot(snapshot, { strict: true })
-          rolledBack = true
-        }
+          // Fallback: Client-Side Transactional Rollback if RPC was not used
+          if (!rolledBack) {
+            console.log(`[BackupRestore] Executing client-side rollback for "${filename}"`)
+            await applySnapshot(snapshot, { strict: true })
+            rolledBack = true
+          }
 
-        // Clean up local snapshots
-        if (filename) await removeSnapshot(filename)
-        if (historyId) await removeSnapshot(historyId)
-        await removeSnapshot('__latest_pre_restore__')
+          // Clean up local snapshots
+          if (filename) await removeSnapshot(filename)
+          if (historyId) await removeSnapshot(historyId)
+          await removeSnapshot('__latest_pre_restore__')
+        } else {
+          console.warn(
+            `[BackupRestore] Pre-restore snapshot is unavailable for "${filename}". Deleting restore history record without database rollback to keep current live data safe.`
+          )
+        }
       }
 
       // Delete restore history record from Supabase
@@ -1009,7 +1008,9 @@ export function BackupRestoreProvider({ children }) {
       }
 
       // Record Audit Log
-      const logDescription = `${profileName || role || 'SK Chairman'} deleted restored backup "${filename}" and reverted the database to its pre-restore state.`
+      const logDescription = rolledBack
+        ? `${profileName || role || 'SK Chairman'} deleted restored backup "${filename}" and reverted the database to its pre-restore state.`
+        : `${profileName || role || 'SK Chairman'} deleted restore history record "${filename}" (pre-restore snapshot was unavailable, live data preserved).`
 
       addLog({
         action: `Restore Record Deleted — ${filename}`,
@@ -1026,7 +1027,9 @@ export function BackupRestoreProvider({ children }) {
         addNotification({
           type: 'info',
           title: 'Restore Record Deleted',
-          message: `Restored backup "${filename}" deleted and system state rolled back.`,
+          message: rolledBack
+            ? `Restored backup "${filename}" deleted and system state rolled back.`
+            : `Restore record "${filename}" removed from history. Live data preserved.`,
         })
       }
 
