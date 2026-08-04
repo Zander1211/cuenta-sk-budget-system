@@ -1,24 +1,51 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, Tooltip,
+  ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
 } from 'recharts'
-import { Wallet, Receipt, PiggyBank, Gauge, Activity, ArrowRight } from 'lucide-react'
+import {
+  Wallet,
+  Receipt,
+  PiggyBank,
+  Clock,
+  ArrowRight,
+  Sparkles,
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  ShieldAlert,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  Lightbulb,
+  BarChart3,
+  Layers,
+} from 'lucide-react'
 import { useAnalysisFilters } from '../../hooks/useAnalysisFilters'
 import {
-  useFinancialSummary, useCategoryAnalysis, useMonthlyTrend, useBudgetVsActual,
+  useFinancialSummary,
+  useCategoryAnalysis,
+  useMonthlyTrend,
+  useBudgetVsActual,
 } from '../../hooks/useAnalysisData'
 import { useAnalysisAI } from '../../hooks/useAnalysisAI'
 import { AnalysisLayout, AnalysisFilterBar } from '../../components/analysis/AnalysisLayout'
-import { InsightPanel } from '../../components/analysis/InsightPanel'
-import AnalysisInsightHeader from '../../components/analysis/AnalysisInsightHeader'
-import { MetricCard, EmptyState, ChartCard } from '../../components/analysis/AnalysisUI'
+import { MetricCard } from '../../components/analysis/AnalysisUI'
 import { buildOverviewInsights } from '../../utils/insights'
 import {
-  formatCurrency, formatPercentage, periodLabel, colorForCategory, CHART_COLORS,
+  formatCurrency,
+  formatPercentage,
+  periodLabel,
+  CHART_COLORS,
 } from '../../utils/analytics'
 
-const BREADCRUMB = [{ label: 'Home', to: '/dashboard' }, { label: 'Analysis' }]
+const BREADCRUMB = [{ label: 'Home', to: '/dashboard' }, { label: 'Financial Analysis' }]
+
+const SEVERITY_META = {
+  high: { label: 'High Risk', Icon: AlertTriangle, colorClass: 'high' },
+  medium: { label: 'Medium Risk', Icon: Info, colorClass: 'medium' },
+  low: { label: 'Low Risk', Icon: CheckCircle2, colorClass: 'low' },
+}
 
 export default function AnalysisOverviewPage() {
   const navigate = useNavigate()
@@ -27,7 +54,6 @@ export default function AnalysisOverviewPage() {
   const summary = useFinancialSummary(filters)
   const category = useCategoryAnalysis(filters)
   const trend = useMonthlyTrend(filters)
-  // The budget-vs-actual preview mirrors its detail page: recent months across the year.
   const yearFilters = useMemo(() => ({ ...filters, view: 'yearly' }), [filters])
   const bva = useBudgetVsActual(yearFilters)
 
@@ -53,97 +79,239 @@ export default function AnalysisOverviewPage() {
         pendingApprovals: summary.pendingRequests.length,
         spendingTrend: trend.trend.direction,
       },
-      topCategories: category.categories.slice(0, 5).map((c) => ({ name: c.name, total: Math.round(c.value) })),
+      topCategories: category.categories.slice(0, 5).map((c) => ({
+        name: c.name,
+        total: Math.round(c.value),
+      })),
     }),
     [summary, category.categories, trend.trend.direction, label]
   )
 
   const ai = useAnalysisAI(aiPayload, { fallback: fallbackInsights, enabled: hasData })
 
+  // Top 4 summary metric cards for desktop (4-col), tablet (2-col), mobile (1-col)
   const metricCards = [
-    { icon: Wallet, label: 'Total Budget', value: formatCurrency(summary.totalBudget), meta: `Allocated for ${label}`, tone: 'neutral' },
-    { icon: Receipt, label: 'Total Expenses', value: formatCurrency(summary.totalExpenses), meta: 'Approved spending', chip: summary.hasBudgetData ? `${formatPercentage(summary.utilizationRate, 0)} used` : null, tone: summary.utilizationRate > 80 ? 'warning' : 'positive' },
-    { icon: PiggyBank, label: 'Remaining Balance', value: formatCurrency(summary.remainingBalance), meta: summary.remainingBalance < 0 ? 'Over budget' : 'Available to spend', tone: summary.remainingBalance < 0 ? 'danger' : 'positive' },
-    { icon: Gauge, label: 'Budget Utilization', value: formatPercentage(summary.utilizationRate, 1), meta: 'Expenses ÷ budget', tone: summary.utilizationRate > 95 ? 'danger' : summary.utilizationRate > 80 ? 'warning' : 'positive' },
-    { icon: Activity, label: 'Overall Performance', value: summary.performance.label, meta: summary.performance.message, tone: summary.performance.tone },
+    {
+      icon: Wallet,
+      label: 'Total Budget',
+      value: formatCurrency(summary.totalBudget),
+      meta: `Allocated for ${label}`,
+      tone: 'neutral',
+    },
+    {
+      icon: Receipt,
+      label: 'Total Expenses',
+      value: formatCurrency(summary.totalExpenses),
+      meta: 'Approved spending',
+      chip: summary.hasBudgetData ? `${formatPercentage(summary.utilizationRate, 0)} used` : null,
+      tone: summary.utilizationRate > 80 ? 'warning' : 'positive',
+    },
+    {
+      icon: PiggyBank,
+      label: 'Remaining Budget',
+      value: formatCurrency(summary.remainingBalance),
+      meta: summary.remainingBalance < 0 ? 'Over budget' : 'Available to spend',
+      chip: summary.remainingBalance < 0 ? 'Deficit' : 'Surplus',
+      tone: summary.remainingBalance < 0 ? 'danger' : 'positive',
+    },
+    {
+      icon: Clock,
+      label: 'Pending Approvals',
+      value: `${summary.pendingRequests.length} Pending`,
+      meta: summary.missingReceipts > 0
+        ? `${summary.missingReceipts} missing receipts`
+        : 'All receipts attached',
+      chip: summary.pendingRequests.length > 0 ? 'Action required' : 'Up to date',
+      tone: summary.pendingRequests.length > 0 ? 'warning' : 'positive',
+    },
   ]
 
-  const bvaMini = bva.monthly.filter((m) => m.budget > 0 || m.spending > 0).slice(-6)
-    .map((m) => ({ month: m.key, Budget: m.budget, Spending: m.spending }))
-  const catMini = category.categories.slice(0, 5).map((c) => ({ name: c.name, value: c.value }))
-  const trendMini = trend.activeRows.map((r) => ({ month: r.month, value: r.total }))
-  const donutData = [
-    { name: 'Utilized', value: Math.min(summary.totalExpenses, summary.totalBudget || summary.totalExpenses) },
-    { name: 'Remaining', value: Math.max(0, summary.remainingBalance) },
-  ]
+  // Severity counts for AI summary
+  const severityCounts = useMemo(() => {
+    return ai.insights.reduce(
+      (acc, item) => {
+        const s = item.severity === 'high' || item.severity === 'medium' ? item.severity : 'low'
+        acc[s] += 1
+        return acc
+      },
+      { high: 0, medium: 0, low: 0 }
+    )
+  }, [ai.insights])
 
-  const previews = [
-    {
-      key: 'bva', title: 'Budget vs Actual Spending', to: '/dashboard/analysis/budget-vs-actual',
-      chart: bvaMini.length ? (
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={bvaMini} margin={{ top: 6, right: 6, left: 6, bottom: 0 }}>
-            <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
-            <Tooltip formatter={(v) => formatCurrency(v)} />
-            <Bar dataKey="Budget" fill={CHART_COLORS.budget} radius={[3, 3, 0, 0]} />
-            <Bar dataKey="Spending" fill={CHART_COLORS.actual} radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      ) : null,
-    },
-    {
-      key: 'cat', title: 'Expenses by Category', to: '/dashboard/analysis/expenses-by-category',
-      chart: catMini.length ? (
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={catMini} layout="vertical" margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
-            <XAxis type="number" hide />
-            <Tooltip formatter={(v) => formatCurrency(v)} />
-            <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-              {catMini.map((c, i) => <Cell key={c.name} fill={colorForCategory(c.name, i)} />)}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      ) : null,
-    },
-    {
-      key: 'trend', title: 'Monthly Spending Trend', to: '/dashboard/analysis/monthly-spending',
-      chart: trendMini.length ? (
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={trendMini} margin={{ top: 6, right: 8, left: 6, bottom: 0 }}>
-            <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
-            <Tooltip formatter={(v) => formatCurrency(v)} />
-            <Line type="monotone" dataKey="value" stroke={CHART_COLORS.primaryLine} strokeWidth={2.5} dot={{ r: 3, fill: CHART_COLORS.primaryLine }} />
-          </LineChart>
-        </ResponsiveContainer>
-      ) : null,
-    },
-    {
-      key: 'util', title: 'Budget Utilization', to: '/dashboard/analysis/budget-utilization',
-      chart: summary.hasBudgetData ? (
-        <div className="an-donut-wrap" style={{ height: '100%' }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={donutData} dataKey="value" innerRadius="62%" outerRadius="90%" paddingAngle={2} startAngle={90} endAngle={-270}>
-                <Cell fill="#0E9F6E" />
-                <Cell fill={CHART_COLORS.remaining} />
-              </Pie>
-              <Tooltip formatter={(v) => formatCurrency(v)} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="an-donut-center">
-            <span className="val" style={{ fontSize: '1.1rem' }}>{formatPercentage(summary.utilizationRate, 0)}</span>
-            <span className="lbl">used</span>
-          </div>
-        </div>
-      ) : null,
-    },
-  ]
+  const overallHealth = useMemo(() => {
+    if (severityCounts.high > 0 || summary.remainingBalance < 0) {
+      return { label: 'Action Needed', tone: 'danger' }
+    }
+    if (severityCounts.medium > 0 || summary.utilizationRate > 80) {
+      return { label: 'Monitor Closely', tone: 'warning' }
+    }
+    return { label: 'Healthy Status', tone: 'positive' }
+  }, [severityCounts, summary.remainingBalance, summary.utilizationRate])
+
+  // Chart data
+  const bvaData = useMemo(() => {
+    return bva.monthly
+      .filter((m) => m.budget > 0 || m.spending > 0)
+      .slice(-6)
+      .map((m) => ({
+        month: m.key,
+        Budget: m.budget,
+        Spending: m.spending,
+      }))
+  }, [bva.monthly])
+
+  const trendData = useMemo(() => {
+    return trend.activeRows.map((r) => ({
+      month: r.month,
+      Spending: r.total,
+    }))
+  }, [trend.activeRows])
+
+  // Spending Highlights 4 compact cards
+  const spendingHighlights = useMemo(() => {
+    const highest = category.highest
+    const lowest = category.lowest && category.lowest.name !== highest?.name
+      ? category.lowest
+      : category.categories.length > 1
+        ? category.categories[category.categories.length - 1]
+        : null
+
+    return [
+      {
+        icon: TrendingUp,
+        label: 'Highest Spending Category',
+        value: highest ? highest.name : 'None',
+        sub: highest
+          ? `${formatCurrency(highest.value)} (${formatPercentage(highest.percent, 0)})`
+          : 'No expenses recorded',
+      },
+      {
+        icon: TrendingDown,
+        label: 'Lowest Spending Category',
+        value: lowest ? lowest.name : (category.categories.length === 1 ? 'Only 1 Category' : 'None'),
+        sub: lowest
+          ? `${formatCurrency(lowest.value)} (${formatPercentage(lowest.percent, 0)})`
+          : 'No secondary expenses',
+      },
+      {
+        icon: Layers,
+        label: 'Budget Utilization Rate',
+        value: formatPercentage(summary.utilizationRate, 1),
+        sub: summary.hasBudgetData
+          ? `${formatCurrency(summary.totalExpenses)} of ${formatCurrency(summary.totalBudget)}`
+          : 'No budget allocated',
+      },
+      {
+        icon: ShieldAlert,
+        label: 'Overspending & Audit Status',
+        value: summary.remainingBalance < 0
+          ? `Over by ${formatCurrency(Math.abs(summary.remainingBalance))}`
+          : summary.missingReceipts > 0
+            ? `${summary.missingReceipts} Missing Receipts`
+            : '100% Compliant',
+        sub: summary.remainingBalance < 0
+          ? 'Requires immediate budget review'
+          : summary.missingReceipts > 0
+            ? 'Supporting documentation pending'
+            : 'Within allocated budget limits',
+      },
+    ]
+  }, [category, summary])
+
+  // Normalized recommendations
+  const normalizedRecommendations = useMemo(() => {
+    const rawList = ai.recommendations && ai.recommendations.length ? ai.recommendations : []
+    if (!rawList.length) {
+      // Smart default recommendations based on current financial state
+      const fallbackList = []
+      if (summary.remainingBalance < 0) {
+        fallbackList.push({
+          title: 'Implement Spending Moratorium',
+          description: `Expenses exceed allocation by ${formatCurrency(Math.abs(summary.remainingBalance))}. Restrict new disbursement requests until supplemental budget is passed.`,
+          priority: 'High',
+          category: 'Budget Control',
+        })
+      }
+      if (summary.missingReceipts > 0) {
+        fallbackList.push({
+          title: 'Enforce Receipt Compliance',
+          description: `${summary.missingReceipts} approved transactions are missing supporting documents. Require uploaded receipts before final liquidation.`,
+          priority: 'High',
+          category: 'Audit & Compliance',
+        })
+      }
+      if (category.highest && category.highest.percent > 45) {
+        fallbackList.push({
+          title: `Diversify ${category.highest.name} Allocation`,
+          description: `${category.highest.name} accounts for ${formatPercentage(category.highest.percent)} of expenditures. Review multi-vendor quotes to reduce category concentration.`,
+          priority: 'Medium',
+          category: 'Resource Optimization',
+        })
+      }
+      fallbackList.push({
+        title: 'Maintain 10% Emergency Buffer',
+        description: 'Preserve at least 10% of total barangay youth funds as an unencumbered contingency buffer for unforeseen community needs.',
+        priority: 'Low',
+        category: 'Contingency Planning',
+      })
+      fallbackList.push({
+        title: 'Conduct Monthly Variance Review',
+        description: 'Host a monthly financial review with SK kagawads to align ongoing project milestones with disbursements.',
+        priority: 'Low',
+        category: 'Governance',
+      })
+      return fallbackList
+    }
+
+    return rawList.map((rec, idx) => {
+      if (typeof rec === 'object') {
+        return {
+          title: rec.title || `Recommendation ${idx + 1}`,
+          description: rec.detail || rec.description || rec.text || '',
+          priority: rec.severity || rec.priority || 'Medium',
+          category: rec.category || 'Strategic Planning',
+        }
+      }
+      const str = String(rec).trim()
+      const colonIdx = str.indexOf(':')
+      const dashIdx = str.indexOf(' - ')
+      const splitIdx = colonIdx > 0 && colonIdx < 50 ? colonIdx : dashIdx > 0 && dashIdx < 50 ? dashIdx : -1
+
+      let title = `Strategic Action ${idx + 1}`
+      let description = str
+      if (splitIdx !== -1) {
+        title = str.slice(0, splitIdx).trim()
+        description = str.slice(splitIdx + 1).trim()
+      } else if (str.length > 50) {
+        const words = str.split(' ')
+        if (words.length > 4) {
+          title = words.slice(0, 4).join(' ')
+        }
+      }
+
+      const lower = str.toLowerCase()
+      let priority = 'Medium'
+      let categoryType = 'Optimization'
+
+      if (lower.includes('urgent') || lower.includes('critical') || lower.includes('overspending') || lower.includes('exceed') || lower.includes('missing receipt') || lower.includes('compliance')) {
+        priority = 'High'
+        categoryType = 'Compliance & Risk'
+      } else if (lower.includes('informational') || lower.includes('favorable') || lower.includes('buffer') || lower.includes('contingency')) {
+        priority = 'Low'
+        categoryType = 'Contingency'
+      } else if (lower.includes('budget') || lower.includes('allocat')) {
+        categoryType = 'Budget Planning'
+      }
+
+      return { title, description, priority, category: categoryType }
+    })
+  }, [ai.recommendations, summary, category])
 
   return (
     <AnalysisLayout
       breadcrumb={BREADCRUMB}
-      title="Financial Analysis"
-      description="A consolidated view of budgets, spending, and AI-generated insights for the selected period."
+      title="Financial Analysis & AI Insights"
+      description="Consolidated intelligence on budgets, spending velocity, category concentrations, and AI-driven risk detection."
       filterBar={
         <AnalysisFilterBar
           filters={filters}
@@ -154,58 +322,311 @@ export default function AnalysisOverviewPage() {
         />
       }
     >
-      {hasData ? (
-        <AnalysisInsightHeader
-          status={ai.status}
-          summary={ai.summary}
-          insights={ai.insights}
-          updatedAt={ai.updatedAt}
-          onRefresh={ai.refresh}
-          onViewDetails={() => {
-            document.getElementById('ai-insights-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          }}
-        />
-      ) : null}
-
-      <section className="an-metric-grid" aria-label="Summary metrics">
-        {metricCards.map((c) => <MetricCard key={c.label} {...c} />)}
+      {/* 1. Top Summary Metric Cards (4 equal cards) */}
+      <section className="an-metric-grid" aria-label="Financial summary metrics">
+        {metricCards.map((c) => (
+          <MetricCard key={c.label} {...c} />
+        ))}
       </section>
 
       {!hasData ? (
-        <ChartCard>
-          <EmptyState
-            title="No financial records for this period"
-            message={`There are no budgets or approved expenses for ${label}. Add a monthly budget or approve a request to see analysis.`}
-          />
-        </ChartCard>
-      ) : (
-        <div className="an-overview-grid">
-          <div className="an-preview-grid">
-            {previews.map((p) => (
-              <button key={p.key} type="button" className="an-preview-card" onClick={() => navigate(p.to)} aria-label={`View details: ${p.title}`}>
-                <div className="an-preview-head">
-                  <span className="an-preview-title">{p.title}</span>
-                  <span className="an-preview-view">View details <ArrowRight size={14} /></span>
-                </div>
-                <div className="an-preview-chart">
-                  {p.chart || <EmptyState title="No data" message="Nothing to chart yet." />}
-                </div>
-              </button>
-            ))}
+        /* Empty State */
+        <div className="an-empty-state-card" role="status">
+          <div className="an-empty-icon-box">
+            <BarChart3 size={32} />
           </div>
-
-          <InsightPanel
-            id="ai-insights-panel"
-            title="AI Insights"
-            status={ai.status}
-            summary={ai.summary}
-            insights={ai.insights}
-            recommendations={ai.recommendations}
-            error={ai.error}
-            onRefresh={ai.refresh}
-            updatedAt={ai.updatedAt}
-          />
+          <h2 className="an-empty-title">No financial data available</h2>
+          <p className="an-empty-desc">
+            No records were found for {label}. Try selecting a different month, year, or project from the filter bar above.
+          </p>
         </div>
+      ) : (
+        <>
+          {/* 2. Executive AI Summary Card */}
+          <section className="an-ai-summary-card" aria-label="Executive AI summary">
+            <div className="an-ai-summary-head">
+              <div className="an-ai-summary-lead">
+                <span className="an-ai-summary-badge" aria-hidden="true">
+                  <Sparkles size={20} />
+                </span>
+                <div>
+                  <h2 className="an-ai-summary-title">Executive Financial Summary</h2>
+                  <div className="an-ai-summary-status" style={{ marginTop: '2px' }}>
+                    Status: <span className={`an-status-badge ${overallHealth.tone}`}>{overallHealth.label}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="an-ai-summary-meta">
+                <span className="an-ai-summary-status">
+                  {ai.status === 'loading'
+                    ? 'Analyzing records with Gemini…'
+                    : ai.updatedAt
+                      ? `Updated ${new Date(ai.updatedAt).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}`
+                      : 'Deterministic Evaluation'}
+                </span>
+                <button
+                  type="button"
+                  className="an-btn an-btn-ghost an-btn-icon"
+                  onClick={ai.refresh}
+                  disabled={ai.status === 'loading'}
+                  aria-label="Refresh AI analysis"
+                  title="Refresh AI analysis"
+                >
+                  <RefreshCw size={16} className={ai.status === 'loading' ? 'an-spin' : ''} />
+                </button>
+              </div>
+            </div>
+
+            <p className="an-ai-summary-text">
+              {ai.summary?.trim() ||
+                `For ${label}, total allocated budget is ${formatCurrency(summary.totalBudget)} with ${formatCurrency(summary.totalExpenses)} in approved disbursements (${formatPercentage(summary.utilizationRate, 1)} utilization). ${severityCounts.high} high-priority, ${severityCounts.medium} medium-priority, and ${severityCounts.low} informational insights detected.`}
+            </p>
+
+            <div className="an-ai-counts-row">
+              <span className="an-ai-count-tag high">
+                <AlertTriangle size={14} /> High Risk ({severityCounts.high})
+              </span>
+              <span className="an-ai-count-tag medium">
+                <Info size={14} /> Medium Risk ({severityCounts.medium})
+              </span>
+              <span className="an-ai-count-tag low">
+                <CheckCircle2 size={14} /> Low / Info ({severityCounts.low})
+              </span>
+            </div>
+          </section>
+
+          {/* 3. Budget & Spending Charts (2-Column Dedicated Cards) */}
+          <section className="an-section" aria-label="Budget charts">
+            <div className="an-section-header">
+              <div className="an-section-title-group">
+                <span className="an-section-icon"><BarChart3 size={18} /></span>
+                <div>
+                  <h2 className="an-section-title">Budget & Spending Analytics</h2>
+                  <p className="an-section-desc">Visual comparison of allocated budgets vs actual disbursements over time.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="an-charts-grid">
+              {/* Card 1: Budget vs Actual */}
+              <div className="an-chart-card">
+                <div className="an-chart-head">
+                  <div>
+                    <h3 className="an-chart-title">Budget vs Actual Spending</h3>
+                    <p className="an-chart-desc">Monthly comparison across active periods</p>
+                  </div>
+                </div>
+
+                <div className="an-chart-body">
+                  {bvaData.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={bvaData} margin={{ top: 12, right: 12, left: -10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `₱${(v / 1000).toFixed(0)}k`} />
+                        <Tooltip formatter={(v) => [formatCurrency(v), '']} contentStyle={{ borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+                        <Bar dataKey="Budget" fill={CHART_COLORS.budget} radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Spending" fill={CHART_COLORS.actual} radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
+                      No budget vs actual data available
+                    </div>
+                  )}
+                </div>
+
+                <div className="an-chart-footer">
+                  <span style={{ fontSize: '0.84rem', color: '#64748b' }}>Updated for {label}</span>
+                  <button
+                    type="button"
+                    className="an-chart-link"
+                    onClick={() => navigate('/dashboard/analysis/budget-vs-actual')}
+                  >
+                    View full report <ArrowRight size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Card 2: Monthly Spending Trend */}
+              <div className="an-chart-card">
+                <div className="an-chart-head">
+                  <div>
+                    <h3 className="an-chart-title">Monthly Spending Trend</h3>
+                    <p className="an-chart-desc">Historical trajectory and disbursement momentum</p>
+                  </div>
+                </div>
+
+                <div className="an-chart-body">
+                  {trendData.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={trendData} margin={{ top: 12, right: 16, left: -10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `₱${(v / 1000).toFixed(0)}k`} />
+                        <Tooltip formatter={(v) => [formatCurrency(v), 'Expenses']} contentStyle={{ borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+                        <Line
+                          type="monotone"
+                          dataKey="Spending"
+                          stroke={CHART_COLORS.primaryLine}
+                          strokeWidth={3}
+                          dot={{ r: 4, fill: '#0E9F6E', strokeWidth: 2, stroke: '#ffffff' }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
+                      No trend data available
+                    </div>
+                  )}
+                </div>
+
+                <div className="an-chart-footer">
+                  <span style={{ fontSize: '0.84rem', color: '#64748b' }}>Velocity: {trend.trend.direction}</span>
+                  <button
+                    type="button"
+                    className="an-chart-link"
+                    onClick={() => navigate('/dashboard/analysis/monthly-spending')}
+                  >
+                    View detailed trend <ArrowRight size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 4. Spending Highlights (4 Compact Cards) */}
+          <section className="an-section" aria-label="Spending highlights">
+            <div className="an-section-header">
+              <div className="an-section-title-group">
+                <span className="an-section-icon"><TrendingUp size={18} /></span>
+                <div>
+                  <h2 className="an-section-title">Spending Highlights & Metrics</h2>
+                  <p className="an-section-desc">Key drivers, category concentrations, and budget compliance metrics.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="an-highlight-grid">
+              {spendingHighlights.map((item) => {
+                const IconComponent = item.icon
+                return (
+                  <div key={item.label} className="an-highlight-item">
+                    <div className="an-highlight-top">
+                      <span className="an-highlight-label">{item.label}</span>
+                      <span className="an-highlight-icon">
+                        <IconComponent size={16} color="#0E9F6E" />
+                      </span>
+                    </div>
+                    <div className="an-highlight-value" title={item.value}>
+                      {item.value}
+                    </div>
+                    <div className="an-highlight-sub">{item.sub}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
+          {/* 5. AI Risk & Anomaly Analysis (Individual Modular Cards) */}
+          <section className="an-section" aria-label="AI risk analysis">
+            <div className="an-section-header">
+              <div className="an-section-title-group">
+                <span className="an-section-icon"><ShieldAlert size={18} /></span>
+                <div>
+                  <h2 className="an-section-title">AI Risk & Anomaly Analysis</h2>
+                  <p className="an-section-desc">
+                    Identified spending anomalies, compliance gaps, and category concentration risks.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="an-risk-grid">
+              {ai.insights && ai.insights.length ? (
+                ai.insights.map((item, index) => {
+                  const sev = item.severity === 'high' || item.severity === 'medium' ? item.severity : 'low'
+                  const meta = SEVERITY_META[sev]
+                  const Icon = meta.Icon
+
+                  return (
+                    <div key={`${item.title}-${index}`} className={`an-risk-card ${meta.colorClass}`}>
+                      <div className="an-risk-card-head">
+                        <h3 className="an-risk-card-title">{item.title}</h3>
+                        <span className={`an-chip ${sev}`}>
+                          <Icon size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: '-1px' }} />
+                          {meta.label}
+                        </span>
+                      </div>
+
+                      {item.why ? (
+                        <p className="an-risk-why">
+                          <span className="an-risk-why-tag">Why:</span>
+                          {item.why}
+                        </p>
+                      ) : null}
+
+                      {item.detail ? (
+                        <p className="an-risk-detail">{item.detail}</p>
+                      ) : null}
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="an-card" style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#64748b' }}>
+                  No risks or anomalies detected for this period.
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* 6. AI Strategic Recommendations (List of Recommendation Cards) */}
+          <section className="an-section" aria-label="AI recommendations">
+            <div className="an-section-header">
+              <div className="an-section-title-group">
+                <span className="an-section-icon"><Lightbulb size={18} /></span>
+                <div>
+                  <h2 className="an-section-title">AI Strategic Recommendations</h2>
+                  <p className="an-section-desc">
+                    Actionable steps to optimize budget allocation, mitigate risks, and enhance audit compliance.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="an-reco-grid">
+              {normalizedRecommendations.map((rec, index) => {
+                const sev = rec.priority === 'High' ? 'danger' : rec.priority === 'Medium' ? 'warning' : 'positive'
+                return (
+                  <div key={`${rec.title}-${index}`} className="an-reco-card">
+                    <div className="an-reco-card-top">
+                      <span className="an-reco-icon-wrap">
+                        <Lightbulb size={18} />
+                      </span>
+                      <span className={`an-chip ${sev}`}>{rec.priority} Priority</span>
+                    </div>
+
+                    <div>
+                      <h3 className="an-reco-title">{rec.title}</h3>
+                      <p className="an-reco-desc" style={{ marginTop: '8px' }}>
+                        {rec.description}
+                      </p>
+                    </div>
+
+                    <div className="an-reco-footer">
+                      <span className="an-reco-category">{rec.category}</span>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#0E9F6E' }}>
+                        Recommendation #{index + 1}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        </>
       )}
     </AnalysisLayout>
   )

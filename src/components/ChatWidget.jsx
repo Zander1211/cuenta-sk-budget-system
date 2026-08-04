@@ -144,7 +144,28 @@ function ChatWidgetInner() {
   const remaining = totals?.remaining || 0
   const userName = profileName || user?.user_metadata?.full_name || user?.email || 'Official'
 
-  // Load chat history from Supabase on user change
+  const LOCAL_CHAT_KEY = 'cuenta.chat_history.v1'
+
+  const getLocalChat = (userId) => {
+    if (!userId) return []
+    try {
+      const raw = window.localStorage.getItem(`${LOCAL_CHAT_KEY}_${userId}`)
+      return raw ? JSON.parse(raw) : []
+    } catch {
+      return []
+    }
+  }
+
+  const saveLocalChat = (userId, message) => {
+    if (!userId) return
+    try {
+      const existing = getLocalChat(userId)
+      const updated = [...existing, message].slice(-50)
+      window.localStorage.setItem(`${LOCAL_CHAT_KEY}_${userId}`, JSON.stringify(updated))
+    } catch {}
+  }
+
+  // Load chat history from Supabase (with localStorage fallback)
   useEffect(() => {
     let mounted = true
     async function loadHistory() {
@@ -165,23 +186,33 @@ function ChatWidgetInner() {
           .eq('user_id', user.id)
           .order('created_at', { ascending: true })
 
-        if (error) {
-          console.warn('Chat history query error:', error.message)
-          if (mounted) setMessages([])
-        } else if (data && mounted) {
+        if (!error && data && data.length > 0) {
           const history = data.map(row => ({
             role: row.role,
             content: row.content,
             timestamp: row.created_at,
           }))
-          setMessages(history)
-          if (history.length > 0) {
+          if (mounted) {
+            setMessages(history)
+            setInitialized(true)
+          }
+        } else {
+          const localHistory = getLocalChat(user.id)
+          if (mounted) {
+            setMessages(localHistory)
+            if (localHistory.length > 0) {
+              setInitialized(true)
+            }
+          }
+        }
+      } catch {
+        const localHistory = getLocalChat(user.id)
+        if (mounted) {
+          setMessages(localHistory)
+          if (localHistory.length > 0) {
             setInitialized(true)
           }
         }
-      } catch (err) {
-        console.warn('Failed to load chat history', err)
-        if (mounted) setMessages([])
       } finally {
         if (mounted) setHistoryLoaded(true)
       }
@@ -659,13 +690,14 @@ function ChatWidgetInner() {
     setMessages(updatedMessages)
     setIsLoading(true)
 
-    // Save user message to Supabase (fire-and-forget)
+    // Save user message to localStorage & Supabase (fire-and-forget)
+    saveLocalChat(user?.id, userMsg)
     if (user?.id) {
       supabase.from('chat_history').insert({
         user_id: user.id,
         role: 'user',
         content: userText,
-      }).then()
+      }).then().catch(() => {})
     }
 
     const systemCtx = buildSystemContext()
@@ -708,13 +740,14 @@ function ChatWidgetInner() {
 
       setMessages(prev => [...prev, assistantMsg])
 
-      // Save assistant message to Supabase (fire-and-forget)
+      // Save assistant message to localStorage & Supabase
+      saveLocalChat(user?.id, assistantMsg)
       if (user?.id) {
         supabase.from('chat_history').insert({
           user_id: user.id,
           role: 'assistant',
           content: replyText,
-        }).then()
+        }).then().catch(() => {})
       }
 
       if (!isOpen) setHasUnread(true)
@@ -723,12 +756,14 @@ function ChatWidgetInner() {
       console.warn('[Cue Chat Widget] API request failed, utilizing client context fallback:', err)
 
       const fallbackMsg = processFinancialQuery(userText, systemCtx)
-
-      setMessages(prev => [...prev, {
+      const assistantFallbackMsg = {
         role: 'assistant',
         content: fallbackMsg,
         timestamp: new Date().toISOString(),
-      }])
+      }
+
+      setMessages(prev => [...prev, assistantFallbackMsg])
+      saveLocalChat(user?.id, assistantFallbackMsg)
     } finally {
       setIsLoading(false)
     }

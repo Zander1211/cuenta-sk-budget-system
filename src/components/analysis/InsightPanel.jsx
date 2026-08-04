@@ -2,42 +2,46 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, Info, Lightbulb, RefreshCw, Sparkles } from 'lucide-react'
 
 const severityMeta = {
-  high: { Icon: AlertTriangle, label: 'High' },
-  medium: { Icon: Info, label: 'Medium' },
-  low: { Icon: CheckCircle2, label: 'Low' },
+  high: { Icon: AlertTriangle, label: 'High Priority', colorClass: 'high' },
+  medium: { Icon: Info, label: 'Medium Priority', colorClass: 'medium' },
+  low: { Icon: CheckCircle2, label: 'Low / Info', colorClass: 'low' },
 }
 
-// Fallback justification when an insight (e.g. from the AI) has no explicit `why`.
-// Keeps every card consistent — a severity is never shown without a reason.
 const severityWhy = {
-  high: 'Flagged as high priority — this may indicate a budget or compliance risk that needs attention.',
-  medium: 'Flagged as medium priority — worth monitoring, but not yet at a critical threshold.',
-  low: 'Informational insight — this does not indicate a current risk.',
+  high: 'Flagged as high priority — this may indicate a budget variance or compliance risk requiring attention.',
+  medium: 'Flagged as medium priority — worth monitoring, but not currently exceeding critical thresholds.',
+  low: 'Informational observation — budget and compliance remain within standard ranges.',
 }
 
 export function InsightItem({ item }) {
-  const { Icon, label } = severityMeta[item.severity] || severityMeta.low
-  const why = item.why || severityWhy[item.severity] || severityWhy.low
+  const sev = item.severity === 'high' || item.severity === 'medium' ? item.severity : 'low'
+  const { Icon, label, colorClass } = severityMeta[sev] || severityMeta.low
+  const why = item.why || severityWhy[sev] || severityWhy.low
+
   return (
-    <div className={`an-insight ${item.severity}`}>
-      <span className="an-insight-icon"><Icon size={16} /></span>
-      <div className="an-insight-body">
-        <div className="an-insight-head">
-          <span className="an-insight-title">{item.title}</span>
-          <span className={`an-sev an-sev-${item.severity}`}>{label}</span>
-        </div>
-        {why ? (
-          <p className="an-insight-why">
-            <span className="an-insight-why-label">Why:</span> {why}
-          </p>
-        ) : null}
-        {item.detail ? <p className="an-insight-detail">{item.detail}</p> : null}
+    <div className={`an-risk-card ${colorClass}`} style={{ padding: '16px 18px', gap: '8px' }}>
+      <div className="an-risk-card-head">
+        <h4 className="an-risk-card-title" style={{ fontSize: '0.96rem' }}>{item.title}</h4>
+        <span className={`an-chip ${sev}`} style={{ fontSize: '0.72rem', padding: '2px 8px' }}>
+          <Icon size={12} style={{ display: 'inline', marginRight: '3px', verticalAlign: '-1px' }} />
+          {label}
+        </span>
       </div>
+      {why ? (
+        <p className="an-risk-why" style={{ fontSize: '0.86rem', lineHeight: '1.45' }}>
+          <span className="an-risk-why-tag">Why:</span> {why}
+        </p>
+      ) : null}
+      {item.detail ? (
+        <p className="an-risk-detail" style={{ fontSize: '0.82rem', padding: '6px 10px' }}>
+          {item.detail}
+        </p>
+      ) : null}
     </div>
   )
 }
 
-// Proactive, page-specific insight panel. Distinct from the conversational Cue chatbot.
+// Proactive, page-specific insight panel for drill-down analytics pages.
 export function InsightPanel({
   id,
   title = 'AI Insights',
@@ -53,7 +57,7 @@ export function InsightPanel({
   const reduce = useReducedMotion()
   const statusLabel =
     status === 'loading'
-      ? 'Generating analysis…'
+      ? 'Analyzing data…'
       : status === 'error'
         ? 'AI interpretation unavailable'
         : updatedAt
@@ -69,18 +73,24 @@ export function InsightPanel({
       transition={{ duration: 0.3 }}
       aria-label="AI insights panel"
     >
-      <div className="an-insight-panel-head">
-        <div className="an-insight-panel-title">
-          <span className="an-insight-panel-badge"><Sparkles size={15} /></span>
+      <div className="an-card-head" style={{ alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span className="an-ai-summary-badge" style={{ width: '36px', height: '36px' }}>
+            <Sparkles size={16} />
+          </span>
           <div>
-            <h2 className="an-card-title">{title}</h2>
-            <p className="an-insight-panel-status">{statusLabel}</p>
+            <h3 className="an-card-title" style={{ fontSize: '1.1rem' }}>{title}</h3>
+            <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>
+              {statusLabel}
+            </p>
           </div>
         </div>
+
         {onRefresh ? (
           <button
             type="button"
             className="an-btn an-btn-ghost an-btn-icon"
+            style={{ width: '36px', height: '36px', padding: '6px' }}
             onClick={onRefresh}
             disabled={status === 'loading'}
             aria-label="Refresh AI analysis"
@@ -91,31 +101,47 @@ export function InsightPanel({
         ) : null}
       </div>
 
-      {summary ? <p className="an-insight-summary">{summary}</p> : null}
+      {summary ? (
+        <p className="an-ai-summary-text" style={{ fontSize: '0.92rem', padding: '12px 14px' }}>
+          {summary}
+        </p>
+      ) : null}
 
-      <div className="an-insight-list">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {insights.length ? (
           insights.map((item, i) => <InsightItem key={`${item.title}-${i}`} item={item} />)
         ) : (
-          <p className="an-insight-empty">{emptyMessage}</p>
+          <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', textAlign: 'center', padding: '16px' }}>
+            {emptyMessage}
+          </p>
         )}
       </div>
 
       {recommendations.length ? (
-        <div className="an-reco">
-          <div className="an-reco-head">
-            <Lightbulb size={15} />
-            <span>Recommended next actions</span>
+        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '0.9rem', color: '#0E9F6E' }}>
+            <Lightbulb size={16} />
+            <span>Recommended Actions</span>
           </div>
-          <ul className="an-reco-list">
-            {recommendations.map((rec, i) => (
-              <li key={i}>{rec}</li>
-            ))}
-          </ul>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {recommendations.map((rec, i) => {
+              const text = typeof rec === 'object' ? (rec.detail || rec.title || '') : String(rec)
+              return (
+                <div key={i} style={{ display: 'flex', gap: '8px', fontSize: '0.86rem', color: '#334155', lineHeight: '1.45' }}>
+                  <span style={{ color: '#0E9F6E', fontWeight: 700 }}>•</span>
+                  <span>{text}</span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       ) : null}
 
-      {error ? <p className="an-insight-error">{error}</p> : null}
+      {error ? (
+        <p style={{ margin: 0, fontSize: '0.84rem', color: '#b45309', background: '#fffbeb', padding: '10px 12px', border: '1px solid #fde68a', borderRadius: '8px' }}>
+          {error}
+        </p>
+      ) : null}
     </motion.aside>
   )
 }
