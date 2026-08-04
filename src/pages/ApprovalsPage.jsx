@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
+import { useNotifications } from '../context/NotificationContext'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -9,6 +10,7 @@ const currency = new Intl.NumberFormat('en-PH', {
 })
 
 function ApprovalsPage() {
+  const { addNotification } = useNotifications()
   const {
     requests,
     approveRequest,
@@ -43,6 +45,7 @@ function ApprovalsPage() {
     const { error } = await approveRequest(requestId)
     if (error) {
       setApprovalError(error.message || 'The request could not be approved.')
+      addNotification({ type: 'error', title: 'Approval Failed', message: error.message || 'The request could not be approved.' })
     }
     setApprovingId(null)
   }

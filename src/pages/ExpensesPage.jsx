@@ -3,6 +3,7 @@ import { AlertCircle, FileText, CheckCircle, ChevronDown, Plus, CreditCard, Chev
 import { useBudget } from '../context/BudgetContext'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
+import { useNotifications } from '../context/NotificationContext'
 import { supabase } from '../supabase/supabaseClient'
 import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
 import ReceiptPrintPreview from '../components/ReceiptPrintPreview'
@@ -41,7 +42,8 @@ function ExpensesPage() {
   } = useBudget()
   const { addLog } = useAuditLog()
   const { user, role } = useAuth()
-  const isTreasurer = role === 'SK Treasurer'
+  const { addNotification } = useNotifications()
+  const canUpload = ['SK Chairman', 'SK Treasurer'].includes(role)
 
   const [activeTab, setActiveTab] = useState('active')
   const [projectFilter, setProjectFilter] = useState('')
@@ -384,6 +386,7 @@ function ExpensesPage() {
       status: 'Success',
     })
     await refreshExpensesFromSupabase()
+    addNotification({ type: 'system', title: 'Receipt Uploaded', message: 'Receipt uploaded and attached successfully.' })
   }
 
   function handlePrintReceipt(expense) {
@@ -544,7 +547,7 @@ function ExpensesPage() {
                               <span className="status-pill status-approved">Uploaded</span>
                             )}
                           </>
-                        ) : isTreasurer ? (
+                        ) : canUpload ? (
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             <input
                               type="file"
@@ -561,11 +564,9 @@ function ExpensesPage() {
                               disabled={uploadingId === addEx.id}
                               style={{ padding: '4px 8px', fontSize: '0.85rem' }}
                             >
-                              {uploadingId === addEx.id ? '...' : 'Upload'}
+                              {uploadingId === addEx.id ? 'Uploading...' : 'Upload'}
                             </button>
-                            {errorsById[addEx.id] ? (
-                               <span className="form-error" style={{ marginLeft: '4px', fontSize: '0.8rem' }}>Error</span>
-                            ) : null}
+                            {errorsById[addEx.id] ? ( <span className="form-error" style={{ marginLeft: '4px', fontSize: '0.8rem' }}>{errorsById[addEx.id]}</span> ) : null}
                           </div>
                         ) : (
                           <span className="status-pill status-pending">Missing</span>
@@ -703,7 +704,7 @@ function ExpensesPage() {
               Archive
             </button>
           </div>
-          {isTreasurer && (
+          {canUpload && (
             <button 
               type="button" 
               className="primary-button" 

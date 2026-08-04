@@ -450,38 +450,49 @@ function BudgetProvider({ children }) {
   }
 
   async function approveRequest(requestId) {
-    const request = requests.find((item) => item.id === requestId)
-    if (!request) {
-      return { error: new Error('Budget request was not found.') }
+    try {
+      const request = requests.find((item) => item.id === requestId)
+      if (!request) {
+        return { error: new Error('Budget request was not found.') }
+      }
+
+      const { data, error } = await supabase.rpc('approve_budget_request', {
+        p_request_id: requestId,
+      })
+
+      if (error) {
+        console.error('Atomic budget approval failed:', error)
+        return { error }
+      }
+
+      const approvedRequest = mapRequestRow(data.request)
+      const approvedExpense = mapExpenseRow(data.expense)
+
+      setRequests((prev) =>
+        prev.map((item) => item.id === requestId ? approvedRequest : item)
+      )
+      setExpenses((prev) => [
+        approvedExpense,
+        ...prev.filter((item) => item.id !== approvedExpense.id),
+      ])
+
+      await Promise.all([
+        loadRequestsFromSupabase(),
+        loadExpensesFromSupabase(),
+        loadBudgetsFromSupabase(),
+      ])
+
+      addNotification({
+        type: 'system',
+        title: 'Budget Request Approved',
+        message: `"${request.event}" has been approved successfully.`,
+      })
+
+      return { data, error: null }
+    } catch (err) {
+      console.error('Exception in approveRequest:', err)
+      return { error: err }
     }
-
-    const { data, error } = await supabase.rpc('approve_budget_request', {
-      p_request_id: requestId,
-    })
-
-    if (error) {
-      console.error('Atomic budget approval failed:', error)
-      return { error }
-    }
-
-    const approvedRequest = mapRequestRow(data.request)
-    const approvedExpense = mapExpenseRow(data.expense)
-
-    setRequests((prev) =>
-      prev.map((item) => item.id === requestId ? approvedRequest : item)
-    )
-    setExpenses((prev) => [
-      approvedExpense,
-      ...prev.filter((item) => item.id !== approvedExpense.id),
-    ])
-
-    await Promise.all([
-      loadRequestsFromSupabase(),
-      loadExpensesFromSupabase(),
-      loadBudgetsFromSupabase(),
-    ])
-
-    return { data, error: null }
   }
 
   function rejectRequest(requestId, reason) {
