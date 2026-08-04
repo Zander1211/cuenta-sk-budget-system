@@ -83,12 +83,13 @@ function EventsPage() {
 
       if (uploadError) throw Object.assign(uploadError, { uploadStep: 'storage' })
 
-      // 2. Best-effort insert to receipt_records auxiliary table
+      // 2. Persist one authoritative database row for this attachment
       const { error: dbError } = await insertReceiptRecord(
         supabase, expense, file, filePath, user, role
       )
       if (dbError) {
-        console.warn('Could not insert to receipt_records (table may not exist or RLS), continuing:', dbError)
+        await supabase.storage.from(RECEIPTS_BUCKET).remove([filePath])
+        throw Object.assign(dbError, { uploadStep: 'receipt_record' })
       }
 
       // 3. Link receipt to expenses table in Supabase

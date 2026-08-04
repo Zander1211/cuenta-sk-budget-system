@@ -37,36 +37,76 @@ function ReceiptsPage() {
 
   useEffect(() => {
     let mounted = true
-    const missing = approvedExpenses.filter((expense) => {
-      const path = expense.receiptUrl || expense.receipt_url
-      return path && !receiptLinks[expense.id]
-    })
-
-    if (!missing.length) return
+    if (!approvedExpenses.length) {
+      return
+    }
 
     ;(async () => {
       const updates = {}
+
+      const recordIds = approvedExpenses.map((expense) => String(expense.id))
+      const { data: receiptRows, error } = await supabase
+        .from('receipt_records')
+        .select('id, record_id, file_path, file_name, file_type, uploaded_at')
+        .in('record_id', recordIds)
+        .order('uploaded_at', { ascending: true })
+
+      if (error) {
+        console.error('Could not load receipt records:', error)
+      }
+
+      await Promise.all((receiptRows || []).map(async (receipt) => {
+        const { data } = await supabase.storage
+          .from(RECEIPTS_BUCKET)
+          .createSignedUrl(receipt.file_path, 60 * 60)
+
+        if (data?.signedUrl) {
+          const key = String(receipt.record_id)
+          if (!updates[key]) updates[key] = []
+          updates[key].push({
+            id: receipt.id,
+            url: data.signedUrl,
+            path: receipt.file_path,
+            name: receipt.file_name || 'Receipt',
+            type: receipt.file_type,
+          })
+        }
+      }))
+
+      // Preserve compatibility with receipts uploaded before receipt_records
+      // existed. Do not duplicate a path already returned by the table.
       await Promise.all(
-        missing.map(async (expense) => {
+        approvedExpenses.map(async (expense) => {
           const path = expense.receiptUrl || expense.receipt_url
+          if (!path) return
+          const key = String(expense.id)
+          const alreadyIncluded = (updates[key] || []).some((receipt) => receipt.path === path)
+          if (alreadyIncluded) return
+
           const { data } = await supabase.storage
             .from(RECEIPTS_BUCKET)
             .createSignedUrl(path, 60 * 60)
           if (data?.signedUrl) {
-            updates[expense.id] = data.signedUrl
+            if (!updates[key]) updates[key] = []
+            updates[key].push({
+              id: `legacy-${key}`,
+              url: data.signedUrl,
+              path,
+              name: expense.receiptName || expense.receipt_name || 'Receipt',
+            })
           }
         })
       )
 
-      if (mounted && Object.keys(updates).length) {
-        setReceiptLinks((prev) => ({ ...prev, ...updates }))
+      if (mounted) {
+        setReceiptLinks(updates)
       }
     })()
 
     return () => {
       mounted = false
     }
-  }, [approvedExpenses, receiptLinks])
+  }, [approvedExpenses])
 
   function stopCamera() {
     if (streamRef.current) {
@@ -122,8 +162,8 @@ function ReceiptsPage() {
         throw Object.assign(uploadError, { uploadStep: 'storage' })
       }
 
-      // 2. Best-effort insert to receipt_records auxiliary table
-      const { error: dbError } = await insertReceiptRecord(
+      // 2. Persist one authoritative database row for this attachment
+      const { data: receiptData, error: dbError } = await insertReceiptRecord(
         supabase,
         expense,
         file,
@@ -133,7 +173,8 @@ function ReceiptsPage() {
       )
 
       if (dbError) {
-        console.warn('Could not insert to receipt_records (table may not exist or RLS), continuing:', dbError)
+        await supabase.storage.from(RECEIPTS_BUCKET).remove([filePath])
+        throw Object.assign(dbError, { uploadStep: 'receipt_record' })
       }
 
       // 3. Link receipt to expenses table in Supabase
@@ -164,7 +205,20 @@ function ReceiptsPage() {
         .from(RECEIPTS_BUCKET)
         .createSignedUrl(filePath, 60 * 60)
       if (signedData?.signedUrl) {
-        setReceiptLinks((prev) => ({ ...prev, [expense.id]: signedData.signedUrl }))
+        const receiptRow = receiptData?.[0]
+        setReceiptLinks((prev) => ({
+          ...prev,
+          [expense.id]: [
+            ...(prev[expense.id] || []),
+            {
+              id: receiptRow?.id || filePath,
+              url: signedData.signedUrl,
+              path: filePath,
+              name: file.name,
+              type: file.type,
+            },
+          ],
+        }))
       }
 
       await refreshExpensesFromSupabase()
@@ -345,15 +399,23 @@ function ReceiptsPage() {
                           : '—'}
                       </td>
                       <td data-label="Receipt">
-                        {receiptLinks[expense.id] ? (
-                          <a
-                            className="file-link"
-                            href={receiptLinks[expense.id]}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            View receipt
-                          </a>
+                        {receiptLinks[expense.id]?.length ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {receiptLinks[expense.id].map((receipt, index) => (
+                              <a
+                                key={receipt.id || receipt.path}
+                                className="file-link"
+                                href={receipt.url}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {receipt.name || `Receipt ${index + 1}`}
+                              </a>
+                            ))}
+                            <small style={{ color: 'var(--ink-soft)' }}>
+                              {receiptLinks[expense.id].length} receipt{receiptLinks[expense.id].length === 1 ? '' : 's'}
+                            </small>
+                          </div>
                         ) : (
                           <span className="status-pill status-pending">Missing</span>
                         )}
