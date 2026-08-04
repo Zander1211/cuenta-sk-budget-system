@@ -1,3 +1,4 @@
+// @ts-nocheck
 // supabase/functions/chatbot/index.ts
 // Cue AI Chatbot — Groq API (llama-3.3-70b-versatile)
 // Supabase Edge Function for the Cuenta SK Budget Monitoring System

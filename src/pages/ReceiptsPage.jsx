@@ -19,6 +19,10 @@ function ReceiptsPage() {
   const [scanFile, setScanFile] = useState(null)
   const [scanStatus, setScanStatus] = useState('idle') // 'camera', 'camera_error', 'scanning', 'review', 'uploading'
   const [activeExpense, setActiveExpense] = useState(null)
+  const [viewerExpense, setViewerExpense] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterCategory, setFilterCategory] = useState('all')
   const [ocrData, setOcrData] = useState({ vendor: '', receiptNumber: '', date: '', amount: '', items: '' })
   
   const uploadInputRef = useRef(null)
@@ -27,6 +31,28 @@ function ReceiptsPage() {
   const streamRef = useRef(null)
   const RECEIPTS_BUCKET = 'receipts'
 
+  function formatReceiptName(fileName) {
+    if (!fileName) return 'Receipt'
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(fileName)
+    if (isUUID) {
+      const ext = fileName.includes('.') ? fileName.split('.').pop() : 'jpg'
+      return `Receipt (${fileName.slice(0, 8)}…${ext})`
+    }
+    if (fileName.length > 22) {
+      const ext = fileName.includes('.') ? '.' + fileName.split('.').pop() : ''
+      const base = fileName.slice(0, 16)
+      return `${base}…${ext}`
+    }
+    return fileName
+  }
+
+  function getFileIcon(name = '', type = '') {
+    const lower = (name || '').toLowerCase()
+    if (lower.endsWith('.pdf') || (type && type.includes('pdf'))) return '📄'
+    if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.webp') || (type && type.includes('image'))) return '🖼️'
+    return '📎'
+  }
+
   const approvedExpenses = useMemo(
     () => expenses.filter((expense) =>
       (expense.status || 'Approved') === 'Approved'
@@ -34,6 +60,35 @@ function ReceiptsPage() {
     ),
     [expenses]
   )
+
+  const categories = useMemo(() => {
+    const set = new Set()
+    approvedExpenses.forEach((e) => {
+      if (e.category) set.add(e.category)
+    })
+    return Array.from(set)
+  }, [approvedExpenses])
+
+  const filteredExpenses = useMemo(() => {
+    return approvedExpenses.filter((expense) => {
+      const title = (expense.event || expense.project || '').toLowerCase()
+      const cat = (expense.category || '').toLowerCase()
+      const query = searchQuery.toLowerCase().trim()
+      const matchesSearch = !query || title.includes(query) || cat.includes(query)
+      
+      const receipts = receiptLinks[expense.id] || []
+      const hasReceipts = receipts.length > 0
+      
+      let matchesStatus = true
+      if (filterStatus === 'with') matchesStatus = hasReceipts
+      if (filterStatus === 'missing') matchesStatus = !hasReceipts
+      
+      let matchesCategory = true
+      if (filterCategory !== 'all') matchesCategory = expense.category === filterCategory
+
+      return matchesSearch && matchesStatus && matchesCategory
+    })
+  }, [approvedExpenses, searchQuery, filterStatus, filterCategory, receiptLinks])
 
   useEffect(() => {
     let mounted = true
@@ -368,109 +423,418 @@ function ReceiptsPage() {
             {feedback.message}
           </div>
         ) : null}
+
         <div className="overview-card">
           <p className="eyebrow">Receipts</p>
-          <h2>Attach receipts to approved Projects, Events, and Payroll</h2>
+          <h2 style={{ marginBottom: '16px' }}>Attach receipts to approved Projects, Events, and Payroll</h2>
+
+          {/* Search & Filter Toolbar */}
+          <div className="receipts-toolbar">
+            <div className="receipts-search-box">
+              <span className="receipts-search-icon">🔍</span>
+              <input
+                type="text"
+                placeholder="Search event, category, or amount…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            <div className="receipts-filter-group">
+              <select
+                className="receipts-select"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+              >
+                <option value="all">All Receipts Status</option>
+                <option value="with">With Receipts</option>
+                <option value="missing">Missing Receipts</option>
+              </select>
+
+              {categories.length > 0 ? (
+                <select
+                  className="receipts-select"
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                >
+                  <option value="all">All Categories</option>
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              ) : null}
+
+              <span style={{ fontSize: '0.82rem', color: 'var(--ink-soft)', fontWeight: 600, padding: '4px 8px', background: 'rgba(15,31,54,0.04)', borderRadius: '8px' }}>
+                {filteredExpenses.length} record{filteredExpenses.length === 1 ? '' : 's'}
+              </span>
+            </div>
+          </div>
+
           {expensesSyncStatus === 'loading' ? (
             <p className="form-note">Syncing approved Projects, Events, and Payroll records...</p>
           ) : null}
 
-            <table className="data-table">
+          {/* Desktop Table View */}
+          <div className="receipts-table-container receipt-desktop-table">
+            <table className="receipts-table">
               <thead>
                 <tr>
-                  <th>Event</th>
-                  <th>Category</th>
-                  <th>Amount</th>
-                  <th>Approved</th>
-                  <th>Receipt</th>
-                  <th>Actions</th>
+                  <th style={{ width: '25%' }}>Event / Project</th>
+                  <th style={{ width: '18%' }}>Category</th>
+                  <th style={{ width: '14%' }}>Amount</th>
+                  <th style={{ width: '13%' }}>Approved</th>
+                  <th style={{ width: '18%' }}>Receipts</th>
+                  <th style={{ width: '12%', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {approvedExpenses.length > 0 ? (
-                  approvedExpenses.map((expense) => (
-                    <tr key={expense.id}>
-                      <td data-label="Event">{expense.event || expense.project || 'Untitled'}</td>
-                      <td data-label="Category">{expense.category || 'Uncategorized'}</td>
-                      <td data-label="Amount">{`₱${Number(expense.amount || 0).toLocaleString()}`}</td>
-                      <td data-label="Approved">
-                        {expense.approvedAt
-                          ? new Date(expense.approvedAt).toLocaleDateString()
-                          : '—'}
-                      </td>
-                      <td data-label="Receipt">
-                        {receiptLinks[expense.id]?.length ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            {receiptLinks[expense.id].map((receipt, index) => (
-                              <a
-                                key={receipt.id || receipt.path}
-                                className="file-link"
-                                href={receipt.url}
-                                target="_blank"
-                                rel="noreferrer"
+                {filteredExpenses.length > 0 ? (
+                  filteredExpenses.map((expense) => {
+                    const receipts = receiptLinks[expense.id] || []
+                    return (
+                      <tr key={expense.id}>
+                        <td className="receipt-event-cell">
+                          <span className="receipt-event-name" title={expense.event || expense.project || 'Untitled'}>
+                            {expense.event || expense.project || 'Untitled'}
+                          </span>
+                          <span className="receipt-type-pill">
+                            {expense.type || 'Project'}
+                          </span>
+                        </td>
+                        <td>{expense.category || 'Uncategorized'}</td>
+                        <td>
+                          <span className="receipt-amount-val">
+                            ₱{Number(expense.amount || 0).toLocaleString()}
+                          </span>
+                        </td>
+                        <td>
+                          {expense.approvedAt
+                            ? new Date(expense.approvedAt).toLocaleDateString()
+                            : '—'}
+                        </td>
+                        <td>
+                          {receipts.length > 1 ? (
+                            <button
+                              type="button"
+                              className="receipt-multi-btn"
+                              onClick={() => setViewerExpense(expense)}
+                              title="Click to view all attached receipts"
+                            >
+                              <span>🧾</span>
+                              <span>{receipts.length} Receipts</span>
+                              <span className="receipt-multi-tag">View All →</span>
+                            </button>
+                          ) : receipts.length === 1 ? (
+                            <div className="receipt-cell-wrapper">
+                              <div className="receipt-chip-single">
+                                <a
+                                  href={receipts[0].url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="receipt-chip-link"
+                                  title={receipts[0].name}
+                                >
+                                  <span>{getFileIcon(receipts[0].name, receipts[0].type)}</span>
+                                  <span>{formatReceiptName(receipts[0].name)}</span>
+                                </a>
+                              </div>
+                              <button
+                                type="button"
+                                className="receipt-action-btn"
+                                style={{ padding: '5px 8px', fontSize: '0.75rem' }}
+                                title="View Details"
+                                onClick={() => setViewerExpense(expense)}
                               >
-                                {receipt.name || `Receipt ${index + 1}`}
-                              </a>
-                            ))}
-                            <small style={{ color: 'var(--ink-soft)' }}>
-                              {receiptLinks[expense.id].length} receipt{receiptLinks[expense.id].length === 1 ? '' : 's'}
-                            </small>
-                          </div>
-                        ) : (
-                          <span className="status-pill status-pending">Missing</span>
-                        )}
-                      </td>
-                      <td data-label="Actions">
-                        {role !== 'Barangay Treasurer' ? (
-                          <div className="field-row" style={{ gap: '8px' }}>
-                            <button
-                              type="button"
-                              className="secondary-button"
-                              disabled={uploadingId !== null}
-                              onClick={() => triggerCamera(expense)}
-                            >
-                              📷 Scan Receipt
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary-button"
-                              disabled={uploadingId !== null}
-                              onClick={() => triggerUpload(expense)}
-                            >
-                              {uploadingId === expense.id ? (
-                                <>
-                                  <span
-                                    className="spinner"
-                                    aria-hidden="true"
-                                    style={{ width: '14px', height: '14px', margin: 0 }}
-                                  />
-                                  Uploading…
-                                </>
-                              ) : '📁 Upload'}
-                            </button>
-                            {errorsById[expense.id] ? (
-                              <span className="form-error" role="alert">
-                                {errorsById[expense.id]}
-                              </span>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <span className="status-pill status-neutral">View Only</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                                👁️
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="receipt-missing-chip">
+                              ⚠️ Missing
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          {role !== 'Barangay Treasurer' ? (
+                            <div className="receipt-actions-wrapper" style={{ justifyContent: 'flex-end' }}>
+                              <button
+                                type="button"
+                                className="receipt-action-btn scan-btn"
+                                disabled={uploadingId !== null}
+                                onClick={() => triggerCamera(expense)}
+                                title="Scan receipt with camera & OCR"
+                              >
+                                📷 Scan
+                              </button>
+                              <button
+                                type="button"
+                                className="receipt-action-btn upload-btn"
+                                disabled={uploadingId !== null}
+                                onClick={() => triggerUpload(expense)}
+                                title="Upload file"
+                              >
+                                {uploadingId === expense.id ? (
+                                  <>
+                                    <span
+                                      className="spinner"
+                                      aria-hidden="true"
+                                      style={{ width: '12px', height: '12px', margin: 0 }}
+                                    />
+                                    <span>…</span>
+                                  </>
+                                ) : '📁 Upload'}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="status-pill status-neutral">View Only</span>
+                          )}
+                          {errorsById[expense.id] ? (
+                            <div className="form-error" role="alert" style={{ marginTop: '4px', fontSize: '0.75rem' }}>
+                              {errorsById[expense.id]}
+                            </div>
+                          ) : null}
+                        </td>
+                      </tr>
+                    )
+                  })
                 ) : (
                   <tr>
-                    <td colSpan="6" className="empty-state">
-                      No approved Projects or Events are available yet.
+                    <td colSpan="6" className="empty-state" style={{ textAlign: 'center', padding: '36px 16px' }}>
+                      {searchQuery || filterStatus !== 'all' || filterCategory !== 'all'
+                        ? 'No records match the active filter criteria.'
+                        : 'No approved Projects, Events, or Payroll records are available yet.'}
                     </td>
                   </tr>
                 )}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Cards View */}
+          <div className="receipt-mobile-cards">
+            {filteredExpenses.length > 0 ? (
+              filteredExpenses.map((expense) => {
+                const receipts = receiptLinks[expense.id] || []
+                return (
+                  <div key={expense.id} className="receipt-card-mobile">
+                    <div className="receipt-card-header">
+                      <div>
+                        <h3 className="receipt-card-title">{expense.event || expense.project || 'Untitled'}</h3>
+                        <span className="receipt-type-pill">{expense.type || 'Project'}</span>
+                      </div>
+                      <span className="receipt-amount-val" style={{ fontSize: '1.05rem' }}>
+                        ₱{Number(expense.amount || 0).toLocaleString()}
+                      </span>
+                    </div>
+
+                    <div className="receipt-card-meta">
+                      <span>📂 {expense.category || 'Uncategorized'}</span>
+                      <span>•</span>
+                      <span>📅 {expense.approvedAt ? new Date(expense.approvedAt).toLocaleDateString() : '—'}</span>
+                    </div>
+
+                    <div className="receipt-card-receipt-section">
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--ink-soft)' }}>
+                        Attached Receipts:
+                      </span>
+                      {receipts.length > 1 ? (
+                        <button
+                          type="button"
+                          className="receipt-multi-btn"
+                          onClick={() => setViewerExpense(expense)}
+                        >
+                          <span>🧾</span>
+                          <span>{receipts.length} Receipts</span>
+                          <span className="receipt-multi-tag">View All →</span>
+                        </button>
+                      ) : receipts.length === 1 ? (
+                        <div className="receipt-chip-single">
+                          <a
+                            href={receipts[0].url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="receipt-chip-link"
+                            title={receipts[0].name}
+                          >
+                            <span>{getFileIcon(receipts[0].name, receipts[0].type)}</span>
+                            <span>{formatReceiptName(receipts[0].name)}</span>
+                          </a>
+                        </div>
+                      ) : (
+                        <span className="receipt-missing-chip">⚠️ Missing</span>
+                      )}
+                    </div>
+
+                    {role !== 'Barangay Treasurer' ? (
+                      <div className="receipt-card-actions">
+                        <button
+                          type="button"
+                          className="receipt-action-btn scan-btn"
+                          disabled={uploadingId !== null}
+                          onClick={() => triggerCamera(expense)}
+                        >
+                          📷 Scan Receipt
+                        </button>
+                        <button
+                          type="button"
+                          className="receipt-action-btn upload-btn"
+                          disabled={uploadingId !== null}
+                          onClick={() => triggerUpload(expense)}
+                        >
+                          {uploadingId === expense.id ? (
+                            <>
+                              <span className="spinner" style={{ width: '14px', height: '14px', margin: 0 }} />
+                              Uploading…
+                            </>
+                          ) : '📁 Upload File'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'right' }}>
+                        <span className="status-pill status-neutral">View Only</span>
+                      </div>
+                    )}
+
+                    {errorsById[expense.id] ? (
+                      <div className="form-error" role="alert" style={{ marginTop: '6px', fontSize: '0.82rem' }}>
+                        {errorsById[expense.id]}
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })
+            ) : (
+              <div className="empty-state" style={{ textAlign: 'center', padding: '36px 16px', background: '#fff', borderRadius: '12px' }}>
+                {searchQuery || filterStatus !== 'all' || filterCategory !== 'all'
+                  ? 'No records match the active filter criteria.'
+                  : 'No approved Projects, Events, or Payroll records are available yet.'}
+              </div>
+            )}
+          </div>
         </div>
       </section>
+
+      {/* Receipts Gallery Viewer Modal */}
+      {viewerExpense ? (
+        <div className="modal-overlay" onClick={() => setViewerExpense(null)}>
+          <div className="modal-content receipt-viewer-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header" style={{ padding: '20px 24px 16px', borderBottom: '1px solid rgba(15,31,54,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <span className="eyebrow" style={{ margin: 0 }}>Receipts Gallery</span>
+                    <span className="receipt-multi-tag">
+                      {(receiptLinks[viewerExpense.id] || []).length} Attached
+                    </span>
+                  </div>
+                  <h2 style={{ fontSize: '1.25rem', margin: '0 0 6px' }}>
+                    {viewerExpense.event || viewerExpense.project || 'Record Receipts'}
+                  </h2>
+                  <div style={{ display: 'flex', gap: '10px', fontSize: '0.85rem', color: 'var(--ink-soft)' }}>
+                    <span>Category: <strong>{viewerExpense.category || 'General'}</strong></span>
+                    <span>•</span>
+                    <span>Budget: <strong style={{ color: '#15803d' }}>₱{Number(viewerExpense.amount || 0).toLocaleString()}</strong></span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  style={{ padding: '6px 10px', minWidth: 'auto', borderRadius: '50%', cursor: 'pointer' }}
+                  onClick={() => setViewerExpense(null)}
+                  title="Close"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="modal-body" style={{ padding: '20px 24px' }}>
+              {(receiptLinks[viewerExpense.id] || []).length > 0 ? (
+                <div className="receipt-viewer-list">
+                  {(receiptLinks[viewerExpense.id] || []).map((rcpt, idx) => (
+                    <div key={rcpt.id || rcpt.path || idx} className="receipt-viewer-item">
+                      <div className="receipt-viewer-item-info">
+                        <div className="receipt-viewer-item-icon">
+                          {getFileIcon(rcpt.name, rcpt.type)}
+                        </div>
+                        <div className="receipt-viewer-item-details">
+                          <span className="receipt-viewer-item-name" title={rcpt.name}>
+                            {rcpt.name || `Receipt #${idx + 1}`}
+                          </span>
+                          <span className="receipt-viewer-item-meta">
+                            Receipt #{idx + 1} {rcpt.type ? `• ${rcpt.type}` : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="receipt-viewer-item-actions">
+                        <a
+                          href={rcpt.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="primary-button"
+                          style={{
+                            padding: '6px 12px',
+                            fontSize: '0.82rem',
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                        >
+                          👁️ View File
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--ink-soft)' }}>
+                  <p style={{ fontSize: '2rem', margin: '0 0 8px' }}>🧾</p>
+                  <p>No receipts attached yet.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer" style={{ padding: '16px 24px', borderTop: '1px solid rgba(15,31,54,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+              {role !== 'Barangay Treasurer' ? (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    style={{ fontSize: '0.85rem', padding: '8px 14px' }}
+                    onClick={() => {
+                      const target = viewerExpense
+                      setViewerExpense(null)
+                      triggerCamera(target)
+                    }}
+                  >
+                    📷 Scan Receipt
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    style={{ fontSize: '0.85rem', padding: '8px 14px' }}
+                    onClick={() => {
+                      const target = viewerExpense
+                      setViewerExpense(null)
+                      triggerUpload(target)
+                    }}
+                  >
+                    📁 Upload More
+                  </button>
+                </div>
+              ) : <div />}
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setViewerExpense(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {scanModalOpen ? (
         <div className="modal-overlay">
