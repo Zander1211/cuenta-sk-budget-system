@@ -92,16 +92,6 @@ export default function ExpensesByCategoryPage() {
     { key: 'spark', header: 'Trend', align: 'center', render: (r) => <Sparkline points={sparklines.get(r.name)} color={colorForCategory(r.name, r.rank - 1)} /> },
   ]
 
-  const handleExport = () => {
-    exportToCsv(`expenses-by-category-${label.replace(/\s+/g, '-')}.csv`, [
-      { header: 'Rank', value: (r) => r.rank },
-      { header: 'Category', value: (r) => r.name },
-      { header: 'Total Expenses', value: (r) => r.value },
-      { header: 'Percent of Total', value: (r) => r.percent.toFixed(1) },
-      { header: 'Change vs Previous', value: (r) => (r.hasPrev && r.changePct != null ? r.changePct.toFixed(1) : 'N/A') },
-    ], cat.categories)
-  }
-
   const hasData = cat.categories.length > 0
 
   return (
@@ -113,7 +103,6 @@ export default function ExpensesByCategoryPage() {
         <AnalysisFilterBar
           filters={filters} setFilter={setFilter}
           categoryOptions={base.categoryOptions} showCategory
-          onExport={handleExport} exportDisabled={!hasData}
         />
       }
     >

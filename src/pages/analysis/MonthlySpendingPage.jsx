@@ -88,13 +88,12 @@ export default function MonthlySpendingPage() {
       { header: 'Missing Receipts', value: (r) => r.missing },
     ], tableRows)
   }
-
   return (
     <AnalysisLayout
       breadcrumb={BREADCRUMB}
       title="Monthly Spending Trend"
       description="How approved spending moves month to month across the selected year, against the 12-month average."
-      filterBar={<AnalysisFilterBar filters={filters} setFilter={setFilter} showView={false} onExport={handleExport} exportDisabled={!trend.hasData} />}
+      filterBar={<AnalysisFilterBar filters={filters} setFilter={setFilter} showView={false} />}
     >
       <section className="an-metric-grid">
         {cards.map((c) => <MetricCard key={c.label} {...c} />)}

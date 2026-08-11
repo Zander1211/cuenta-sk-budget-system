@@ -74,22 +74,12 @@ export default function BudgetUtilizationPage() {
     { key: 'changePct', header: 'vs Prev.', align: 'right', render: (r) => <PercentageChange value={r.changePct} invertColor /> },
   ]
 
-  const handleExport = () => {
-    exportToCsv(`budget-utilization-${label.replace(/\s+/g, '-')}.csv`, [
-      { header: 'Category', value: (r) => r.name },
-      { header: 'Budget Pool', value: (r) => r.allocation },
-      { header: 'Utilized', value: (r) => r.utilized },
-      { header: 'Share of Budget %', value: (r) => r.rate.toFixed(1) },
-      { header: 'Status', value: (r) => r.status },
-    ], rows)
-  }
-
   return (
     <AnalysisLayout
       breadcrumb={BREADCRUMB}
       title="Budget Utilization"
       description="How much of the allocated budget has been used. Utilization is shown against the shared period budget — this system does not store separate per-project allocations."
-      filterBar={<AnalysisFilterBar filters={filters} setFilter={setFilter} onExport={handleExport} exportDisabled={!util.hasAnyData} />}
+      filterBar={<AnalysisFilterBar filters={filters} setFilter={setFilter} />}
     >
       <section className="an-metric-grid">
         {cards.map((c) => <MetricCard key={c.label} {...c} />)}

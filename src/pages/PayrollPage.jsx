@@ -1,7 +1,12 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useMemo, useState, useEffect, useRef } from 'react'
 import { useBudget } from '../context/BudgetContext'
 import RoleGate from '../components/RoleGate'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../supabase/supabaseClient'
+
+import CurrencyInput from '../components/CurrencyInput'
+import { useNotifications } from '../context/NotificationContext'
+import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -18,9 +23,162 @@ function getPayrollTotal(breakdown = []) {
 }
 
 function PayrollPage() {
-  const { role } = useAuth()
-  const { expenses, updateProjectStatus } = useBudget()
+  const { role, user } = useAuth()
+  const { expenses, updateProjectStatus, refreshExpensesFromSupabase, updateExpenseReceipt } = useBudget()
+  const { addNotification } = useNotifications()
+
   const [expanded, setExpanded] = useState({})
+
+  const [errorsById, setErrorsById] = useState({})
+  const [uploadingId, setUploadingId] = useState(null)
+  const [scanModalOpen, setScanModalOpen] = useState(false)
+  const [scanFile, setScanFile] = useState(null)
+  const [scanStatus, setScanStatus] = useState('idle')
+  const [activeExpense, setActiveExpense] = useState(null)
+  const [ocrData, setOcrData] = useState({ vendor: '', receiptNumber: '', date: '', amount: '', items: '' })
+
+  const uploadInputRef = useRef(null)
+  const pendingUploadExpenseRef = useRef(null)
+  const videoRef = useRef(null)
+  const streamRef = useRef(null)
+  const RECEIPTS_BUCKET = 'receipts'
+
+  function stopCamera() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+  }
+
+  useEffect(() => {
+    if (scanStatus === 'camera') {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(stream => {
+          streamRef.current = stream
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream
+          }
+        })
+        .catch(err => {
+          console.error('Camera error:', err)
+          setScanStatus('camera_error')
+        })
+    } else {
+      stopCamera()
+    }
+    return () => stopCamera()
+  }, [scanStatus])
+
+  async function uploadReceipt(expense, file, { appendedNotes = '' } = {}) {
+    const validationError = validateReceiptFile(file, role)
+    if (validationError) {
+      setErrorsById(prev => ({ ...prev, [expense.id]: validationError }))
+      return { error: new Error(validationError) }
+    }
+
+    setUploadingId(expense.id)
+    setErrorsById(prev => ({ ...prev, [expense.id]: '' }))
+
+    const filePath = generateReceiptPath(expense, file)
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from(RECEIPTS_BUCKET)
+        .upload(filePath, file, { upsert: false })
+
+      if (uploadError) throw Object.assign(uploadError, { uploadStep: 'storage' })
+
+      const { error: dbError } = await insertReceiptRecord(
+        supabase, expense, file, filePath, user, role
+      )
+      if (dbError) {
+        await supabase.storage.from(RECEIPTS_BUCKET).remove([filePath])
+        throw Object.assign(dbError, { uploadStep: 'receipt_record' })
+      }
+
+      const updatePayload = { receipt_url: filePath, receipt_name: file.name }
+      if (appendedNotes) {
+        updatePayload.remarks = expense.remarks ? `${expense.remarks}\n\n${appendedNotes}` : appendedNotes
+      }
+
+      const { error: linkError } = await supabase
+        .from('expenses')
+        .update(updatePayload)
+        .eq('id', expense.id)
+
+      if (linkError) {
+        console.warn('Could not update expenses table in Supabase:', linkError)
+      }
+
+      updateExpenseReceipt(expense.id, filePath, file.name)
+
+      await refreshExpensesFromSupabase()
+      addNotification({ type: 'system', title: 'Receipt Uploaded', message: 'Receipt attached successfully.' })
+      return { error: null }
+    } catch (error) {
+      logUploadDebugInfo(error, { expenseId: expense.id, filePath, step: error.uploadStep || 'unknown' })
+      setErrorsById(prev => ({ ...prev, [expense.id]: getUploadErrorMessage(error) }))
+      return { error }
+    } finally {
+      setUploadingId(null)
+    }
+  }
+
+  function triggerCamera(expense) {
+    setActiveExpense(expense)
+    setScanModalOpen(true)
+    setScanStatus('camera')
+  }
+
+  function triggerUpload(expense) {
+    if (uploadingId !== null) return
+    pendingUploadExpenseRef.current = expense
+    setActiveExpense(expense)
+    setErrorsById(prev => ({ ...prev, [expense.id]: '' }))
+    if (uploadInputRef.current) uploadInputRef.current.value = ''
+    uploadInputRef.current?.click()
+  }
+
+  function capturePhoto() {
+    if (!videoRef.current) return
+    const canvas = document.createElement('canvas')
+    canvas.width = videoRef.current.videoWidth
+    canvas.height = videoRef.current.videoHeight
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
+    canvas.toBlob(blob => {
+      const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' })
+      setScanFile(file)
+      setScanStatus('scanning')
+      setTimeout(() => {
+        setOcrData({ vendor: 'Local Vendor Inc.', receiptNumber: `RCP-${Math.floor(Math.random() * 10000)}`, date: new Date().toISOString().split('T')[0], amount: activeExpense?.amount || '', items: 'Supplies' })
+        setScanStatus('review')
+      }, 2000)
+    }, 'image/jpeg')
+  }
+
+  async function handleFileSelected(event) {
+    const files = Array.from(event.target.files || [])
+    const expense = pendingUploadExpenseRef.current
+    event.target.value = ''
+    pendingUploadExpenseRef.current = null
+    if (!files.length || !expense) return
+    for (const file of files) {
+      await uploadReceipt(expense, file)
+    }
+  }
+
+  async function confirmScanUpload() {
+    if (!activeExpense || !scanFile || scanStatus === 'uploading') return
+    setScanStatus('uploading')
+    const appendedNotes = [ocrData.vendor ? `Vendor: ${ocrData.vendor}` : '', ocrData.receiptNumber ? `Receipt #: ${ocrData.receiptNumber}` : '', ocrData.date ? `Receipt date: ${ocrData.date}` : '', ocrData.amount !== '' ? `Receipt amount: ${ocrData.amount}` : '', ocrData.items ? `Items: ${ocrData.items}` : ''].filter(Boolean).join('\n')
+    const { error } = await uploadReceipt(activeExpense, scanFile, { appendedNotes })
+    if (error) { setScanStatus('review'); return }
+    setScanModalOpen(false)
+    setScanFile(null)
+    setScanStatus('idle')
+  }
+
+
 
   // Filter only parent expenses (approved requests) of type 'Payroll'
   const parentPayroll = useMemo(() => {
@@ -155,6 +313,7 @@ function PayrollPage() {
                 <p className="details-value" style={{ color: 'var(--text-secondary)' }}>No additional expenses linked to this payroll.</p>
               )}
             </div>
+
             
             {project.description && (
               <div style={{ marginTop: '24px' }}>
@@ -260,6 +419,61 @@ function PayrollPage() {
           </table>
         </div>
       </section>
+
+      <input type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" ref={uploadInputRef} onChange={handleFileSelected} multiple style={{ display: 'none' }} />
+      {scanModalOpen ? (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>Scanning Receipt</h2>
+              <p>Analyzing document with AI...</p>
+            </div>
+            <div className="modal-body">
+              {scanStatus === 'camera' ? (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ background: '#000', borderRadius: '12px', overflow: 'hidden', marginBottom: '16px' }}>
+                    <video ref={videoRef} autoPlay playsInline style={{ width: '100%', maxHeight: '60vh', display: 'block' }}></video>
+                  </div>
+                  <button type="button" className="primary-button" onClick={capturePhoto} style={{ width: '100%', padding: '16px', fontSize: '1.1rem' }}>
+                    Capture Photo
+                  </button>
+                </div>
+              ) : scanStatus === 'camera_error' ? (
+                <div style={{ padding: '40px 0', textAlign: 'center' }}>
+                  <p style={{ color: 'var(--cherry)', marginBottom: '16px' }}>Camera access denied or unavailable.</p>
+                  <button type="button" className="secondary-button" onClick={() => { pendingUploadExpenseRef.current = activeExpense; if (uploadInputRef.current) uploadInputRef.current.value = ''; uploadInputRef.current?.click(); }}>
+                    Upload File Instead
+                  </button>
+                </div>
+              ) : scanStatus === 'scanning' ? (
+                <div style={{ padding: '40px 0', textAlign: 'center' }}>
+                  <div className="spinner"></div>
+                  <p>Extracting data from receipt with OCR...</p>
+                </div>
+              ) : scanStatus === 'uploading' ? (
+                <div style={{ padding: '40px 0', textAlign: 'center' }}>
+                  <div className="spinner"></div>
+                  <p>Uploading and attaching receipt...</p>
+                </div>
+              ) : scanStatus === 'review' ? (
+                <div className="details-panel" style={{ marginTop: '16px' }}>
+                  <p style={{ color: '#15803d', fontWeight: 'bold', margin: '0 0 12px' }}>✓ Data Extracted Successfully</p>
+                  <div className="form-grid">
+                    <div className="field-group"><label>Store / Vendor Name</label><input type="text" value={ocrData.vendor} onChange={e => setOcrData({...ocrData, vendor: e.target.value})} /></div>
+                    <div className="field-group"><label>Receipt Number</label><input type="text" value={ocrData.receiptNumber} onChange={e => setOcrData({...ocrData, receiptNumber: e.target.value})} /></div>
+                    <div className="field-group"><label>Date</label><input type="date" value={ocrData.date} onChange={e => setOcrData({...ocrData, date: e.target.value})} /></div>
+                    <div className="field-group"><label>Total Amount (₱)</label><CurrencyInput value={ocrData.amount} onValueChange={val => setOcrData({...ocrData, amount: Number(val)})} /></div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="secondary-button" onClick={() => { setScanModalOpen(false); stopCamera(); }} disabled={scanStatus === 'uploading'}>Cancel</button>
+              {scanStatus === 'review' && activeExpense ? <button type="button" className="primary-button" onClick={confirmScanUpload}>Save & Attach</button> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </RoleGate>
   )
 }

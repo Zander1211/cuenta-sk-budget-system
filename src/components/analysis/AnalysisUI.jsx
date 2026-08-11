@@ -169,21 +169,6 @@ export function UtilizationProgress({ label, utilized, allocation, rate, status,
   )
 }
 
-// ---------- ExportButton ----------
-export function ExportButton({ onExport, disabled }) {
-  return (
-    <button
-      type="button"
-      className="an-btn an-btn-outline"
-      onClick={onExport}
-      disabled={disabled}
-      aria-label="Export current analysis as CSV"
-    >
-      <Download size={15} /> Export
-    </button>
-  )
-}
-
 // ---------- DataTable (generic, horizontally scrollable) ----------
 export function DataTable({ columns, rows, caption, empty = 'No records for this period.' }) {
   return (

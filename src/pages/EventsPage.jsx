@@ -3,7 +3,7 @@ import { useBudget } from '../context/BudgetContext'
 import RoleGate from '../components/RoleGate'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
-import { Download, FileText } from 'lucide-react'
+
 import { useRef } from 'react'
 import CurrencyInput from '../components/CurrencyInput'
 import { useNotifications } from '../context/NotificationContext'
@@ -19,7 +19,7 @@ function EventsPage() {
   const { role } = useAuth()
   const { expenses, updateProjectStatus } = useBudget()
   const [expanded, setExpanded] = useState({})
-  const [receiptLinks, setReceiptLinks] = useState({})
+
 
   const { user } = useAuth()
   const { addNotification } = useNotifications()
@@ -109,10 +109,6 @@ function EventsPage() {
 
       // 4. Update local state
       updateExpenseReceipt(expense.id, filePath, file.name)
-      const { data: signedData } = await supabase.storage.from(RECEIPTS_BUCKET).createSignedUrl(filePath, 60 * 60)
-      if (signedData?.signedUrl) {
-        setReceiptLinks(prev => ({ ...prev, [expense.id]: { url: signedData.signedUrl, name: file.name } }))
-      }
 
       await refreshExpensesFromSupabase()
       addNotification({ type: 'system', title: 'Receipt Uploaded', message: 'Receipt attached successfully.' })
@@ -182,39 +178,7 @@ function EventsPage() {
   }
 
 
-  useEffect(() => {
-    let mounted = true
-    const expandedIds = Object.keys(expanded).filter(id => expanded[id])
-    if (!expandedIds.length) return
 
-    async function fetchReceipts() {
-      const updates = {}
-      await Promise.all(expandedIds.map(async (id) => {
-        const project = expenses.find(e => e.id === id)
-        if (!project) return
-        
-        const additionalExpenses = expenses.filter(e => e.type === 'Expense' && (e.project === project.event || e.event === project.event))
-        const allLinked = [project, ...additionalExpenses]
-        
-        await Promise.all(allLinked.map(async (expense) => {
-          const path = expense.receiptUrl || expense.receipt_url
-          if (path && !receiptLinks[expense.id]) {
-            const { data } = await supabase.storage.from('receipts').createSignedUrl(path, 60 * 60)
-            if (data?.signedUrl) {
-              updates[expense.id] = { url: data.signedUrl, name: expense.receipt_name || expense.receiptName || 'Receipt' }
-            }
-          }
-        }))
-      }))
-
-      if (mounted && Object.keys(updates).length > 0) {
-        setReceiptLinks(prev => ({ ...prev, ...updates }))
-      }
-    }
-    
-    fetchReceipts()
-    return () => { mounted = false }
-  }, [expanded, expenses, receiptLinks])
 
   // Filter only parent expenses (approved requests) of type 'Event'
   const parentEvents = useMemo(() => {
@@ -304,57 +268,6 @@ function EventsPage() {
               )}
             </div>
 
-            <div className="details-breakdown" style={{ marginTop: '24px' }}>
-              <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '12px' }}>Attached Receipts</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {[project, ...additionalExpenses].filter(e => receiptLinks[e.id]).length > 0 ? (
-                  [project, ...additionalExpenses].map(e => {
-                    const receipt = receiptLinks[e.id]
-                    if (!receipt) return null
-                    return (
-                      <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                        <FileText size={20} color="var(--accent)" />
-                        <div style={{ flex: 1 }}>
-                          <p style={{ margin: 0, fontWeight: 500, fontSize: '0.9rem' }}>{receipt.name}</p>
-                          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--ink-soft)' }}>
-                            {e.id === project.id ? 'Main Event Receipt' : `Additional Expense: ${e.description || e.remarks || '—'}`}
-                          </p>
-                        </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <a href={receipt.url} target="_blank" rel="noreferrer" className="secondary-button" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            View
-                          </a>
-                          <a href={receipt.url} download className="secondary-button" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <Download size={14} /> Download
-                          </a>
-                        </div>
-
-  {['SK Chairman', 'SK Treasurer'].includes(role) && (
-    <div style={{ display: 'flex', gap: '8px', marginTop: '12px', alignItems: 'center' }}>
-      <button type="button" className="secondary-button" disabled={uploadingId === e.id} onClick={() => triggerCamera(e)}>📷 Scan Receipt</button>
-      <button type="button" className="secondary-button" disabled={uploadingId === e.id} onClick={() => triggerUpload(e)}>{uploadingId === e.id ? 'Uploading...' : '📁 Upload'}</button>
-      {errorsById[e.id] && <span className="form-error" style={{ fontSize: '0.8rem', margin: 0 }}>{errorsById[e.id]}</span>}
-    </div>
-  )}
-                      </div>
-                    )
-                  })
-                ) : (
-                  
-  <div style={{ marginTop: '12px' }}>
-    <p className="details-value" style={{ color: 'var(--text-secondary)' }}>No receipts attached to this event or its additional expenses.</p>
-    {['SK Chairman', 'SK Treasurer'].includes(role) && (
-      <div style={{ display: 'flex', gap: '8px', marginTop: '12px', alignItems: 'center' }}>
-        <button type="button" className="secondary-button" disabled={uploadingId === project.id} onClick={() => triggerCamera(project)}>📷 Scan event Receipt</button>
-        <button type="button" className="secondary-button" disabled={uploadingId === project.id} onClick={() => triggerUpload(project)}>{uploadingId === project.id ? 'Uploading...' : '📁 Upload event Receipt'}</button>
-        {errorsById[project.id] && <span className="form-error" style={{ fontSize: '0.8rem', margin: 0 }}>{errorsById[project.id]}</span>}
-      </div>
-    )}
-  </div>
-
-                )}
-              </div>
-            </div>
             
             {project.description && (
               <div style={{ marginTop: '24px' }}>

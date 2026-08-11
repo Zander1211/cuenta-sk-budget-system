@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import RoleGate from '../RoleGate'
 import { monthOptions } from '../../utils/analytics'
-import { ExportButton } from './AnalysisUI'
 import YearSpinner from '../YearSpinner'
 
 // Every role sees the same analysis: the overview charts, the drill-down
@@ -41,8 +40,6 @@ export function AnalysisFilterBar({
   showView = true,
   showProject = false,
   showCategory = false,
-  onExport,
-  exportDisabled,
 }) {
   return (
     <div className="an-filterbar" role="group" aria-label="Analysis filters">
@@ -120,11 +117,7 @@ export function AnalysisFilterBar({
         </label>
       ) : null}
 
-      {onExport ? (
-        <div className="an-filter an-filter-end">
-          <ExportButton onExport={onExport} disabled={exportDisabled} />
-        </div>
-      ) : null}
+
     </div>
   )
 }

@@ -70,23 +70,12 @@ export default function BudgetVsActualPage() {
     { key: 'status', header: 'Status', align: 'center', render: (r) => <StatusBadge status={r.status} /> },
   ]
 
-  const handleExport = () => {
-    exportToCsv(`budget-vs-actual-${filters.year}.csv`, [
-      { header: 'Month', value: (r) => r.label },
-      { header: 'Allocated Budget', value: (r) => r.budget },
-      { header: 'Approved Spending', value: (r) => r.spending },
-      { header: 'Variance', value: (r) => r.variance },
-      { header: 'Percent Used', value: (r) => r.percentUsed.toFixed(1) },
-      { header: 'Status', value: (r) => r.status },
-    ], bva.rowsWithData)
-  }
-
   return (
     <AnalysisLayout
       breadcrumb={BREADCRUMB}
       title="Budget vs Actual Spending"
       description="Allocated monthly budget compared with approved spending. This system records approved expenses as spending — there is no separate 'actual' amount, so figures are labeled accordingly."
-      filterBar={<AnalysisFilterBar filters={filters} setFilter={setFilter} showView={false} onExport={handleExport} exportDisabled={!bva.hasData} />}
+      filterBar={<AnalysisFilterBar filters={filters} setFilter={setFilter} showView={false} />}
     >
       <section className="an-metric-grid">
         {cards.map((c) => <MetricCard key={c.label} {...c} />)}

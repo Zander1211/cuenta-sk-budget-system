@@ -124,39 +124,30 @@ function ExpensesPage() {
     })
   }
 
-  // Generate signed URLs for receipts
+  // Fetch receipt counts from receipt_records
   useEffect(() => {
     let mounted = true
-    const missing = expenses.filter((expense) => {
-      const path = expense.receiptUrl || expense.receipt_url
-      return path && !receiptLinks[expense.id]
-    })
-
-    if (!missing.length) return
+    const expenseIds = expenses.map(e => String(e.id))
+    if (!expenseIds.length) return
 
     ;(async () => {
-      const updates = {}
-      await Promise.all(
-        missing.map(async (expense) => {
-          const path = expense.receiptUrl || expense.receipt_url
-          const { data } = await supabase.storage
-            .from(RECEIPTS_BUCKET)
-            .createSignedUrl(path, 60 * 60)
-          if (data?.signedUrl) {
-            updates[expense.id] = data.signedUrl
-          }
-        })
-      )
+      const { data, error } = await supabase
+        .from('receipt_records')
+        .select('record_id')
+        .in('record_id', expenseIds)
 
-      if (mounted && Object.keys(updates).length) {
-        setReceiptLinks((prev) => ({ ...prev, ...updates }))
+      if (!error && data && mounted) {
+        const counts = {}
+        data.forEach(row => {
+          const key = String(row.record_id)
+          counts[key] = (counts[key] || 0) + 1
+        })
+        setReceiptLinks(counts)
       }
     })()
 
-    return () => {
-      mounted = false
-    }
-  }, [expenses, receiptLinks])
+    return () => { mounted = false }
+  }, [expenses])
 
   const activeExpenses = useMemo(() => {
     return expenses.filter((expense) => {
@@ -397,7 +388,8 @@ function ExpensesPage() {
     const breakdownTotal = getBreakdownTotal(breakdownItems)
     const requestedAmount = Number(expense.amount) || 0
     const totalAmount = requestedAmount > 0 ? requestedAmount : breakdownTotal
-    const hasReceipt = expense.receiptUrl || expense.receipt_url || receiptLinks[expense.id]
+    const hasReceipt = receiptLinks[expense.id] && receiptLinks[expense.id] > 0
+    const receiptCount = receiptLinks[expense.id] || 0
 
     const additionalExpenses = expenses.filter(e => e.parentProjectId === expense.id)
     const additionalTotal = additionalExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
@@ -517,7 +509,8 @@ function ExpensesPage() {
                 </thead>
                 <tbody>
                   {additionalExpenses.length ? additionalExpenses.map((addEx, index) => {
-                    const hasAddReceipt = addEx.receiptUrl || addEx.receipt_url || receiptLinks[addEx.id]
+                    const addReceiptCount = receiptLinks[addEx.id] || 0
+                    const hasAddReceipt = addReceiptCount > 0
                     return (
                     <tr key={`${expense.id}-add-${index}`}>
                       <td data-label="Date">{addEx.date ? new Date(addEx.date).toLocaleDateString() : '—'}</td>
@@ -527,20 +520,9 @@ function ExpensesPage() {
                       <td data-label="Amount">{currency.format(Number(addEx.amount) || 0)}</td>
                       <td data-label="Receipt">
                         {hasAddReceipt ? (
-                          <>
-                            {receiptLinks[addEx.id] ? (
-                              <a
-                                className="file-link"
-                                href={receiptLinks[addEx.id]}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                View
-                              </a>
-                            ) : (
-                              <span className="status-pill status-approved">Uploaded</span>
-                            )}
-                          </>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 600, backgroundColor: '#dcfce7', color: '#15803d' }}>
+                            ✅ Uploaded ({addReceiptCount})
+                          </span>
                         ) : canUpload ? (
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             <input
@@ -563,7 +545,9 @@ function ExpensesPage() {
                             {errorsById[addEx.id] ? ( <span className="form-error" style={{ marginLeft: '4px', fontSize: '0.8rem' }}>{errorsById[addEx.id]}</span> ) : null}
                           </div>
                         ) : (
-                          <span className="status-pill status-pending">Missing</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 600, backgroundColor: '#fee2e2', color: '#dc2626' }}>
+                            ❌ Missing (0)
+                          </span>
                         )}
                       </td>
                     </tr>
@@ -604,51 +588,40 @@ function ExpensesPage() {
               </table>
             </div>
 
-            {/* Receipt upload + print section */}
+            {/* Receipt status + upload section */}
             <div className="details-receipt-section">
-              <p className="details-label">Receipt</p>
+              <p className="details-label">Receipts</p>
               <div className="details-receipt-actions">
                 {hasReceipt ? (
-                  <>
-                    {receiptLinks[expense.id] ? (
-                      <a
-                        className="file-link"
-                        href={receiptLinks[expense.id]}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        View Receipt
-                      </a>
-                    ) : (
-                      <span className="status-pill status-approved">Uploaded</span>
-                    )}
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => handlePrintReceipt(expense)}
-                    >
-                      Print Receipt
-                    </button>
-                  </>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '999px', fontSize: '0.85rem', fontWeight: 600, backgroundColor: '#dcfce7', color: '#15803d' }}>
+                    ✅ Uploaded ({receiptCount})
+                  </span>
                 ) : (
-                  <div className="field-row">
-                    <input
-                      type="file"
-                      accept="image/*,application/pdf"
-                      capture="environment"
-                      onChange={(event) =>
-                        handleFileChange(expense.id, event.target.files?.[0] || null)
-                      }
-                    />
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => handleUpload(expense)}
-                      disabled={uploadingId === expense.id}
-                    >
-                      {uploadingId === expense.id ? 'Uploading...' : 'Upload'}
-                    </button>
-                  </div>
+                  <>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '999px', fontSize: '0.85rem', fontWeight: 600, backgroundColor: '#fee2e2', color: '#dc2626', marginBottom: '8px' }}>
+                      ❌ Missing (0)
+                    </span>
+                    {canUpload && (
+                      <div className="field-row">
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          capture="environment"
+                          onChange={(event) =>
+                            handleFileChange(expense.id, event.target.files?.[0] || null)
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => handleUpload(expense)}
+                          disabled={uploadingId === expense.id}
+                        >
+                          {uploadingId === expense.id ? 'Uploading...' : 'Upload'}
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
                 {errorsById[expense.id] ? (
                   <p className="form-error">{errorsById[expense.id]}</p>
