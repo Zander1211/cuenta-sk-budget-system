@@ -1,5 +1,7 @@
 import { Fragment, useState } from 'react'
 import RoleGate from '../components/RoleGate'
+import { getBreakdownTotal } from '../utils/budgetUtils'
+import BudgetBreakdownTable from '../components/BudgetBreakdownTable'
 import { useBudget } from '../context/BudgetContext'
 import { useNotifications } from '../context/NotificationContext'
 
@@ -70,12 +72,6 @@ function ApprovalsPage() {
     setEditingCancelReasonId(null)
   }
 
-  const getBreakdownTotal = (breakdown = []) =>
-    breakdown.reduce((sum, item) => {
-      const qty = Number(item.quantity) || 0
-      const unit = Number(item.unitCost) || 0
-      return sum + qty * unit
-    }, 0)
 
   function toggleDetails(requestId) {
     setExpanded((prev) => ({
@@ -167,7 +163,7 @@ function ApprovalsPage() {
     const breakdownItems = Array.isArray(request.breakdown)
       ? request.breakdown
       : []
-    const breakdownTotal = getBreakdownTotal(breakdownItems)
+    const breakdownTotal = getBreakdownTotal(breakdownItems, request.type === 'Payroll')
     const requestedAmount = Number(request.amount) || 0
     const totalAmount = requestedAmount > 0 ? requestedAmount : breakdownTotal
     const hasBreakdown = breakdownItems.length > 0
@@ -303,40 +299,7 @@ function ApprovalsPage() {
 
                 <div className="details-breakdown">
                   <p className="details-label">Budget breakdown</p>
-                  {breakdownItems.length ? (
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Requisition</th>
-                          <th>Quantity</th>
-                          <th>Unit cost</th>
-                          <th>Total cost</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {breakdownItems.map((item, index) => (
-                          <tr key={`${request.id}-item-${index}`}>
-                            <td>{item.itemName || '—'}</td>
-                            <td>{item.quantity || 0}</td>
-                            <td>{currency.format(item.unitCost || 0)}</td>
-                            <td>
-                              {currency.format(
-                                (item.quantity || 0) * (item.unitCost || 0)
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <th colSpan="3">Total cost</th>
-                          <th>{currency.format(breakdownTotal)}</th>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  ) : (
-                    <p className="details-value">No requisition provided.</p>
-                  )}
+                  <BudgetBreakdownTable request={request} breakdownItems={breakdownItems} currency={currency} />
                 </div>
 
 

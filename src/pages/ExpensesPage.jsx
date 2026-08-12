@@ -9,6 +9,8 @@ import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUpl
 import ReceiptPrintPreview from '../components/ReceiptPrintPreview'
 import CurrencyInput from '../components/CurrencyInput'
 import YearSpinner from '../components/YearSpinner'
+import { getBreakdownTotal } from '../utils/budgetUtils'
+import BudgetBreakdownTable from '../components/BudgetBreakdownTable'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -21,13 +23,7 @@ const monthLabels = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
-function getBreakdownTotal(breakdown = []) {
-  return breakdown.reduce((sum, item) => {
-    const qty = Number(item.quantity) || 0
-    const unit = Number(item.unitCost) || 0
-    return sum + qty * unit
-  }, 0)
-}
+
 
 function ExpensesPage() {
   const {
@@ -385,7 +381,7 @@ function ExpensesPage() {
     if (!expanded[expense.id]) return null
 
     const breakdownItems = Array.isArray(expense.breakdown) ? expense.breakdown : []
-    const breakdownTotal = getBreakdownTotal(breakdownItems)
+    const breakdownTotal = getBreakdownTotal(breakdownItems, expense.type === 'Payroll')
     const requestedAmount = Number(expense.amount) || 0
     const totalAmount = requestedAmount > 0 ? requestedAmount : breakdownTotal
     const hasReceipt = receiptLinks[expense.id] && receiptLinks[expense.id] > 0
@@ -449,45 +445,7 @@ function ExpensesPage() {
             </div>
 
             <div className="details-breakdown">
-              {breakdownItems.length ? (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th colSpan="4" style={{ backgroundColor: '#111827', color: 'white', padding: '8px 12px', textAlign: 'center' }}>
-                        <span style={{ fontWeight: 600, letterSpacing: '0.05em' }}>BUDGET BREAKDOWN</span>
-                      </th>
-                    </tr>
-                    <tr>
-                      <th style={{ textTransform: 'uppercase' }}>ITEM</th>
-                      <th style={{ textTransform: 'uppercase' }}>QUANTITY</th>
-                      <th style={{ textTransform: 'uppercase' }}>UNIT COST</th>
-                      <th style={{ textTransform: 'uppercase' }}>TOTAL COST</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {breakdownItems.map((item, index) => (
-                      <tr key={`${expense.id}-item-${index}`}>
-                        <td data-label="Item">{item.itemName || '—'}</td>
-                        <td data-label="Quantity">{item.quantity || 0}</td>
-                        <td data-label="Unit Cost">{currency.format(item.unitCost || 0)}</td>
-                        <td data-label="Total Cost">
-                          {currency.format(
-                            (item.quantity || 0) * (item.unitCost || 0)
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <th colSpan="3">Total Cost</th>
-                      <th>{currency.format(breakdownTotal)}</th>
-                    </tr>
-                  </tfoot>
-                </table>
-              ) : (
-                <p className="details-value">No requisition provided.</p>
-              )}
+              <BudgetBreakdownTable request={expense} breakdownItems={breakdownItems} currency={currency} title="BUDGET BREAKDOWN" />
             </div>
 
             <div className="details-breakdown" style={{ marginTop: '16px' }}>

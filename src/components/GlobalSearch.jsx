@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { Search, X, FileText, ArrowRight } from 'lucide-react'
 import { useBudget } from '../context/BudgetContext'
+import { getBreakdownTotal } from '../utils/budgetUtils'
+import BudgetBreakdownTable from '../components/BudgetBreakdownTable'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -8,13 +10,7 @@ const currency = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 0,
 })
 
-function getBreakdownTotal(breakdown = []) {
-  return breakdown.reduce((sum, item) => {
-    const qty = Number(item.quantity) || 0
-    const unit = Number(item.unitCost) || 0
-    return sum + qty * unit
-  }, 0)
-}
+
 
 function GlobalSearch({ isOpen, onClose }) {
   const { expenses } = useBudget()
@@ -68,7 +64,11 @@ function GlobalSearch({ isOpen, onClose }) {
       
       let breakdownMatch = false
       if (Array.isArray(p.breakdown)) {
-        breakdownMatch = p.breakdown.some(b => (b.itemName || '').toLowerCase().includes(lowerQuery))
+        breakdownMatch = p.breakdown.some(b => 
+          (b.itemName || '').toLowerCase().includes(lowerQuery) ||
+          (b.name || '').toLowerCase().includes(lowerQuery) ||
+          (b.position || '').toLowerCase().includes(lowerQuery)
+        )
       }
       
       return titleMatch || descMatch || catMatch || notesMatch || breakdownMatch
@@ -85,7 +85,7 @@ function GlobalSearch({ isOpen, onClose }) {
     if (!selectedProject) return null
 
     const breakdownItems = Array.isArray(selectedProject.breakdown) ? selectedProject.breakdown : []
-    const breakdownTotal = getBreakdownTotal(breakdownItems)
+    const breakdownTotal = getBreakdownTotal(breakdownItems, selectedProject.type === 'Payroll')
     const requestedAmount = Number(selectedProject.amount) || 0
     const totalAmount = requestedAmount > 0 ? requestedAmount : breakdownTotal
 
@@ -139,44 +139,7 @@ function GlobalSearch({ isOpen, onClose }) {
 
             <div className="details-breakdown">
               <p className="details-label">Budget Breakdown</p>
-              {breakdownItems.length ? (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Item</th>
-                      <th>Quantity</th>
-                      <th>Unit Cost</th>
-                      <th>Total Cost</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {breakdownItems.map((item, index) => (
-                      <tr key={`${selectedProject.id}-item-${index}`}>
-                        <td>{item.itemName || '—'}</td>
-                        <td>{item.quantity || 0}</td>
-                        <td>{currency.format(item.unitCost || 0)}</td>
-                        <td>
-                          {currency.format(
-                            (item.quantity || 0) * (item.unitCost || 0)
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <th colSpan="3">Total Cost</th>
-                      <th>{currency.format(breakdownTotal)}</th>
-                    </tr>
-                    <tr>
-                      <th colSpan="3">Total Amount</th>
-                      <th>{currency.format(totalAmount)}</th>
-                    </tr>
-                  </tfoot>
-                </table>
-              ) : (
-                <p className="details-value">No breakdown provided.</p>
-              )}
+              <BudgetBreakdownTable request={selectedProject} breakdownItems={breakdownItems} currency={currency} totalAmount={totalAmount} />
             </div>
             
             <div className="details-receipt-section">
