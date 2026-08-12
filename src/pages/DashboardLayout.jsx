@@ -97,7 +97,7 @@ const navItems = [
   {
     label: 'Receipts',
     path: '/dashboard/receipts',
-    roles: ['SK Chairman', 'SK Treasurer'],
+    roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
     icon: ScrollText
   },
   {

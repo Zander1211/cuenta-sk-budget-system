@@ -392,7 +392,7 @@ function ReceiptsPage() {
   }
 
   return (
-    <RoleGate allow={['SK Chairman', 'SK Treasurer', 'Barangay Treasurer']}>
+    <RoleGate allow={['SK Chairman', 'SK Treasurer', 'Barangay Treasurer', 'SK Kagawad']}>
       <header className="dashboard-header">
         <div className="header-left">
           <div>
@@ -555,7 +555,7 @@ function ReceiptsPage() {
                           )}
                         </td>
                         <td style={{ textAlign: 'right' }}>
-                          {role !== 'Barangay Treasurer' ? (
+                          {['SK Chairman', 'SK Treasurer'].includes(role) ? (
                             <div className="receipt-actions-wrapper" style={{ justifyContent: 'flex-end' }}>
                               <button
                                 type="button"
@@ -665,7 +665,7 @@ function ReceiptsPage() {
                       )}
                     </div>
 
-                    {role !== 'Barangay Treasurer' ? (
+                    {['SK Chairman', 'SK Treasurer'].includes(role) ? (
                       <div className="receipt-card-actions">
                         <button
                           type="button"
@@ -796,7 +796,7 @@ function ReceiptsPage() {
             </div>
 
             <div className="modal-footer" style={{ padding: '16px 24px', borderTop: '1px solid rgba(15,31,54,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-              {role !== 'Barangay Treasurer' ? (
+              {['SK Chairman', 'SK Treasurer'].includes(role) ? (
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     type="button"

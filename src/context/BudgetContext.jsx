@@ -1113,39 +1113,95 @@ function BudgetProvider({ children }) {
     })
   }
 
-  function updateProjectStatus(requestId, newStatus) {
+  async function updateProjectStatus(requestId, newStatus) {
     const validStatuses = ['Pending', 'Ongoing', 'Completed']
     if (!validStatuses.includes(newStatus)) return
 
-    const request = requests.find((item) => item.id === requestId)
-    if (!request) return
+    let requestRecord = requests.find((item) => String(item.id) === String(requestId))
+    let expenseRecord = expenses.find((item) => String(item.id) === String(requestId) || String(item.requestId) === String(requestId))
+    
+    if (!requestRecord && !expenseRecord) return
 
-    setRequests((prev) =>
-      prev.map((item) =>
-        item.id === requestId
-          ? { ...item, projectStatus: newStatus }
-          : item
+    const record = requestRecord || expenseRecord
+    const moduleName = record.type === 'Payroll' ? 'Payroll' : record.type === 'Event' ? 'Event' : 'Project'
+
+    let success = false;
+    
+    if (requestRecord) {
+      try {
+        const { error: reqErr } = await supabase
+          .from('budget_requests')
+          .update({ project_status: newStatus })
+          .eq('id', requestRecord.id)
+          
+        if (reqErr) throw reqErr
+        
+        const { error: expErr } = await supabase
+          .from('expenses')
+          .update({ project_status: newStatus })
+          .eq('request_id', requestRecord.id)
+          
+        if (expErr) throw expErr
+        
+        success = true
+      } catch (err) {
+        console.error('Failed to update project status in DB (request flow):', err)
+      }
+    } else if (expenseRecord) {
+      try {
+        const { error: expErr } = await supabase
+          .from('expenses')
+          .update({ project_status: newStatus })
+          .eq('id', expenseRecord.id)
+          
+        if (expErr) throw expErr
+        
+        success = true
+      } catch (err) {
+        console.error('Failed to update project status in DB (expense flow):', err)
+      }
+    }
+
+    if (success) {
+      setRequests((prev) =>
+        prev.map((item) =>
+          String(item.id) === String(requestId)
+            ? { ...item, projectStatus: newStatus }
+            : item
+        )
       )
-    )
 
-    setExpenses((prev) =>
-      prev.map((item) =>
-        item.id === requestId || item.requestId === requestId
-          ? { ...item, projectStatus: newStatus }
-          : item
+      setExpenses((prev) =>
+        prev.map((item) =>
+          String(item.id) === String(requestId) || String(item.requestId) === String(requestId)
+            ? { ...item, projectStatus: newStatus }
+            : item
+        )
       )
-    )
 
-    addLog({
-      action: `Status Changed — ${request.event}`,
-      actionType: 'Status Changed',
-      module: 'Budget Requests',
-      recordType: 'Budget Request',
-      recordId: requestId,
-      description: `Project status updated for ${request.event}`,
-      previousValue: { projectStatus: request.projectStatus },
-      newValue: { projectStatus: newStatus },
-    })
+      addNotification({
+        type: 'success',
+        title: 'Success',
+        message: 'Status updated successfully.',
+      })
+
+      addLog({
+        action: `Status Changed — ${record.event || record.project}`,
+        actionType: 'Status Changed',
+        module: moduleName,
+        recordType: moduleName,
+        recordId: String(requestId),
+        description: `SK Chairman changed the ${moduleName} status from "${record.projectStatus || 'Ongoing'}" to "${newStatus}" for "${record.event || record.project}".`,
+        previousValue: { projectStatus: record.projectStatus || 'Ongoing' },
+        newValue: { projectStatus: newStatus },
+      })
+    } else {
+      addNotification({
+        type: 'error',
+        title: 'Update Failed',
+        message: 'Could not save the new status to the database.',
+      })
+    }
   }
 
   function updateRejectionReason(requestId, reason) {
