@@ -107,14 +107,23 @@ body {
 
 .details-grid {
 	display: grid;
-	gap: 12px;
-	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 20px 12px;
+	grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+	text-align: center;
+}
+
+@media (min-width: 640px) {
+	.details-grid {
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: 24px 16px;
+		text-align: left;
+	}
 }
 
 .details-label {
-	margin: 0 0 8px;
-	font-size: 0.75rem; /* was 0.7rem — bumped for readability */
-	letter-spacing: 0.1rem;
+	margin: 0 0 4px;
+	font-size: 0.72rem;
+	letter-spacing: 0.08rem;
 	text-transform: uppercase;
 	color: var(--ink-soft);
 	font-weight: 600;
@@ -4308,8 +4317,8 @@ td.nr-info-label {
 	.data-table td:not([data-label]),
 	.user-table td:not([data-label]),
 	.audit-table td:not([data-label]) {
-		justify-content: flex-start;
-		text-align: left;
+		justify-content: center;
+		text-align: center;
 	}
 
 	.data-table td:last-child,

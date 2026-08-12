@@ -108,11 +108,23 @@ function NewRequestPage() {
       prev.map((item, itemIndex) => (itemIndex === index ? { ...item, [field]: value } : item))
     )
   }
-  const selectedDate = new Date(eventDate)
-  const isValidDate = !isNaN(selectedDate.getTime())
-  const selectedMonth = isValidDate ? selectedDate.getMonth() + 1 : null
-  const selectedYear = isValidDate ? selectedDate.getFullYear() : null
-  const monthName = isValidDate ? selectedDate.toLocaleString('default', { month: 'long' }) : ''
+  let selectedYear = null
+  let selectedMonth = null
+  let isValidDate = false
+  let monthName = ''
+
+  if (eventDate) {
+    const parts = eventDate.split('-')
+    if (parts.length === 3) {
+      selectedYear = parseInt(parts[0], 10)
+      selectedMonth = parseInt(parts[1], 10)
+      isValidDate = !isNaN(selectedYear) && !isNaN(selectedMonth)
+      if (isValidDate) {
+        const dateObj = new Date(selectedYear, selectedMonth - 1, parseInt(parts[2], 10))
+        monthName = dateObj.toLocaleString('default', { month: 'long' })
+      }
+    }
+  }
 
   const [remoteBudgetAmount, setRemoteBudgetAmount] = useState(0)
   const [isCheckingBudget, setIsCheckingBudget] = useState(false)

@@ -447,18 +447,41 @@ function BudgetProvider({ children }) {
     })
 
     try {
-      await supabase.from('budgets').upsert(
-        {
-          month: normalizedMonth,
-          quarter,
-          year: normalizedYear,
-          amount: normalizedAmount,
-          source: source || '',
-        },
-        { onConflict: 'month,year' }
-      )
+      const { data: existingBudgets, error: fetchError } = await supabase
+        .from('budgets')
+        .select('id')
+        .eq('month', normalizedMonth)
+        .eq('year', normalizedYear)
+
+      if (fetchError) throw fetchError
+
+      if (existingBudgets && existingBudgets.length > 0) {
+        // Update the first matching budget
+        const { error: updateError } = await supabase
+          .from('budgets')
+          .update({
+            amount: normalizedAmount,
+            source: source || '',
+          })
+          .eq('id', existingBudgets[0].id)
+          
+        if (updateError) throw updateError
+      } else {
+        // Insert new budget
+        const { error: insertError } = await supabase
+          .from('budgets')
+          .insert({
+            month: normalizedMonth,
+            quarter,
+            year: normalizedYear,
+            amount: normalizedAmount,
+            source: source || '',
+          })
+          
+        if (insertError) throw insertError
+      }
     } catch (err) {
-      console.warn('Failed to upsert monthly budget to Supabase:', err)
+      console.warn('Failed to save monthly budget to Supabase:', err)
     }
 
     addLog({
