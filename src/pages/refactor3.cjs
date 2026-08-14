@@ -83,7 +83,7 @@ const logicToInject = `
 
   const filteredExpenses = expenses.filter((expense) => {
     if (expense.archivedAt || expense.status === 'Cancelled') return false
-    return isInPeriod(expense.approvedAt || expense.createdAt || expense.eventDate || expense.date)
+    return isInPeriod(expense.eventDate || expense.date || expense.approvedAt || expense.createdAt)
   })
   const totalExpenses = filteredExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0)
   

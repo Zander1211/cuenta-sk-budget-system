@@ -69,7 +69,7 @@ function ApprovedProjectsPage() {
     }))
   }
 
-  function renderProjectDetails(project, columnCount) {
+  function renderProjectDetails(project) {
     if (!expanded[project.id]) return null
 
     const breakdownItems = Array.isArray(project.breakdown) ? project.breakdown : []
@@ -79,85 +79,60 @@ function ApprovedProjectsPage() {
     const hasReceipt = project.receiptUrl || project.receipt_url || receiptLinks[project.id]
 
     return (
-      <tr className="details-row">
-        <td colSpan={columnCount}>
-          <div className="details-panel">
-            <div className="details-grid">
-              <div>
-                <p className="details-label">Description</p>
-                <p className="details-value">{project.description || '—'}</p>
-              </div>
-              <div>
-                <p className="details-label">Total Amount</p>
-                <p className="details-value">{currency.format(totalAmount)}</p>
-              </div>
-              <div>
-                <p className="details-label">Total Cost (Breakdown)</p>
-                <p className="details-value">
-                  {breakdownItems.length ? currency.format(breakdownTotal) : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="details-label">Date Approved</p>
-                <p className="details-value">
-                  {project.approvedAt
-                    ? new Date(project.approvedAt).toLocaleDateString()
-                    : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="details-label">Current Status</p>
-                <p className="details-value">
-                  {project.projectStatus || 'Ongoing'}
-                </p>
-              </div>
-              <div>
-                <p className="details-label">Associated Expenses / Category</p>
-                <p className="details-value">{project.category || '—'}</p>
-              </div>
-              <div>
-                <p className="details-label">Event Date</p>
-                <p className="details-value">
-                  {project.eventDate
-                    ? new Date(project.eventDate).toLocaleDateString()
-                    : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="details-label">Requested By</p>
-                <p className="details-value">{project.requestedBy || '—'}</p>
-              </div>
-            </div>
-
-            <div className="details-breakdown">
-              <p className="details-label">Budget Breakdown</p>
-              <BudgetBreakdownTable request={project} breakdownItems={breakdownItems} currency={currency} totalAmount={totalAmount} />
-            </div>
-
-            <div className="details-receipt-section">
-              <p className="details-label">Uploaded Documents and Receipts</p>
-              <div className="details-receipt-actions">
-                {hasReceipt ? (
-                  receiptLinks[project.id] ? (
-                    <a
-                      className="file-link"
-                      href={receiptLinks[project.id]}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      View Receipt/Document
-                    </a>
-                  ) : (
-                    <span className="status-pill status-approved">Document Uploaded</span>
-                  )
-                ) : (
-                  <p className="details-value" style={{ margin: 0 }}>No documents uploaded.</p>
-                )}
-              </div>
-            </div>
+      <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
+        <div className="details-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+          <div>
+            <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#6b7280', margin: '0 0 4px' }}>Description</p>
+            <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>{project.description || '—'}</p>
           </div>
-        </td>
-      </tr>
+          <div>
+            <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#6b7280', margin: '0 0 4px' }}>Total Cost (Breakdown)</p>
+            <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>
+              {breakdownItems.length ? currency.format(breakdownTotal) : '—'}
+            </p>
+          </div>
+          <div>
+            <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#6b7280', margin: '0 0 4px' }}>Event Date</p>
+            <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>
+              {project.eventDate
+                ? new Date(project.eventDate).toLocaleDateString()
+                : '—'}
+            </p>
+          </div>
+          <div>
+            <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#6b7280', margin: '0 0 4px' }}>Requested By</p>
+            <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>{project.requestedBy || '—'}</p>
+          </div>
+        </div>
+
+        <div className="details-breakdown" style={{ marginBottom: '24px' }}>
+          <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#6b7280', marginBottom: '12px' }}>Budget Breakdown</p>
+          <BudgetBreakdownTable request={project} breakdownItems={breakdownItems} currency={currency} totalAmount={totalAmount} />
+        </div>
+
+        <div className="details-receipt-section">
+          <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#6b7280', marginBottom: '8px' }}>Uploaded Documents and Receipts</p>
+          <div className="details-receipt-actions">
+            {hasReceipt ? (
+              receiptLinks[project.id] ? (
+                <a
+                  className="file-link"
+                  href={receiptLinks[project.id]}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ display: 'inline-block', padding: '8px 16px', backgroundColor: '#f3f4f6', borderRadius: '6px', color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}
+                >
+                  View Receipt/Document
+                </a>
+              ) : (
+                <span className="status-pill status-approved">Document Uploaded</span>
+              )
+            ) : (
+              <p className="details-value" style={{ margin: 0, fontStyle: 'italic', color: '#9ca3af' }}>No documents uploaded.</p>
+            )}
+          </div>
+        </div>
+      </div>
     )
   }
 
@@ -174,60 +149,59 @@ function ApprovedProjectsPage() {
       </header>
 
       <section className="dashboard-content">
-        <div className="overview-card">
+        <div className="overview-card" style={{ padding: '24px' }}>
           <p className="eyebrow">Overview</p>
-          <h2>All Approved Projects</h2>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Project / Event Title</th>
-                <th>Category</th>
-                <th>Approved Budget</th>
-                <th>Date Approved</th>
-                <th>Current Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {approvedProjects.length ? (
-                approvedProjects.map((project) => (
-                  <Fragment key={project.id}>
-                    <tr>
-                      <td>{project.project || project.event || 'Untitled'}</td>
-                      <td>{project.category}</td>
-                      <td>{currency.format(project.amount || 0)}</td>
-                      <td>
-                        {project.approvedAt
-                          ? new Date(project.approvedAt).toLocaleDateString()
-                          : '—'}
-                      </td>
-                      <td>
-                        <span className={`status-pill status-${(project.projectStatus || 'Ongoing').toLowerCase()}`}>
-                          {project.projectStatus || 'Ongoing'}
-                        </span>
-                      </td>
-                      <td className="table-actions">
-                        <button
-                          className="secondary-button"
-                          type="button"
-                          onClick={() => toggleDetails(project.id)}
-                        >
-                          {expanded[project.id] ? 'Hide Details' : 'View Details'}
-                        </button>
-                      </td>
-                    </tr>
-                    {renderProjectDetails(project, 6)}
-                  </Fragment>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="6" className="empty-state">
-                    No approved projects yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <h2 style={{ marginBottom: '24px' }}>All Approved Projects</h2>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
+            {approvedProjects.length ? (
+              approvedProjects.map((project) => (
+                <div key={project.id} style={{ border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px', backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#111827', lineHeight: '1.3' }}>
+                      {project.project || project.event || 'Untitled'}
+                    </h3>
+                    <span className={`status-pill status-${(project.projectStatus || 'Ongoing').toLowerCase()}`} style={{ flexShrink: 0, marginLeft: '12px' }}>
+                      {project.projectStatus || 'Ongoing'}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                    <div>
+                      <p style={{ margin: '0 0 2px', fontSize: '0.8rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>Category</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', color: '#374151' }}>{project.category}</p>
+                    </div>
+                    <div>
+                      <p style={{ margin: '0 0 2px', fontSize: '0.8rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>Approved Budget</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 500, color: '#059669' }}>{currency.format(project.amount || 0)}</p>
+                    </div>
+                    <div>
+                      <p style={{ margin: '0 0 2px', fontSize: '0.8rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>Date Approved</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', color: '#374151' }}>
+                        {project.approvedAt ? new Date(project.approvedAt).toLocaleDateString() : '—'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => toggleDetails(project.id)}
+                    style={{ width: '100%', marginTop: 'auto', justifyContent: 'center' }}
+                  >
+                    {expanded[project.id] ? 'Hide Details' : 'View Details'}
+                  </button>
+
+                  {renderProjectDetails(project)}
+                </div>
+              ))
+            ) : (
+              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: '#6b7280', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
+                No approved projects yet.
+              </div>
+            )}
+          </div>
         </div>
       </section>
     </RoleGate>

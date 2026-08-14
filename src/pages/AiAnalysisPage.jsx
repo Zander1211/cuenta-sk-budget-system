@@ -221,7 +221,7 @@ function AiAnalysisPage() {
   )
 
   const activeExpenses = useMemo(
-    () => expenses.filter((e) => !e.archivedAt && e.status !== 'Cancelled' && isInPeriod(e.approvedAt || e.createdAt || e.eventDate || e.date)),
+    () => expenses.filter((e) => !e.archivedAt && e.status !== 'Cancelled' && isInPeriod(e.eventDate || e.date || e.approvedAt || e.createdAt)),
     [expenses, isInPeriod]
   )
 

@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
-import { Wallet, Receipt, Scale, Gauge } from 'lucide-react'
+import { Wallet, Receipt, Scale, Gauge, FileDown } from 'lucide-react'
 import { useAnalysisFilters } from '../../hooks/useAnalysisFilters'
 import { useBudgetVsActual } from '../../hooks/useAnalysisData'
 import { useAnalysisAI } from '../../hooks/useAnalysisAI'
@@ -14,6 +14,7 @@ import {
 import { buildVarianceInsights } from '../../utils/insights'
 import { formatCurrency, formatPercentage, CHART_COLORS } from '../../utils/analytics'
 import { exportToCsv } from '../../utils/exportCsv'
+import { exportBudgetVsActualPdf } from '../../utils/exportPdf'
 
 const BREADCRUMB = [{ label: 'Home', to: '/dashboard' }, { label: 'Analysis', to: '/dashboard/analysis' }, { label: 'Budget vs Actual' }]
 
@@ -34,9 +35,24 @@ function Money({ active, payload, label }) {
 
 export default function BudgetVsActualPage() {
   const { filters, setFilter } = useAnalysisFilters()
+  const chartRef = useRef(null)
+  const [exporting, setExporting] = useState(false)
+
   // This comparison is most meaningful across the full year's months.
   const yearFilters = useMemo(() => ({ ...filters, view: 'yearly' }), [filters])
   const bva = useBudgetVsActual(yearFilters)
+
+  async function handleExportPdf() {
+    if (exporting || !bva.hasData) return
+    setExporting(true)
+    try {
+      await exportBudgetVsActualPdf({ chartRef: chartRef.current, bva, filters })
+    } catch (err) {
+      console.error('PDF export failed:', err)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const chartData = bva.monthly.map((m) => ({
     month: m.key, 'Allocated Budget': m.budget, 'Approved Spending': m.spending,
@@ -83,8 +99,16 @@ export default function BudgetVsActualPage() {
 
       <div className="an-detail-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <ChartCard eyebrow="Financial Performance" title={`Allocated Budget vs Approved Spending — ${filters.year}`}>
+          <ChartCard eyebrow="Financial Performance" title={`Allocated Budget vs Approved Spending — ${filters.year}`}
+            action={bva.hasData ? (
+              <button type="button" className={`an-btn an-btn-outline`} onClick={handleExportPdf} disabled={exporting} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <FileDown size={15} />
+                {exporting ? 'Exporting…' : 'Export PDF'}
+              </button>
+            ) : null}
+          >
             {bva.hasData ? (
+              <div ref={chartRef}>
               <ResponsiveContainer width="100%" height={340}>
                 <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e8eff0" vertical={false} />
@@ -96,6 +120,7 @@ export default function BudgetVsActualPage() {
                   <Bar dataKey="Approved Spending" fill={CHART_COLORS.actual} radius={[4, 4, 0, 0]} maxBarSize={34} />
                 </BarChart>
               </ResponsiveContainer>
+              </div>
             ) : (
               <EmptyState title="No budget or spending data" message={`No allocated budget or approved expenses recorded for ${filters.year}.`} />
             )}

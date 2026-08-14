@@ -7,6 +7,7 @@ import { useBudget } from '../context/BudgetContext'
 import AnnualReportPreview from '../components/documents/AnnualReportPreview'
 import { useAuth } from '../context/AuthContext'
 import YearSpinner from '../components/YearSpinner'
+import { supabase } from '../supabase/supabaseClient'
 
 const currentYear = new Date().getFullYear()
 
@@ -14,6 +15,10 @@ function AnnualReportPage() {
   const { budgets, expenses } = useBudget()
   const { profileName, role, profileSurname } = useAuth()
   const navigate = useNavigate()
+  
+  const [expectedResults, setExpectedResults] = useState('')
+  const [performanceIndicators, setPerformanceIndicators] = useState('')
+  const [projectOverrides, setProjectOverrides] = useState({})
   
   const [selectedYear, setSelectedYear] = useState(currentYear)
   const [showPreview, setShowPreview] = useState(false)
@@ -28,6 +33,14 @@ function AnnualReportPage() {
   
   const [skTreasurer, setSkTreasurer] = useState(role === 'SK Treasurer' ? fullName : '')
   const [skChairperson, setSkChairperson] = useState(role === 'SK Chairman' ? fullName : '')
+  const [skSecretary, setSkSecretary] = useState('')
+  const [skKagawads, setSkKagawads] = useState(['', '', '', '', '', '', ''])
+
+  const handleKagawadChange = (index, value) => {
+    const newKagawads = [...skKagawads]
+    newKagawads[index] = value
+    setSkKagawads(newKagawads)
+  }
   
   // Calculate system totals for the selected year
   const systemTotals = useMemo(() => {
@@ -36,7 +49,7 @@ function AnnualReportPage() {
     
     const yearExpenses = expenses.filter((e) => {
       if (e.archivedAt) return false
-      const dateStr = e.approvedAt || e.date || e.eventDate
+      const dateStr = e.eventDate || e.date || e.approvedAt
       if (!dateStr) return false
       return new Date(dateStr).getFullYear() === selectedYear
     })
@@ -123,6 +136,30 @@ function AnnualReportPage() {
   const [cashEndHand, setCashEndHand] = useState(0)
   const [cashEndBank, setCashEndBank] = useState(0)
 
+  // Load saved settings from database
+  useEffect(() => {
+    async function loadSettings() {
+      const { data, error } = await supabase
+        .from('report_summaries')
+        .select('summary')
+        .eq('report_id', 'annual_report_settings')
+        .eq('model', 'global')
+        .single()
+      
+      if (data && data.summary) {
+        try {
+          const settings = JSON.parse(data.summary)
+          if (settings.expectedResults) setExpectedResults(settings.expectedResults)
+          if (settings.performanceIndicators) setPerformanceIndicators(settings.performanceIndicators)
+          if (settings.projectOverrides) setProjectOverrides(settings.projectOverrides)
+        } catch (e) {
+          console.error('Failed to parse settings', e)
+        }
+      }
+    }
+    loadSettings()
+  }, [])
+
   // Auto-fill system totals when year changes
   useEffect(() => {
     setSubsidyBarangay(systemTotals.totalBudget)
@@ -154,8 +191,20 @@ function AnnualReportPage() {
   const cashBeginning = cashBeginningHand + cashBeginningBank
   const cashEnd = cashBeginning + totalIncreaseDecreaseCash
 
-  const handlePreview = (e) => {
+  const handlePreview = async (e) => {
     e.preventDefault()
+    
+    // Save to database
+    try {
+      await supabase.from('report_summaries').upsert({
+        report_id: 'annual_report_settings',
+        model: 'global',
+        summary: JSON.stringify({ expectedResults, performanceIndicators, projectOverrides })
+      }, { onConflict: 'report_id, model' })
+    } catch (err) {
+      console.error('Failed to save settings', err)
+    }
+
     setShowPreview(true)
   }
 
@@ -240,6 +289,87 @@ function AnnualReportPage() {
               </label>
             </div>
           </div>
+
+          {/* Section: Resolution Officials */}
+          <div className="overview-card">
+            <h2>Resolution Officials (For PRESENTS Section)</h2>
+            <div className="form-grid">
+              <label className="field">
+                <span>SK Secretary</span>
+                <input type="text" value={skSecretary} onChange={(e) => setSkSecretary(e.target.value)} placeholder="Enter name..." />
+              </label>
+            </div>
+            <h3 style={{ marginTop: '16px', marginBottom: '8px', fontSize: '1rem' }}>SK Kagawads</h3>
+            <div className="form-grid">
+              {skKagawads.map((kagawad, idx) => (
+                <label key={idx} className="field">
+                  <span>SK Kagawad {idx + 1}</span>
+                  <input type="text" value={kagawad} onChange={(e) => handleKagawadChange(idx, e.target.value)} placeholder="Enter name..." />
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Section: General Administration Goals */}
+          <div className="overview-card">
+            <h2>General Administration Goals</h2>
+            <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
+              <label className="field">
+                <span>EXPECTED RESULTS (DESIRED OBJECTIVES)</span>
+                <textarea 
+                  value={expectedResults} 
+                  onChange={(e) => setExpectedResults(e.target.value)} 
+                  placeholder="Enter expected results..."
+                  rows={4}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit', resize: 'vertical' }}
+                />
+              </label>
+              <label className="field">
+                <span>PERFORMANCE INDICATORS (MEANS OF MEASUREMENT)</span>
+                <textarea 
+                  value={performanceIndicators} 
+                  onChange={(e) => setPerformanceIndicators(e.target.value)} 
+                  placeholder="Enter performance indicators..."
+                  rows={4}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit', resize: 'vertical' }}
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Section: Project Details */}
+          {systemTotals.projects.length > 0 && (
+            <div className="overview-card">
+              <h2>Project Objectives & Indicators</h2>
+              {systemTotals.projects.map((proj) => (
+                <div key={proj.id} style={{ marginBottom: '24px', padding: '16px', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                  <h3 style={{ marginBottom: '12px', fontSize: '1rem' }}>{proj.event || proj.project || 'Untitled Project'}</h3>
+                  <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
+                    <label className="field">
+                      <span>EXPECTED RESULTS (DESIRED OBJECTIVES)</span>
+                      <textarea 
+                        value={projectOverrides[proj.id]?.expectedResult ?? proj.description ?? ''} 
+                        onChange={(e) => setProjectOverrides(prev => ({ ...prev, [proj.id]: { ...prev[proj.id], expectedResult: e.target.value } }))} 
+                        placeholder={`e.g. To implement and complete ${proj.event || proj.project || 'Untitled Project'}`}
+                        rows={2}
+                        style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit', resize: 'vertical' }}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>PERFORMANCE INDICATORS (MEANS OF MEASUREMENT)</span>
+                      <textarea 
+                        value={projectOverrides[proj.id]?.indicator ?? proj.projectStatus ?? proj.status ?? ''} 
+                        onChange={(e) => setProjectOverrides(prev => ({ ...prev, [proj.id]: { ...prev[proj.id], indicator: e.target.value } }))} 
+                        placeholder="e.g. Completed"
+                        rows={2}
+                        style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit', resize: 'vertical' }}
+                      />
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Section: Receipts */}
           <div className="overview-card">
@@ -429,6 +559,8 @@ function AnnualReportPage() {
             province: province,
             skTreasurer,
             skChairperson,
+            skSecretary,
+            skKagawads,
             receipts: {
               subsidyBarangay,
               subsidyOtherLGU,
@@ -457,7 +589,10 @@ function AnnualReportPage() {
               bank: cashEndBank,
               calculatedTotal: cashEnd
             },
-            projects: systemTotals.projects
+            projects: systemTotals.projects,
+            expectedResults,
+            performanceIndicators,
+            projectOverrides
           }}
           onClose={() => setShowPreview(false)}
         />

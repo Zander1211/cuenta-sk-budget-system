@@ -69,7 +69,7 @@ function ExpenseSummaryPage() {
       const status = expense.status || 'Approved'
       if (!['Approved', 'Released'].includes(status)) return false
       const inPeriod = isInPeriod(
-        expense.approvedAt || expense.date || expense.eventDate
+        expense.eventDate || expense.date || expense.approvedAt
       )
       if (!inPeriod) return false
       if (categoryFilter !== 'All' && expense.category !== categoryFilter) return false
@@ -133,7 +133,7 @@ function ExpenseSummaryPage() {
     const monthTotals = Array.from({ length: 12 }, () => 0)
     expenses.forEach((expense) => {
       if (expense.archivedAt || expense.status === 'Cancelled') return
-      const date = parseDate(expense.approvedAt || expense.date || expense.eventDate)
+      const date = parseDate(expense.eventDate || expense.date || expense.approvedAt)
       if (!date || date.getFullYear() !== selectedYear) return
       monthTotals[date.getMonth()] += Number(expense.amount || 0)
     })

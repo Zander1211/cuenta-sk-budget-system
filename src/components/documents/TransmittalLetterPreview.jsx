@@ -1,5 +1,6 @@
 import '../PrintPreview.css'
 import './AdditionalDocuments.css'
+import logo from '../../assets/logo.png'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -52,17 +53,16 @@ function TransmittalLetterPreview({ data, onClose }) {
 
         <div className="print-page">
           {/* Government Letterhead with logos */}
-          <div className="gov-letterhead">
-            <div className="gov-logo-row">
-              <div className="gov-logo-placeholder">[LOGO]</div>
-              <div className="gov-letterhead-text">
-                <p className="gov-line">Republic of the Philippines</p>
-                <p className="gov-line-bold">REGION XII</p>
-                <p className="gov-line">Province of Cotabato</p>
-                <p className="gov-line">Municipality of Midsayap</p>
-                <p className="gov-line-bold">Barangay Upper Glad II</p>
-              </div>
-              <div className="gov-logo-placeholder">[LOGO]</div>
+          <div className="gov-letterhead" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '30px' }}>
+            <img src={logo} alt="SK Logo" style={{ width: '100px', height: '100px', position: 'absolute', left: '50px', top: '0', objectFit: 'contain' }} />
+            <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
+              <p style={{ margin: 0 }}>Republic of the Philippines</p>
+              <p style={{ margin: 0, fontWeight: 'bold' }}>REGION XII</p>
+              <p style={{ margin: 0 }}>Province of Cotabato</p>
+              <p style={{ margin: 0 }}>Municipality of Midsayap</p>
+              <p style={{ margin: 0, fontWeight: 'bold' }}>BARANGAY UPPER GLAD II</p>
+              <br/>
+              <p style={{ margin: 0, fontWeight: 'bold', fontSize: '11pt' }}>OFFICE OF THE SANGGUNIANG KABATAAN</p>
             </div>
           </div>
 

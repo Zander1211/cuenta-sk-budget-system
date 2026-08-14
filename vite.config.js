@@ -146,6 +146,54 @@ function localRecaptchaMock(env) {
   }
 }
 
+function localUserLoginHandler(env) {
+  return {
+    name: 'local-user-login-handler',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (req.url.startsWith('/api/user-login') && req.method === 'GET') {
+          try {
+            const url = new URL(req.url, `http://${req.headers.host}`)
+            const id = url.searchParams.get('id')
+
+            if (!id) {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: 'Missing user ID' }))
+              return
+            }
+
+            const supabaseUrl = env.VITE_SUPABASE_URL
+            const supabaseServiceKey = env.SUPABASE_SERVICE_ROLE_KEY
+
+            if (!supabaseUrl || !supabaseServiceKey) {
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: 'Configuration missing' }))
+              return
+            }
+
+            const supabase = createClient(supabaseUrl, supabaseServiceKey)
+            const { data, error } = await supabase.auth.admin.getUserById(id)
+
+            if (error) {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: error.message }))
+              return
+            }
+
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ last_sign_in_at: data.user.last_sign_in_at }))
+          } catch (err) {
+            res.statusCode = 500
+            res.end(JSON.stringify({ error: err.message }))
+          }
+          return
+        }
+        next()
+      })
+    }
+  }
+}
+
 export default defineConfig(({ mode }) => {
   // eslint-disable-next-line no-undef
   const env = loadEnv(mode, process.cwd(), '')
@@ -156,6 +204,7 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       localChatHandler(env),
       localRecaptchaMock(env),
+      localUserLoginHandler(env),
     ],
     server: {
       proxy: {
@@ -168,6 +217,9 @@ export default defineConfig(({ mode }) => {
               return req.url
             }
             if (req.url === '/api/chat') {
+              return req.url
+            }
+            if (req.url.startsWith('/api/user-login')) {
               return req.url
             }
           }

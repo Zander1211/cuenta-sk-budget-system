@@ -1,4 +1,5 @@
 import '../PrintPreview.css'
+import logo from '../../assets/logo.png'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -62,16 +63,17 @@ function NarrativeReportPreview({ data, onClose }) {
         {showCoverPage && (
           <div className="print-page nr-print-page">
           <div className="nr-title-page">
-            <div className="nr-logo-area">
-              <div className="nr-logo-placeholder">SK</div>
+            <div className="nr-logo-area" style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+              <img src={logo} alt="SK Logo" style={{ width: '120px', height: '120px', objectFit: 'contain' }} />
             </div>
 
-            <div className="nr-title-block">
-              <p className="nr-republic">Republic of the Philippines</p>
-              <p className="nr-gov-unit">
+            <div className="nr-title-block" style={{ textAlign: 'center', marginBottom: '40px', lineHeight: '1.3' }}>
+              <p style={{ margin: 0 }}>Republic of the Philippines</p>
+              <p style={{ margin: 0 }}>
                 Barangay {data.barangay}, {data.municipality}, {data.province}
               </p>
-              <p className="nr-office">SANGGUNIANG KABATAAN</p>
+              <br/>
+              <p style={{ margin: 0, fontWeight: 'bold', fontSize: '14pt' }}>SANGGUNIANG KABATAAN</p>
             </div>
 
             <div className="nr-title-main">

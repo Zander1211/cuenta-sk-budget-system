@@ -8,7 +8,7 @@ const currency = new Intl.NumberFormat('en-PH', {
 
 function ReceiptPrintPreview({ expense, receiptUrl, onClose }) {
   const projectName = expense.event || expense.project || 'Untitled'
-  const uploadDate = expense.approvedAt || expense.date || expense.eventDate
+  const uploadDate = expense.eventDate || expense.date || expense.approvedAt
 
   function handlePrint(e) {
     e.preventDefault()

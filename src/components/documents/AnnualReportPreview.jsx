@@ -1,5 +1,6 @@
-import { useRef } from 'react'
+import React, { useRef } from 'react'
 import { X, Printer } from 'lucide-react'
+import logo from '../../assets/logo.png'
 
 const currency = new Intl.NumberFormat('en-PH', {
   minimumFractionDigits: 2,
@@ -7,7 +8,7 @@ const currency = new Intl.NumberFormat('en-PH', {
 })
 
 function formatCurrency(amount) {
-  if (amount === 0 || !amount) return '-'
+  if (amount === 0 || !amount) return '0'
   return currency.format(amount)
 }
 
@@ -18,199 +19,514 @@ function AnnualReportPreview({ data, onClose }) {
     window.print()
   }
 
-  // Helper for rendering a line item with an amount
-  const LineItem = ({ label, amount, isTotal = false, indent = 0, style }) => (
-    <div className={`ar-line-item ar-indent-${indent}`} style={style}>
-      <span className={isTotal ? 'ar-total-label' : ''}>{label}</span>
-      <span className={isTotal ? 'ar-total-value' : ''}>{formatCurrency(amount)}</span>
-    </div>
-  )
+  const mooeLabels = {
+    travelling: 'Travelling Expenses',
+    training: 'Training Expenses',
+    officeSupplies: 'Office Supplies Expenses',
+    semiExpendable: 'Semi-Expendable Property Expenses',
+    fuelOil: 'Fuel, Oil and Lubricants Expenses',
+    accountableForms: 'Accountable Forms Expenses',
+    otherSupplies: 'Other Supplies and Materials Expenses',
+    water: 'Water Expenses',
+    electricity: 'Electricity Expenses',
+    postage: 'Postage and Courier Services',
+    telephone: 'Telephone Expenses',
+    internet: 'Internet Subscription Expenses',
+    prizes: 'Prizes',
+    rmLandImprovements: 'Repairs & Maint. - Land Improvements',
+    rmBuildings: 'Repairs & Maint. - Buildings & Structures',
+    rmMachinery: 'Repairs & Maint. - Machinery',
+    rmOfficeEquipment: 'Repairs & Maint. - Office Equipment',
+    rmICT: 'Repairs & Maint. - ICT Equipment',
+    rmSports: 'Repairs & Maint. - Sports Equipment',
+    rmTransportation: 'Repairs & Maint. - Transportation Eq.',
+    rmFurniture: 'Repairs & Maint. - Furniture & Books',
+    rmOtherProperty: 'Repairs & Maint. - Other Property & Eq.',
+    fidelityBond: 'Fidelity Bond Premiums',
+    advertising: 'Advertising Expenses',
+    rent: 'Rent/Lease Expenses',
+    membershipDues: 'Membership Dues & Contributions',
+    donation: 'Donation',
+    honoraria: 'Honoraria',
+    bankCharges: 'Bank Charges',
+    otherMOOE: 'Other Maintenance and Operating Expenses',
+  }
+
+  const coLabels = {
+    land: 'Land',
+    landImprovements: 'Land Improvements',
+    buildings: 'Buildings',
+    otherStructures: 'Other Structures',
+    machinery: 'Machinery',
+    officeEquipment: 'Office Equipment',
+    ictEquipment: 'ICT Equipment',
+    sportsEquipment: 'Sports Equipment',
+    transportation: 'Transportation Equipment',
+    furniture: 'Furniture, Fixtures and Books',
+    otherProperty: 'Other Property and Equipment',
+    cipLandImprovements: 'CIP - Land Improvements',
+    cipBuildings: 'CIP - Buildings',
+    cipOtherStructures: 'CIP - Other Structures',
+  }
+
+  const activeMooeCount = Object.entries(data.mooe || {}).filter(([k, v]) => v > 0 && k !== 'total').length
+  const activeCoCount = Object.entries(data.co || {}).filter(([k, v]) => v > 0 && k !== 'total').length
+  const totalGeneralAdminRows = 1 + activeMooeCount + ((data.co && data.co.total > 0) ? 1 : 0) + activeCoCount
 
   return (
     <div className="print-preview-overlay">
       <div className="print-preview-toolbar">
         <button type="button" className="secondary-button" onClick={onClose}>
-          <X size={16} />
-          Close
+          <X size={16} /> Close
         </button>
         <button type="button" className="primary-button" onClick={handlePrint}>
-          <Printer size={16} />
-          Print
+          <Printer size={16} /> Print
         </button>
       </div>
 
-      <div className="print-preview-container" ref={contentRef}>
+      <div className="print-preview-container" ref={contentRef} style={{ overflowX: 'auto' }}>
+        <style>{`
+          @media print {
+            @page { size: portrait; margin: 0.5in; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white !important; }
+            .print-preview-overlay { background: white !important; overflow: visible !important; position: static !important; }
+            .print-preview-toolbar { display: none !important; }
+            .print-preview-container { padding: 0 !important; margin: 0 !important; box-shadow: none !important; width: 100% !important; max-width: 100% !important; overflow: visible !important; }
+            .print-page { box-shadow: none !important; margin: 0 !important; padding: 0 !important; border: none !important; min-height: auto !important; width: 100% !important; }
+            .resolution-section { page-break-before: always; }
+          }
+          
+          .abyip-container {
+            width: 100%;
+            min-width: 800px;
+            background: white;
+            color: black;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            padding: 40px;
+          }
+          
+          @media (max-width: 768px) {
+            .abyip-container {
+              padding: 20px;
+            }
+          }
+
+          .abyip-header {
+            text-align: center;
+            line-height: 1.2;
+            margin-bottom: 20px;
+          }
+          .abyip-title {
+            text-align: center;
+            font-weight: bold;
+            margin: 20px 0;
+            font-size: 11pt;
+            text-transform: uppercase;
+          }
+          .abyip-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9.5pt;
+            margin-bottom: 30px;
+          }
+          .abyip-table th, .abyip-table td {
+            border: 1px solid #000;
+            padding: 6px;
+            vertical-align: middle;
+          }
+          .abyip-table th {
+            text-align: center;
+            font-weight: bold;
+          }
+          .amount-col {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+          }
+          .center-col {
+            text-align: center;
+          }
+          .bold { font-weight: bold; }
+          .uppercase { text-transform: uppercase; }
+          .indent-1 { padding-left: 20px !important; }
+          .indent-2 { padding-left: 40px !important; }
+          
+          .resolution-section {
+            margin-top: 80px;
+          }
+          .resolution-section p {
+            margin: 0 0 15px 0;
+            text-align: justify;
+          }
+        `}</style>
         
-        {/* PAGE 1: Receipts and MOOE */}
-        <div className="print-page ar-print-page">
-          <div className="ar-header">
-            <p className="ar-republic">Republic of the Philippines</p>
-            <hr className="ar-header-line" />
-            <p className="ar-sk-details">(SK of Barangay {data.barangay}, {data.city}, {data.province})</p>
-            <h1 className="ar-title">Annual Statement of Receipts and Payments</h1>
-            <p className="ar-subtitle">For the year ended December 31, {data.year}</p>
-          </div>
-
-          <div className="ar-body">
-            <h2 className="ar-section-title">Receipts</h2>
-            <LineItem label="Subsidy from Barangay" amount={data.receipts.subsidyBarangay} indent={1} />
-            <LineItem label="Subsidy from Other Local Government Units" amount={data.receipts.subsidyOtherLGU} indent={1} />
-            <LineItem label="Subsidy from National Government Agencies" amount={data.receipts.subsidyNGA} indent={1} />
-            <LineItem label="Subsidy from Government-Owned and/or Controlled Corporations" amount={data.receipts.subsidyGOCC} indent={1} />
-            <div className="ar-line-item ar-indent-1"><span>Grants and Donations in Cash</span></div>
-            <LineItem label="with Specific Purpose" amount={data.receipts.grantsSpecific} indent={2} />
-            <LineItem label="without Specific Purpose" amount={data.receipts.grantsWithoutSpecific} indent={2} />
-            <LineItem label="Miscellaneous Income" amount={data.receipts.miscIncome} indent={1} />
-            <LineItem label="Other Receipts" amount={data.receipts.otherReceipts} indent={1} style={{ borderBottom: '1px solid #000', marginBottom: '2px', paddingBottom: '2px' }} />
-            <LineItem label="Total Receipts for the year" amount={data.receipts.total} isTotal />
-
-            <h2 className="ar-section-title" style={{ marginTop: '16px' }}>Less: Payments</h2>
-            <h3 className="ar-subsection-title ar-indent-1">Maintenance and Other Operating Expenses</h3>
+        <div className="print-page" style={{ width: '100%', overflowX: 'auto', background: 'white' }}>
+          <div className="abyip-container">
             
-            <LineItem label="Travelling Expenses" amount={data.mooe.travelling} indent={2} />
-            <LineItem label="Training Expenses" amount={data.mooe.training} indent={2} />
-            <LineItem label="Office Supplies Expenses" amount={data.mooe.officeSupplies} indent={2} />
-            <LineItem label="Semi-Expendable Property Expenses" amount={data.mooe.semiExpendable} indent={2} />
-            <LineItem label="Fuel, Oil and Lubricants Expenses" amount={data.mooe.fuelOil} indent={2} />
-            <LineItem label="Accountable Forms Expenses" amount={data.mooe.accountableForms} indent={2} />
-            <LineItem label="Other Supplies and Materials Expenses" amount={data.mooe.otherSupplies} indent={2} />
-            <LineItem label="Water Expenses" amount={data.mooe.water} indent={2} />
-            <LineItem label="Electricity Expenses" amount={data.mooe.electricity} indent={2} />
-            <LineItem label="Postage and Courier Services" amount={data.mooe.postage} indent={2} />
-            <LineItem label="Telephone Expenses" amount={data.mooe.telephone} indent={2} />
-            <LineItem label="Internet Subscription Expenses" amount={data.mooe.internet} indent={2} />
-            <LineItem label="Prizes" amount={data.mooe.prizes} indent={2} />
-            <LineItem label="Repairs and Maintenance-Land Improvements" amount={data.mooe.rmLandImprovements} indent={2} />
-            <LineItem label="Repairs and Maintenance-Buildings and Other Structures" amount={data.mooe.rmBuildings} indent={2} />
-            <LineItem label="Repairs and Maintenance-Machinery" amount={data.mooe.rmMachinery} indent={2} />
-            <LineItem label="Repairs and Maintenance-Office Equipment" amount={data.mooe.rmOfficeEquipment} indent={2} />
-            <LineItem label="Repairs and Maintenance -Information and Communications Technology Equipment" amount={data.mooe.rmICT} indent={2} />
-            <LineItem label="Repairs and Maintenance-Sports Equipment" amount={data.mooe.rmSports} indent={2} />
-            <LineItem label="Repairs and Maintenance-Transportation Equipment" amount={data.mooe.rmTransportation} indent={2} />
-            <LineItem label="Repairs and Maintenance-Furniture, Fixtures and Books" amount={data.mooe.rmFurniture} indent={2} />
-            <LineItem label="Repairs and Maintenance-Other Property and Equipment" amount={data.mooe.rmOtherProperty} indent={2} />
-            <LineItem label="Fidelity Bond Premiums" amount={data.mooe.fidelityBond} indent={2} />
-            <LineItem label="Advertising Expenses" amount={data.mooe.advertising} indent={2} />
-            <LineItem label="Rent/Lease Expenses" amount={data.mooe.rent} indent={2} />
-            <LineItem label="Membership Dues and Contributions to Organizations" amount={data.mooe.membershipDues} indent={2} />
-            <LineItem label="Donation" amount={data.mooe.donation} indent={2} />
-          </div>
-        </div>
-
-        {/* PAGE 2: Continuation (MOOE, CO, Cash, Signatures) */}
-        <div className="print-page ar-print-page">
-          <div className="ar-body">
-            <LineItem label="Honoraria" amount={data.mooe.honoraria} indent={2} />
-            <LineItem label="Bank Charges" amount={data.mooe.bankCharges} indent={2} />
-            <LineItem label="Other Maintenance and Operating Expenses" amount={data.mooe.otherMOOE} indent={2} style={{ borderBottom: '1px solid #000', marginBottom: '2px', paddingBottom: '2px' }} />
-            <LineItem label="Total Maintenance and Other Operating Expenses" amount={data.mooe.total} indent={1} isTotal />
-
-            <h3 className="ar-subsection-title ar-indent-1" style={{ marginTop: '16px' }}>Capital Outlay</h3>
-            <LineItem label="Land" amount={data.co.land} indent={2} />
-            <LineItem label="Land Improvements" amount={data.co.landImprovements} indent={2} />
-            <LineItem label="Buildings" amount={data.co.buildings} indent={2} />
-            <LineItem label="Other Structures" amount={data.co.otherStructures} indent={2} />
-            <LineItem label="Machinery" amount={data.co.machinery} indent={2} />
-            <LineItem label="Office Equipment" amount={data.co.officeEquipment} indent={2} />
-            <LineItem label="Information and Communications Technology Equipment" amount={data.co.ictEquipment} indent={2} />
-            <LineItem label="Sports Equipment" amount={data.co.sportsEquipment} indent={2} />
-            <LineItem label="Transportation Equipment" amount={data.co.transportation} indent={2} />
-            <LineItem label="Furniture, Fixtures and Books" amount={data.co.furniture} indent={2} />
-            <LineItem label="Other Property and Equipment" amount={data.co.otherProperty} indent={2} />
-            <LineItem label="Construction in Progress-Land Improvements" amount={data.co.cipLandImprovements} indent={2} />
-            <LineItem label="Construction in Progress-Buildings" amount={data.co.cipBuildings} indent={2} />
-            <LineItem label="Construction in Progress-Other Structures" amount={data.co.cipOtherStructures} indent={2} style={{ borderBottom: '1px solid #000', marginBottom: '2px', paddingBottom: '2px' }} />
-            <LineItem label="Total Capital Outlay" amount={data.co.total} indent={1} isTotal />
-
-            <LineItem label="Cash Advances, Net" amount={data.cashAdvancesNet} isTotal style={{ marginTop: '24px' }} />
-            
-            <LineItem label="Total Payments for the year" amount={data.totalPayments} isTotal style={{ marginTop: '16px' }} />
-            <LineItem label="Increase/(Decrease) in Cash for the year" amount={data.increaseDecreaseCash} isTotal />
-            
-            <div className="ar-line-item"><span>Add/Less: Others</span><span>{formatCurrency(data.addLessOthers)}</span></div>
-            
-            <LineItem label="Total Increase/(Decrease) in Cash for the year" amount={data.totalIncreaseDecreaseCash} isTotal />
-            
-            <h2 className="ar-section-title" style={{ marginTop: '8px' }}>Cash at beginning of year</h2>
-            <LineItem label="Cash on Hand" amount={data.cashBeginning.hand} indent={1} />
-            <LineItem label="Cash in Bank" amount={data.cashBeginning.bank} indent={1} />
-            
-            <LineItem label="Cash at end of year" amount={data.cashEnd.calculatedTotal} isTotal style={{ marginTop: '8px' }} />
-
-            <h2 className="ar-section-title" style={{ marginTop: '16px' }}>Breakdown of Cash at end of year</h2>
-            <LineItem label="Cash on Hand" amount={data.cashEnd.hand} indent={1} />
-            <LineItem label="Cash in Bank" amount={data.cashEnd.bank} indent={1} style={{ borderBottom: '1px solid #000', marginBottom: '2px', paddingBottom: '2px' }} />
-
-            <div className="ar-signatures" style={{ marginTop: '48px' }}>
-              <p style={{ marginBottom: '32px' }}>Prepared and certified correct by:</p>
-              
-              <div className="ar-signature-row">
-                <div className="ar-signature-block">
-                  <div className="ar-signature-line" style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>
-                    {data.skTreasurer || '_________________________'}
-                  </div>
-                  <div className="ar-signature-label">SK Treasurer</div>
-                </div>
-                <div className="ar-signature-block">
-                  <div className="ar-signature-line">___________________</div>
-                  <div className="ar-signature-label">Date</div>
-                </div>
-              </div>
-
-              <p style={{ marginTop: '32px', marginBottom: '32px' }}>Approved by:</p>
-              
-              <div className="ar-signature-row">
-                <div className="ar-signature-block">
-                  <div className="ar-signature-line" style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>
-                    {data.skChairperson || '_________________________'}
-                  </div>
-                  <div className="ar-signature-label">SK Chairperson</div>
-                </div>
-                <div className="ar-signature-block">
-                  <div className="ar-signature-line">___________________</div>
-                  <div className="ar-signature-label">Date</div>
-                </div>
+            {/* ABYIP HEADER */}
+            <div className="abyip-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '20px' }}>
+              <img src={logo} alt="SK Logo" style={{ width: '100px', height: '100px', position: 'absolute', left: '50px', top: '0', objectFit: 'contain' }} />
+              <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
+                <p style={{ margin: 0 }}>Republic of the Philippines</p>
+                <p style={{ margin: 0 }}>Province of {data.province || 'Cotabato'}</p>
+                <p style={{ margin: 0 }}>Municipality of {data.city || 'Midsayap'}</p>
+                <p className="bold uppercase" style={{ margin: 0 }}>SK OF BARANGAY {data.barangay?.toUpperCase() || 'UPPER GLAD 2'}</p>
+                <br/>
+                <p className="bold uppercase" style={{ fontSize: '11pt', margin: 0 }}>OFFICE OF THE SANGGUNIANG KABATAAN</p>
               </div>
             </div>
-
-          </div>
-        </div>
-
-        {/* PAGE 3: Annex A - Summary of Projects & Accomplishments */}
-        {data.projects.length > 0 && (
-          <div className="print-page ar-print-page ar-annex-page">
-            <h2 className="ar-annex-title">Annex A: Summary of Projects & Events for CY {data.year}</h2>
-            <table className="ar-annex-table">
+            
+            <div className="abyip-title">
+              <p>ANNUAL BARANGAY YOUTH INVESTMENT PLAN</p>
+              <p>(ABYIP) CY-{data.year}</p>
+            </div>
+            
+            <table className="abyip-table">
               <thead>
                 <tr>
-                  <th>No.</th>
-                  <th>Project / Event Title</th>
-                  <th>Category</th>
-                  <th>Date</th>
-                  <th>Total Cost</th>
-                  <th>Status</th>
+                  <th style={{ width: '32%' }}>OBJECT OF EXPENDITURES</th>
+                  <th style={{ width: '8%' }}>ACCOUNT<br/>CODE</th>
+                  <th style={{ width: '16%' }}>BUDGET YEAR<br/>EXPENDITURES</th>
+                  <th style={{ width: '22%' }}>EXPECTED RESULTS<br/>(DESIRED OBJECTIVE)</th>
+                  <th style={{ width: '22%' }}>PERFORMANCE INDICATORS<br/>(MEANS OF MEASUREMENT)</th>
                 </tr>
               </thead>
               <tbody>
-                {data.projects.map((proj, idx) => (
-                  <tr key={proj.id}>
-                    <td>{idx + 1}</td>
-                    <td>{proj.event || proj.project || 'Untitled'}</td>
-                    <td>{proj.category || 'Uncategorized'}</td>
-                    <td>
-                      {proj.eventDate || proj.date || proj.approvedAt
-                        ? new Date(proj.eventDate || proj.date || proj.approvedAt).toLocaleDateString()
-                        : '—'}
-                    </td>
-                    <td>{formatCurrency(proj.amount)}</td>
-                    <td>{proj.projectStatus || proj.status || 'Completed'}</td>
+                {/* RECEIPTS PROGRAM */}
+                <tr>
+                  <td colSpan="5" className="bold">PART I. Receipts Program</td>
+                </tr>
+                
+                {data.receipts.subsidyBarangay > 0 && (
+                  <tr>
+                    <td className="indent-1">Ten Percent (10%) of the general fund of the barangay</td>
+                    <td className="center-col"></td>
+                    <td className="amount-col">{formatCurrency(data.receipts.subsidyBarangay)}</td>
+                    <td></td>
+                    <td></td>
+                  </tr>
+                )}
+                {data.receipts.subsidyOtherLGU > 0 && (
+                  <tr>
+                    <td className="indent-1">Subsidy from Other LGUs</td>
+                    <td className="center-col"></td>
+                    <td className="amount-col">{formatCurrency(data.receipts.subsidyOtherLGU)}</td>
+                    <td></td>
+                    <td></td>
+                  </tr>
+                )}
+                {data.receipts.subsidyNGA > 0 && (
+                  <tr>
+                    <td className="indent-1">Subsidy from National Government Agencies</td>
+                    <td className="center-col"></td>
+                    <td className="amount-col">{formatCurrency(data.receipts.subsidyNGA)}</td>
+                    <td></td>
+                    <td></td>
+                  </tr>
+                )}
+                {data.receipts.subsidyGOCC > 0 && (
+                  <tr>
+                    <td className="indent-1">Subsidy from GOCCs</td>
+                    <td className="center-col"></td>
+                    <td className="amount-col">{formatCurrency(data.receipts.subsidyGOCC)}</td>
+                    <td></td>
+                    <td></td>
+                  </tr>
+                )}
+                {(data.receipts.grantsSpecific > 0 || data.receipts.grantsWithoutSpecific > 0) && (
+                  <tr>
+                    <td className="indent-1">Grants and Donations in Cash</td>
+                    <td className="center-col"></td>
+                    <td className="amount-col">{formatCurrency(data.receipts.grantsSpecific + data.receipts.grantsWithoutSpecific)}</td>
+                    <td></td>
+                    <td></td>
+                  </tr>
+                )}
+                {data.receipts.miscIncome > 0 && (
+                  <tr>
+                    <td className="indent-1">Miscellaneous Income</td>
+                    <td className="center-col"></td>
+                    <td className="amount-col">{formatCurrency(data.receipts.miscIncome)}</td>
+                    <td></td>
+                    <td></td>
+                  </tr>
+                )}
+                {data.receipts.otherReceipts > 0 && (
+                  <tr>
+                    <td className="indent-1">Receipts from fund raising activities / Others</td>
+                    <td className="center-col"></td>
+                    <td className="amount-col">{formatCurrency(data.receipts.otherReceipts)}</td>
+                    <td></td>
+                    <td></td>
+                  </tr>
+                )}
+                
+                <tr>
+                  <td className="bold uppercase">TOTAL ESTIMATED FUNDS AVAILABLE FOR APPROPRIATION</td>
+                  <td></td>
+                  <td className="amount-col bold">{formatCurrency(data.receipts.total)}</td>
+                  <td></td>
+                  <td></td>
+                </tr>
+
+                {/* EXPENDITURES PROGRAM */}
+                <tr>
+                  <td colSpan="5" className="bold" style={{ borderTop: '2px solid black' }}>PART II. Expenditures Program</td>
+                </tr>
+                <tr>
+                  <td colSpan="5" className="center-col bold">General Administration Current Operating Expenditures</td>
+                </tr>
+                
+                {/* MOOE */}
+                <tr>
+                  <td className="bold uppercase">MOOE</td>
+                  <td></td>
+                  <td className="amount-col bold">{formatCurrency(data.mooe.total)}</td>
+                  <td rowSpan={totalGeneralAdminRows} style={{ whiteSpace: 'pre-wrap', verticalAlign: 'top', textAlign: 'left', padding: '10px' }}>
+                    {data.expectedResults || 'Not specified'}
+                  </td>
+                  <td rowSpan={totalGeneralAdminRows} style={{ whiteSpace: 'pre-wrap', verticalAlign: 'top', textAlign: 'left', padding: '10px' }}>
+                    {data.performanceIndicators || 'Not specified'}
+                  </td>
+                </tr>
+                {Object.entries(data.mooe).filter(([k, v]) => v > 0 && k !== 'total').map(([key, value]) => (
+                  <tr key={key}>
+                    <td className="indent-1">{mooeLabels[key] || key}</td>
+                    <td></td>
+                    <td className="amount-col">{formatCurrency(value)}</td>
                   </tr>
                 ))}
+
+                {/* CO */}
+                {data.co.total > 0 && (
+                  <>
+                    <tr>
+                      <td className="bold uppercase">CAPITAL OUTLAYS</td>
+                      <td></td>
+                      <td className="amount-col bold">{formatCurrency(data.co.total)}</td>
+                    </tr>
+                    {Object.entries(data.co).filter(([k, v]) => v > 0 && k !== 'total').map(([key, value]) => (
+                      <tr key={key}>
+                        <td className="indent-1">{coLabels[key] || key}</td>
+                        <td></td>
+                        <td className="amount-col">{formatCurrency(value)}</td>
+                      </tr>
+                    ))}
+                  </>
+                )}
+                
+                <tr>
+                  <td className="bold uppercase" style={{ borderTop: '2px solid black', borderBottom: '2px solid black' }}>TOTAL GENERAL ADMINISTRATION PROGRAM</td>
+                  <td></td>
+                  <td className="amount-col bold" style={{ borderTop: '2px solid black', borderBottom: '2px solid black' }}>
+                    {formatCurrency(data.mooe.total + data.co.total)}
+                  </td>
+                  <td></td>
+                  <td></td>
+                </tr>
+
+                {/* PROJECTS / PROGRAMS */}
+                {data.projects.map((proj, idx) => {
+                  const letter = String.fromCharCode(65 + idx);
+                  const title = proj.event || proj.project || 'Untitled Project';
+                  
+                  const overrideExpected = data.projectOverrides?.[proj.id]?.expectedResult;
+                  const expectedResult = (overrideExpected !== undefined) ? overrideExpected : (proj.description || '');
+                  
+                  const overrideIndicator = data.projectOverrides?.[proj.id]?.indicator;
+                  const indicator = (overrideIndicator !== undefined) ? overrideIndicator : (proj.projectStatus || proj.status || '');
+                  
+                  const category = proj.category || 'Youth Development Program';
+
+                  return (
+                    <React.Fragment key={proj.id || idx}>
+                      <tr>
+                        <td className="bold">{letter}. {category}</td>
+                        <td></td>
+                        <td></td>
+                        <td style={{ whiteSpace: 'pre-wrap' }}>{expectedResult || 'Not specified'}</td>
+                        <td style={{ whiteSpace: 'pre-wrap' }}>{indicator || 'Not specified'}</td>
+                      </tr>
+                      <tr>
+                        <td className="bold uppercase indent-1">MOOE</td>
+                        <td></td>
+                        <td className="amount-col">{formatCurrency(proj.amount)}</td>
+                        <td></td>
+                        <td></td>
+                      </tr>
+                      <tr>
+                        <td className="indent-2">{title}</td>
+                        <td></td>
+                        <td className="amount-col">{formatCurrency(proj.amount)}</td>
+                        <td></td>
+                        <td></td>
+                      </tr>
+                    </React.Fragment>
+                  );
+                })}
+                
+                {data.cashAdvancesNet > 0 && (
+                  <tr>
+                    <td className="bold">Cash Advances, Net</td>
+                    <td></td>
+                    <td className="amount-col">{formatCurrency(data.cashAdvancesNet)}</td>
+                    <td></td>
+                    <td></td>
+                  </tr>
+                )}
+
+                {/* TOTALS */}
+                <tr>
+                  <td className="bold uppercase" style={{ borderTop: '2px solid black' }}>TOTAL for YOUTH DEVELOPMENT AND EMPOWERMENT PROGRAMS</td>
+                  <td style={{ borderTop: '2px solid black' }}></td>
+                  <td className="amount-col bold" style={{ borderTop: '2px solid black' }}>
+                    {formatCurrency(data.projects.reduce((sum, p) => sum + (Number(p.amount) || 0), 0))}
+                  </td>
+                  <td style={{ borderTop: '2px solid black' }}></td>
+                  <td style={{ borderTop: '2px solid black' }}></td>
+                </tr>
+                <tr>
+                  <td className="bold uppercase">TOTAL EXPENDITURE PROGRAM</td>
+                  <td></td>
+                  <td className="amount-col bold">{formatCurrency(data.totalPayments)}</td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td className="bold uppercase" style={{ borderBottom: '2px solid black' }}>ENDING BALANCE</td>
+                  <td style={{ borderBottom: '2px solid black' }}></td>
+                  <td className="amount-col bold" style={{ background: '#e0e0e0', borderBottom: '2px solid black' }}>
+                    {formatCurrency(data.cashEnd.calculatedTotal)}
+                  </td>
+                  <td style={{ borderBottom: '2px solid black' }}></td>
+                  <td style={{ borderBottom: '2px solid black' }}></td>
+                </tr>
               </tbody>
             </table>
-          </div>
-        )}
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '50px', padding: '0 40px' }}>
+              <div>
+                <p style={{ marginBottom: '40px' }}>Prepared by:</p>
+                <p style={{ fontWeight: 'bold', textDecoration: 'underline' }}>{data.skTreasurer?.toUpperCase() || '_______________________'}</p>
+                <p style={{ textAlign: 'center' }}>SK Treasurer</p>
+              </div>
+              <div>
+                <p style={{ marginBottom: '40px' }}>Approved:</p>
+                <p style={{ fontWeight: 'bold', textDecoration: 'underline' }}>HON. {data.skChairperson?.toUpperCase() || '_______________________'}</p>
+                <p style={{ textAlign: 'center' }}>SK Chairperson</p>
+              </div>
+            </div>
 
+            {/* RESOLUTION SECTION - Starts on new page in print */}
+            <div className="resolution-section">
+              <div className="abyip-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '30px' }}>
+                <img src={logo} alt="SK Logo" style={{ width: '100px', height: '100px', position: 'absolute', left: '50px', top: '0', objectFit: 'contain' }} />
+                <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
+                  <p style={{ margin: 0 }}>Republic of the Philippines</p>
+                  <p style={{ margin: 0 }}>REGION XII</p>
+                  <p style={{ margin: 0 }}>Province of {data.province || 'Cotabato'}</p>
+                  <p style={{ margin: 0 }}>Municipality of {data.city || 'Midsayap'}</p>
+                  <p className="uppercase bold" style={{ margin: 0 }}>SK OF BARANGAY {data.barangay || 'UPPER GLAD 2'}</p>
+                  <br/>
+                  <p className="uppercase bold" style={{ fontSize: '11pt', margin: 0 }}>OFFICE OF THE SANGGUNIANG KABATAAN</p>
+                </div>
+              </div>
+
+              <p style={{ textTransform: 'uppercase', marginBottom: '30px' }}>
+                EXCERPTS FROM THE MINUTES OF THE REGULAR SESSION OF THE SANGGUNIANG KABATAAN OF BARANGAY {data.barangay}, {data.city}, {data.province} HELD AT BARANGAY HALL ON DECEMBER 23, {data.year} AT EXACTLY 8:00 O'CLOCK IN THE MORNING. A RESOLUTION AUTHORIZING THE ANNUAL BUDGET OF THE BARANGAY {data.barangay}, FOR FISCAL YEAR {data.year} IN THE TOTAL AMOUNT OF {formatCurrency(data.receipts.total)} APPROPRIATING THE NECESSARY FUNDS FOR THE PURPOSE.
+              </p>
+
+              <div style={{ display: 'flex', marginBottom: '40px' }}>
+                <div style={{ width: '120px', fontWeight: 'bold' }}>PRESENTS:</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', marginBottom: '5px' }}>
+                    <span style={{ width: '250px' }}>Hon. {data.skChairperson || '_________________'}</span> 
+                    <span>___________________ Presiding Officer/SK Chairperson</span>
+                  </div>
+                  <div style={{ display: 'flex', marginBottom: '5px' }}>
+                    <span style={{ width: '250px' }}>Hon. {data.skTreasurer || '_________________'}</span> 
+                    <span>___________________ SK Treasurer</span>
+                  </div>
+                  <div style={{ display: 'flex', marginBottom: '5px' }}>
+                    <span style={{ width: '250px' }}>Hon. {data.skSecretary || '___________________________'}</span> 
+                    <span>___________________ SK Secretary</span>
+                  </div>
+                  {(data.skKagawads || ['', '', '', '', '', '', '']).map((kagawad, idx) => {
+                    // Only render empty lines up to 5 if entirely blank, to match standard forms, or all 7 if they are entered.
+                    // Wait, if all are blank, rendering 7 might make the page too long? Let's just render all of them unconditionally.
+                    return (
+                      <div key={idx} style={{ display: 'flex', marginBottom: '5px' }}>
+                        <span style={{ width: '250px' }}>Hon. {kagawad || '___________________________'}</span> 
+                        <span>___________________ SK Kagawad</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+                <p className="bold">RESOLUTION NO. _______</p>
+                <p>Series of {data.year}</p>
+              </div>
+
+              <p>
+                PRESENT FOR CONSIDERATION IS THE ANNUAL BUDGET OF SANGGUNIANG KABATAAN OF BARANGAY {data.barangay} FISCAL YEAR {data.year} IN THE TOTAL AMOUNT of {formatCurrency(data.receipts.total)} covering the various expenditures of SK barangay Government for FY {data.year} is hereby approved.
+              </p>
+
+              <p>
+                WHEREAS, incorporated is the Annual Barangay Youth Investment Plan (ABYIP) which shall be made an integral part of this Resolution;
+              </p>
+
+              <p>
+                WHEREAS, pursuant to section 329 of RA NO. 7160 and Section 20 (a) of RA No. 10742, Ten percent (10%) of the general fund of the Barangay shall be set aside for the SK. The Sangguniang Barangay shall appropriate the SK Funds in Lump-sum which shall be disbursed solely for youth development and empowerment purpose.
+              </p>
+
+              <p>
+                WHEREAS, Section 20 (b) of RA No.10742 provides that the SK shall have Financial independence in its operation, disbursement and encashment of their funds, income and expenditures;
+              </p>
+
+              <p>
+                NOW THEREFORE, on motion of SK Kagawad ___________________________ and duly seconded by Hon. ___________________________ be it.
+              </p>
+
+              <p>
+                RESOLVED, as it is hereby approved to enact the following Appropriation Resolution to wit;
+              </p>
+
+              <p style={{ marginLeft: '40px' }}>
+                The provision of this Appropriation shall take on January {data.year} to December {data.year}.
+              </p>
+
+              <p style={{ marginLeft: '40px' }}>
+                RESOLVED FINALLY, as it is finally resolved to forward copy of this resolution to the office of Sangguniang Bayan for information.
+              </p>
+
+              <p style={{ marginTop: '40px', marginBottom: '40px' }}>UNANIMOUSLY APPROVED: December 22, {data.year}</p>
+
+              <p style={{ textTransform: 'uppercase', marginBottom: '60px' }}>I HEREBY CERTIFY to the correctness of the above-quoted resolution.</p>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <span style={{ marginRight: '10px' }}>Attested by:</span>
+                    <span style={{ borderBottom: '1px solid black', width: '200px', display: 'inline-block' }}></span>
+                  </div>
+                  <p style={{ paddingLeft: '90px', marginTop: '5px' }}>SK Secretary</p>
+                </div>
+              </div>
+              
+              <div style={{ marginTop: '50px' }}>
+                <p>Approved:</p>
+                <div style={{ marginTop: '40px', paddingLeft: '60px' }}>
+                  <p style={{ textDecoration: 'underline', fontWeight: 'bold' }}>HON. {data.skChairperson?.toUpperCase() || '_______________________'}</p>
+                  <p style={{ paddingLeft: '30px', marginTop: '5px' }}>SK CHAIRPERSON</p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

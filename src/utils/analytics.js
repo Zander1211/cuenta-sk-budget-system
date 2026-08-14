@@ -95,7 +95,7 @@ export function isInPeriod(dateValue, filters) {
 
 // The date an expense should be counted on (mirrors useBudgetCalculations logic).
 export function expenseDate(expense) {
-  return expense.approvedAt || expense.createdAt || expense.eventDate || expense.date || null
+  return expense.eventDate || expense.date || expense.approvedAt || expense.createdAt || null
 }
 
 // An expense counts toward spending if it isn't archived or cancelled.

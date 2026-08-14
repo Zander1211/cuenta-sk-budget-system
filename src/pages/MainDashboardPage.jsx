@@ -149,7 +149,7 @@ function MainDashboardPage() {
   // but since useBudgetCalculations doesn't export validExpenses, we can just filter from expenses directly.
   const missingDocsCount = expenses.filter((expense) => {
     if (expense.archivedAt || expense.status === 'Cancelled') return false
-    if (!isInPeriod(expense.approvedAt || expense.createdAt || expense.eventDate || expense.date)) return false
+    if (!isInPeriod(expense.eventDate || expense.date || expense.approvedAt || expense.createdAt)) return false
     return !expense.receiptUrl && !expense.receiptName
   }).length
 
@@ -251,8 +251,14 @@ function MainDashboardPage() {
         </div>
         <div className="topbar-actions">
           <label className="search-field" onClick={() => setIsSearchOpen(true)}>
-            <Search size={16} />
-            <input type="button" value="Search projects, categories..." aria-label="Search" style={{ textAlign: 'left', cursor: 'pointer' }} />
+            <Search size={16} color="#6b7280" />
+            <input 
+              type="text" 
+              readOnly 
+              placeholder="Search projects, categories..." 
+              aria-label="Search" 
+              style={{ cursor: 'pointer' }} 
+            />
           </label>
           {['SK Chairman', 'SK Treasurer'].includes(role) && <NotificationBell />}
           <div className="user-chip">

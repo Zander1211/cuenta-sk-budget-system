@@ -6,7 +6,6 @@ import { loginUser } from '../services/authService'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
 import logo from '../assets/logo.png'
-import VantaClouds from '../components/VantaClouds'
 
 function LoginPage() {
   const [email, setEmail] = useState('')
@@ -84,7 +83,6 @@ function LoginPage() {
 
   return (
     <div className="login-page">
-      <VantaClouds />
       <div className="login-shell">
         <section className="login-panel">
           <header className="login-header">
@@ -96,7 +94,8 @@ function LoginPage() {
             <p className="subcopy">Use your work email to continue.</p>
           </header>
 
-          <form onSubmit={handleLogin} className="login-form">
+          <div className="login-right-side" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <form onSubmit={handleLogin} className="login-form">
             <label className="field">
               <span>Email</span>
               <input
@@ -164,10 +163,8 @@ function LoginPage() {
           </form>
 
           <div className="login-footer">
-            <span>Need access?</span>
-            <button type="button" className="ghost-button">
-              Request an invite
-            </button>
+            <span style={{ fontSize: '0.85rem', textAlign: 'center', lineHeight: '1.4' }}>Need access? Only the SK Chairman can create an account for the members.</span>
+          </div>
           </div>
         </section>
       </div>

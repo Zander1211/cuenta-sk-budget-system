@@ -45,13 +45,26 @@ function UserManagementPage() {
     setViewModal({ open: true, user: account })
     setViewBiodata({ status: 'loading', data: null })
 
-    const { data, error } = await supabase
+    const biodataPromise = supabase
       .from('member_biodata')
       .select('*')
       .eq('id', account.id)
       .maybeSingle()
 
-    setViewBiodata({ status: error ? 'error' : 'ready', data: error ? null : data })
+    const loginPromise = fetch(`/api/user-login?id=${account.id}`)
+      .then(res => res.json())
+      .catch(() => ({}))
+
+    const [biodataRes, loginRes] = await Promise.all([biodataPromise, loginPromise])
+
+    if (loginRes && loginRes.last_sign_in_at) {
+      setViewModal(prev => ({
+        ...prev,
+        user: { ...prev.user, last_sign_in_at: loginRes.last_sign_in_at }
+      }))
+    }
+
+    setViewBiodata({ status: biodataRes.error ? 'error' : 'ready', data: biodataRes.error ? null : biodataRes.data })
   }
 
   useEffect(() => {
@@ -347,97 +360,134 @@ function UserManagementPage() {
           <div className="overview-card">
             <p className="eyebrow">Directory</p>
             <h2>Created accounts</h2>
-            <table className="user-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  <tr>
-                    <td colSpan="4" className="empty-state">
-                      Loading accounts...
-                    </td>
-                  </tr>
-                ) : accounts.length ? (
-                  accounts.map((user) => (
-                    <tr key={user.id} style={{ opacity: user.is_active ? 1 : 0.55 }}>
-                      <td data-label="Name">{user.full_name}</td>
-                      <td data-label="Email">{user.email}</td>
-                      <td data-label="Role">
+            {isLoading ? (
+              <p className="empty-state">Loading accounts...</p>
+            ) : accounts.length ? (
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
+                gap: '24px',
+                marginTop: '16px'
+              }}>
+                {accounts.map((user) => (
+                  <div key={user.id} style={{ 
+                    backgroundColor: 'var(--background-color, #ffffff)', 
+                    padding: '24px', 
+                    borderRadius: '12px', 
+                    border: '1px solid var(--border-color)',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '20px',
+                    opacity: user.is_active ? 1 : 0.65
+                  }}>
+                    {/* Header: Avatar, Name, Email */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div style={{ 
+                        width: '56px', height: '56px', borderRadius: '50%', 
+                        backgroundColor: 'var(--accent)', color: 'white',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '24px', fontWeight: 'bold', flexShrink: 0,
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                      }}>
+                        {user.full_name?.charAt(0)?.toUpperCase() || '?'}
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: '600', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {user.full_name}
+                        </h3>
+                        <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {user.email}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Info Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Role</p>
                         {editingRoleId === user.id ? (
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             <select
                               className="panel-select"
                               value={editRoleValue}
                               onChange={(e) => setEditRoleValue(e.target.value)}
-                              style={{ minWidth: '140px', fontSize: '0.85rem' }}
+                              style={{ width: '100%', fontSize: '0.85rem', padding: '6px 10px' }}
                             >
                               {roles.map((r) => (
                                 <option key={r} value={r}>{r}</option>
                               ))}
                             </select>
-                            <button
-                              type="button"
-                              className="text-button"
-                              style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '0.8rem' }}
-                              onClick={() => saveRole(user)}
-                              disabled={updatingId === user.id}
-                            >
-                              Save
-                            </button>
-                            <button
-                              type="button"
-                              className="text-button"
-                              style={{ fontSize: '0.8rem' }}
-                              onClick={cancelEditRole}
-                            >
-                              Cancel
-                            </button>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                type="button"
+                                className="primary-button"
+                                style={{ padding: '6px 12px', fontSize: '0.8rem', flex: 1 }}
+                                onClick={() => saveRole(user)}
+                                disabled={updatingId === user.id}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                style={{ padding: '6px 12px', fontSize: '0.8rem', flex: 1 }}
+                                onClick={cancelEditRole}
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           </div>
                         ) : (
-                          <span className="role-pill">{user.role}</span>
+                          <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', fontWeight: '400' }}>{user.role}</p>
                         )}
-                      </td>
+                      </div>
 
-                      <td data-label="Actions" style={{ textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                          <button
-                            type="button"
-                            className="text-button"
-                            style={{ fontSize: '0.8rem' }}
-                            onClick={() => openViewModal(user)}
-                          >
-                            View Info
-                          </button>
-                          {editingRoleId !== user.id && (
-                            <button
-                              type="button"
-                              className="text-button"
-                              style={{ fontSize: '0.8rem' }}
-                              onClick={() => startEditRole(user)}
-                              disabled={updatingId === user.id}
-                            >
-                              Edit Role
-                            </button>
-                          )}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Status</p>
+                        <div>
+                          <span className={`status-pill ${user.is_active ? 'status-completed' : 'status-rejected'}`} style={{ display: 'inline-block', margin: 0 }}>
+                            {user.is_active ? 'Active' : 'Inactive'}
+                          </span>
                         </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="4" className="empty-state">
-                      No accounts yet. Create the first user.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', gridColumn: '1 / -1' }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Date Created</p>
+                        <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', fontWeight: '400' }}>
+                          {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        style={{ flex: '1 1 auto', fontSize: '0.85rem', padding: '8px 12px', textAlign: 'center' }}
+                        onClick={() => openViewModal(user)}
+                      >
+                        View Info
+                      </button>
+                      {editingRoleId !== user.id && (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          style={{ flex: '1 1 auto', fontSize: '0.85rem', padding: '8px 12px', textAlign: 'center' }}
+                          onClick={() => startEditRole(user)}
+                          disabled={updatingId === user.id}
+                        >
+                          Edit Role
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">No accounts yet. Create the first user.</p>
+            )}
           </div>
         </div>
       </section>
@@ -505,89 +555,93 @@ function UserManagementPage() {
             <div className="modal-header">
               <h2>User Information</h2>
             </div>
-            <div className="modal-body" style={{ margin: '16px 0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+            <div className="modal-body" style={{ margin: '0', padding: '24px 20px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: '24px' }}>
                 <div style={{ 
-                  width: '64px', height: '64px', borderRadius: '50%', 
+                  width: '72px', height: '72px', borderRadius: '50%', 
                   backgroundColor: 'var(--accent)', color: 'white',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '24px', fontWeight: 'bold'
+                  fontSize: '28px', fontWeight: 'bold', marginBottom: '16px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
                 }}>
                   {viewModal.user.full_name?.charAt(0)?.toUpperCase() || '?'}
                 </div>
-                <div>
-                  <h3 style={{ margin: '0 0 4px', fontSize: '1.25rem' }}>{viewModal.user.full_name}</h3>
-                  <p style={{ margin: 0, color: 'var(--ink-soft)' }}>{viewModal.user.email}</p>
-                </div>
+                <h3 style={{ margin: '0 0 4px', fontSize: '1.25rem', fontWeight: '600', color: 'var(--text-primary)' }}>{viewModal.user.full_name}</h3>
+                <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem', wordBreak: 'break-all' }}>{viewModal.user.email}</p>
               </div>
 
-              <div className="details-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div>
-                  <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Role</p>
-                  <p className="details-value" style={{ fontWeight: 500 }}>{viewModal.user.role}</p>
-                </div>
-                <div>
-                  <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Account Status</p>
-                  <p className="details-value" style={{ fontWeight: 500, color: viewModal.user.is_active ? '#15803d' : '#ef4444' }}>
-                    {viewModal.user.is_active ? 'Active' : 'Deactivated'}
-                  </p>
-                </div>
-                <div>
-                  <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Date Created</p>
-                  <p className="details-value" style={{ fontWeight: 500 }}>
-                    {viewModal.user.created_at ? new Date(viewModal.user.created_at).toLocaleDateString() : '—'}
-                  </p>
-                </div>
-                <div>
-                  <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Last Login</p>
-                  <p className="details-value" style={{ fontWeight: 500 }}>
-                    {viewModal.user.last_sign_in_at ? new Date(viewModal.user.last_sign_in_at).toLocaleDateString() : 'Not available'}
-                  </p>
-                </div>
-              </div>
-
-              <div style={{ borderTop: '1px solid rgba(15, 31, 54, 0.08)', marginTop: '20px', paddingTop: '16px' }}>
-                <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)', marginBottom: '10px' }}>Biodata</p>
-                {viewBiodata.status === 'loading' ? (
-                  <p style={{ fontSize: '0.85rem', color: 'var(--ink-soft)', margin: 0 }}>Loading biodata...</p>
-                ) : viewBiodata.status === 'error' ? (
-                  <p style={{ fontSize: '0.85rem', color: 'var(--ink-soft)', margin: 0 }}>Unable to load biodata.</p>
-                ) : viewBiodata.data ? (
-                  <div className="details-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ backgroundColor: 'var(--background-color, #ffffff)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-color)', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '20px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>User Role</p>
+                    <p style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '400' }}>{viewModal.user.role}</p>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Account Status</p>
                     <div>
-                      <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Birthdate</p>
-                      <p className="details-value" style={{ fontWeight: 500 }}>{formatBirthdate(viewBiodata.data.birthdate)}</p>
-                    </div>
-                    <div>
-                      <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Sex</p>
-                      <p className="details-value" style={{ fontWeight: 500 }}>{viewBiodata.data.sex || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Civil Status</p>
-                      <p className="details-value" style={{ fontWeight: 500 }}>{viewBiodata.data.civil_status || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Citizenship</p>
-                      <p className="details-value" style={{ fontWeight: 500 }}>{viewBiodata.data.citizenship || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Mobile Number</p>
-                      <p className="details-value" style={{ fontWeight: 500 }}>{viewBiodata.data.mobile_number || '—'}</p>
-                    </div>
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <p className="details-label" style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Complete Address</p>
-                      <p className="details-value" style={{ fontWeight: 500 }}>{viewBiodata.data.complete_address || '—'}</p>
+                      <span className={`status-pill ${viewModal.user.is_active ? 'status-completed' : 'status-rejected'}`} style={{ display: 'inline-block', margin: 0 }}>
+                        {viewModal.user.is_active ? 'Active' : 'Deactivated'}
+                      </span>
                     </div>
                   </div>
-                ) : (
-                  <p style={{ fontSize: '0.85rem', color: 'var(--ink-soft)', margin: 0 }}>This member hasn&apos;t filled out their biodata yet.</p>
-                )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Date Created</p>
+                    <p style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '400' }}>
+                      {viewModal.user.created_at ? new Date(viewModal.user.created_at).toLocaleDateString() : '—'}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Last Login</p>
+                    <p style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '400' }}>
+                      {viewModal.user.last_sign_in_at ? new Date(viewModal.user.last_sign_in_at).toLocaleString() : 'Not available'}
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '24px', paddingTop: '24px' }}>
+                  <h4 style={{ margin: '0 0 20px', fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Biodata</h4>
+                  {viewBiodata.status === 'loading' ? (
+                    <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: 0 }}>Loading biodata...</p>
+                  ) : viewBiodata.status === 'error' ? (
+                    <p style={{ fontSize: '0.9rem', color: 'var(--danger-color)', margin: 0 }}>Unable to load biodata.</p>
+                  ) : viewBiodata.data ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '20px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Birthdate</p>
+                        <p style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '400' }}>{formatBirthdate(viewBiodata.data.birthdate)}</p>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Sex</p>
+                        <p style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '400' }}>{viewBiodata.data.sex || '—'}</p>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Civil Status</p>
+                        <p style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '400' }}>{viewBiodata.data.civil_status || '—'}</p>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Citizenship</p>
+                        <p style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '400' }}>{viewBiodata.data.citizenship || '—'}</p>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Mobile Number</p>
+                        <p style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '400' }}>{viewBiodata.data.mobile_number || '—'}</p>
+                      </div>
+                      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Complete Address</p>
+                        <p style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '400' }}>{viewBiodata.data.complete_address || '—'}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: 0 }}>This member hasn&apos;t filled out their biodata yet.</p>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div className="modal-footer" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '12px' }}>
               <button
                 type="button"
                 className="secondary-button"
+                style={{ flex: '1 1 auto', maxWidth: '200px' }}
                 onClick={() => { setViewModal({ open: false, user: null }); setViewBiodata({ status: 'idle', data: null }) }}
               >
                 Close

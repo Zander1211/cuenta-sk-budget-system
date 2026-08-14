@@ -104,7 +104,7 @@ function MainDashboardPage() {
   const filteredExpenses = expenses.filter((expense) => {
     if (expense.archivedAt || expense.status === 'Cancelled') return false
     return isInPeriod(
-      expense.approvedAt || expense.createdAt || expense.eventDate || expense.date
+      expense.eventDate || expense.date || expense.approvedAt || expense.createdAt
     )
   })
   const totalExpenses = filteredExpenses.reduce(

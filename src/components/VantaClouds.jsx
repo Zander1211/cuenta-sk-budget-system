@@ -47,12 +47,11 @@ export default function VantaClouds() {
           gyroControls: false,
           minHeight: 200.0,
           minWidth: 200.0,
-          // Brand-tuned sky: cool teal daylight rather than vanta's default
-          // blue, so the clouds sit under Cuenta's palette instead of beside it.
-          backgroundColor: 0xf7fafb,
-          skyColor: 0x5fa8b8,
-          cloudColor: 0xc4d8dd,
-          cloudShadowColor: 0x123f42,
+          // Brand-tuned sky: Deep teal sky with mint clouds.
+          backgroundColor: 0xe6f5f0,
+          skyColor: 0x02353c,
+          cloudColor: 0xc1f6ed,
+          cloudShadowColor: 0x011a1d,
           sunColor: 0xffd9a8,
           sunGlareColor: 0xffbe8a,
           sunlightColor: 0xfff0da,

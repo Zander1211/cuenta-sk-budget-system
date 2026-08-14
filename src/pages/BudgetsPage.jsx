@@ -125,13 +125,15 @@ function BudgetsPage() {
         </div>
       </header>
 
-      <section className="dashboard-content two-column">
+      <section className="dashboard-content two-column" style={{ gap: '24px', alignItems: 'start' }}>
         {canEdit ? (
-          <div className="overview-card">
-            <p className="eyebrow">New budget</p>
-            <h2>Add a monthly budget</h2>
-            <form className="user-form" onSubmit={handleSubmit}>
-              <div className="form-grid">
+          <div className="overview-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div>
+              <p className="eyebrow">New budget</p>
+              <h2 style={{ margin: 0 }}>Add a monthly budget</h2>
+            </div>
+            <form className="user-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div className="form-grid" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <label className="field">
                   <span>Month</span>
                   <select
@@ -145,9 +147,9 @@ function BudgetsPage() {
                     ))}
                   </select>
                 </label>
-                <label className="field">
-                  <span>Year</span>
-                  <div style={{ marginTop: '4px' }}>
+                <label className="field" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontWeight: 500, fontSize: '0.9rem', color: '#374151' }}>Year</span>
+                  <div>
                     <YearSpinner year={year} onYearChange={setYear} />
                   </div>
                 </label>
@@ -175,27 +177,28 @@ function BudgetsPage() {
                   </select>
                 </label>
                 {sourceOption === 'Other' && (
-                  <label className="field" style={{ gridColumn: '1 / -1' }}>
-                    <span>Specify Other Source</span>
+                  <label className="field" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <span style={{ fontWeight: 500, fontSize: '0.9rem', color: '#374151' }}>Specify Other Source</span>
                     <input
                       type="text"
                       value={customSource}
                       onChange={(event) => setCustomSource(event.target.value)}
                       placeholder="e.g. Fundraising Event"
                       required
+                      style={{ width: '100%' }}
                     />
                   </label>
                 )}
               </div>
-              <button type="submit" className="primary-button">
+              <button type="submit" className="primary-button" style={{ alignSelf: 'flex-start', padding: '10px 24px' }}>
                 Save Budget
               </button>
             </form>
           </div>
         ) : (
-          <div className="overview-card">
+          <div className="overview-card" style={{ padding: '24px' }}>
             <p className="eyebrow">Budget summary</p>
-            <h2>Budgets</h2>
+            <h2 style={{ margin: 0, marginBottom: '8px' }}>Budgets</h2>
             <p className="form-note">
               Only the SK Treasurer can add or edit budgets. You have view-only
               access.
@@ -203,8 +206,8 @@ function BudgetsPage() {
           </div>
         )}
 
-        <div className="overview-card">
-          <div className="card-header-bar">
+        <div className="overview-card" style={{ padding: '24px' }}>
+          <div className="card-header-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
             <div>
               <p className="eyebrow">History</p>
               <h2 style={{ margin: 0 }}>Recorded budgets</h2>
@@ -253,38 +256,48 @@ function BudgetsPage() {
               </div>
             </div>
           </div>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{viewMode === 'monthly' ? 'Month' : 'Quarter'}</th>
-                <th>Year</th>
-                <th>Total Budget</th>
-                {viewMode === 'monthly' && <th>Source</th>}
-                <th>{viewMode === 'monthly' ? 'Date Added' : 'Last Updated'}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayedBudgets.length ? (
-                displayedBudgets.map((budget) => (
-                  <tr key={budget.id}>
-                    <td data-label={viewMode === 'monthly' ? 'Month' : 'Quarter'}>{budget.periodLabel}</td>
-                    <td data-label="Year">{budget.year}</td>
-                    <td data-label="Total Budget">{currency.format(budget.amount)}</td>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
+            {displayedBudgets.length ? (
+              displayedBudgets.map((budget) => (
+                <div key={budget.id} style={{ border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px', backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: '#111827', lineHeight: '1.3' }}>
+                      {budget.periodLabel} {budget.year}
+                    </h3>
+                    <span className="status-pill status-approved" style={{ flexShrink: 0, marginLeft: '12px' }}>
+                      Recorded
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                    <div>
+                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Budget Amount</p>
+                      <p style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#059669' }}>{currency.format(budget.amount)}</p>
+                    </div>
                     {viewMode === 'monthly' && (
-                      <td data-label="Source">{budget.source || 'Not Specified'}</td>
+                      <div>
+                        <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Budget Source</p>
+                        <p style={{ margin: 0, fontSize: '0.95rem', color: '#374151' }}>{budget.source || 'Not Specified'}</p>
+                      </div>
                     )}
-                    <td data-label={viewMode === 'monthly' ? 'Date Added' : 'Last Updated'}>{new Date(budget.createdAt).toLocaleDateString()}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={viewMode === 'monthly' ? "5" : "4"} className="empty-state">
-                    No budgets yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    <div>
+                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>{viewMode === 'monthly' ? 'Date Recorded' : 'Last Updated'}</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', color: '#374151' }}>{new Date(budget.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Recorded By</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', color: '#374151' }}>SK Treasurer</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: '#6b7280', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
+                No recorded budget history found
+              </div>
+            )}
+          </div>
         </div>
       </section>
     </>

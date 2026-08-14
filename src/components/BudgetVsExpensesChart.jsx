@@ -72,7 +72,7 @@ export default function BudgetVsExpensesChart({ year }) {
       const actual = expenses
         .filter(e => {
           if (e.archivedAt || e.status === 'Cancelled') return false
-          const d = new Date(e.approvedAt || e.createdAt || e.eventDate || e.date)
+          const d = new Date(e.eventDate || e.date || e.approvedAt || e.createdAt)
           if (isNaN(d.getTime())) return false
           return d.getMonth() + 1 === monthNum && d.getFullYear() === year
         })

@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
-import { CalendarDays, Sigma, TrendingUp, Activity } from 'lucide-react'
+import { CalendarDays, Sigma, TrendingUp, Activity, FileDown } from 'lucide-react'
 import { useAnalysisFilters } from '../../hooks/useAnalysisFilters'
 import { useMonthlyTrend } from '../../hooks/useAnalysisData'
 import { useAnalysisAI } from '../../hooks/useAnalysisAI'
@@ -14,6 +14,7 @@ import {
 import { buildTrendInsights } from '../../utils/insights'
 import { formatCurrency, safeDivide } from '../../utils/analytics'
 import { exportToCsv } from '../../utils/exportCsv'
+import { exportMonthlySpendingPdf } from '../../utils/exportPdf'
 
 const BREADCRUMB = [{ label: 'Home', to: '/dashboard' }, { label: 'Analysis', to: '/dashboard/analysis' }, { label: 'Monthly Spending' }]
 
@@ -36,6 +37,8 @@ export default function MonthlySpendingPage() {
   const { filters, setFilter } = useAnalysisFilters()
   const trend = useMonthlyTrend(filters)
   const [showPrevYear, setShowPrevYear] = useState(false)
+  const chartRef = useRef(null)
+  const [exporting, setExporting] = useState(false)
 
   const hasPrevYear = trend.rows.some((r) => r.prevYear > 0)
   const chartData = trend.rows.map((r) => ({
@@ -88,6 +91,18 @@ export default function MonthlySpendingPage() {
       { header: 'Missing Receipts', value: (r) => r.missing },
     ], tableRows)
   }
+
+  async function handleExportPdf() {
+    if (exporting || !trend.hasData) return
+    setExporting(true)
+    try {
+      await exportMonthlySpendingPdf({ chartRef: chartRef.current, trend, tableRows, filters })
+    } catch (err) {
+      console.error('PDF export failed:', err)
+    } finally {
+      setExporting(false)
+    }
+  }
   return (
     <AnalysisLayout
       breadcrumb={BREADCRUMB}
@@ -106,12 +121,21 @@ export default function MonthlySpendingPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <ChartCard
               eyebrow="Trend" title={`Monthly spending — ${filters.year}`}
-              action={hasPrevYear ? (
-                <button type="button" className={`an-btn ${showPrevYear ? 'an-btn-primary' : 'an-btn-outline'}`} onClick={() => setShowPrevYear((v) => !v)}>
-                  Compare {filters.year - 1}
-                </button>
-              ) : null}
+              action={
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {hasPrevYear ? (
+                    <button type="button" className={`an-btn ${showPrevYear ? 'an-btn-primary' : 'an-btn-outline'}`} onClick={() => setShowPrevYear((v) => !v)}>
+                      Compare {filters.year - 1}
+                    </button>
+                  ) : null}
+                  <button type="button" className="an-btn an-btn-outline" onClick={handleExportPdf} disabled={exporting} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <FileDown size={15} />
+                    {exporting ? 'Exporting…' : 'Export PDF'}
+                  </button>
+                </div>
+              }
             >
+              <div ref={chartRef}>
               <ResponsiveContainer width="100%" height={340}>
                 <LineChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e8eff0" vertical={false} />
@@ -128,6 +152,7 @@ export default function MonthlySpendingPage() {
                   ) : null}
                 </LineChart>
               </ResponsiveContainer>
+              </div>
             </ChartCard>
 
             <ChartCard eyebrow="Breakdown" title="Monthly breakdown">

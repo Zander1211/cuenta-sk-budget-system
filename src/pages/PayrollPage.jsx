@@ -210,33 +210,47 @@ function PayrollPage() {
       <tr className="details-row">
         <td colSpan={columnCount}>
           <div className="details-panel" style={{ backgroundColor: 'var(--surface-color)', padding: '24px', borderTop: '1px solid var(--border-color)' }}>
-            <div className="details-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px', marginBottom: '24px' }}>
-              <div>
-                <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '4px' }}>Approved Budget</p>
-                <p className="details-value" style={{ fontSize: '1.25rem', fontWeight: '600' }}>{currency.format(approvedBudget)}</p>
-              </div>
-              <div>
-                <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '4px' }}>Total Expenses</p>
-                <p className="details-value" style={{ fontSize: '1.25rem', fontWeight: '600' }}>{currency.format(totalExpenses)}</p>
-              </div>
-              <div>
-                <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '4px' }}>Additional Expenses</p>
-                <p className="details-value" style={{ fontSize: '1.25rem', fontWeight: '600' }}>{currency.format(additionalSum)}</p>
-              </div>
-              <div>
-                <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '4px' }}>Remaining Balance</p>
-                <p className="details-value" style={{ fontSize: '1.25rem', fontWeight: '600', color: remainingBalance < 0 ? 'var(--danger-color)' : 'inherit' }}>
-                  {currency.format(remainingBalance)}
-                </p>
-              </div>
-              <div>
-                <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '4px' }}>Budget Utilization</p>
-                <p className="details-value" style={{ fontSize: '1.25rem', fontWeight: '600' }}>{utilization}%</p>
-              </div>
-              <div>
-                <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '4px' }}>Date Approved</p>
-                <p className="details-value" style={{ fontSize: '1.25rem', fontWeight: '600' }}>{project.approvedAt ? new Date(project.approvedAt).toLocaleDateString() : '—'}</p>
-              </div>
+            <div className="details-grid" style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+              gap: '16px', 
+              marginBottom: '32px' 
+            }}>
+              {[
+                { label: 'Approved Budget', value: currency.format(approvedBudget) },
+                { label: 'Total Expenses', value: currency.format(totalExpenses) },
+                { label: 'Additional Expenses', value: currency.format(additionalSum) },
+                { label: 'Remaining Balance', value: currency.format(remainingBalance), highlight: remainingBalance < 0 },
+                { label: 'Budget Utilization', value: `${utilization}%` },
+                { label: 'Date Approved', value: project.approvedAt ? new Date(project.approvedAt).toLocaleDateString() : '—' }
+              ].map((item, i) => (
+                <div key={i} style={{ 
+                  backgroundColor: 'var(--background-color, #ffffff)', 
+                  padding: '20px', 
+                  borderRadius: '12px', 
+                  border: '1px solid var(--border-color)', 
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <p className="details-label" style={{ 
+                    fontSize: '0.75rem', 
+                    textTransform: 'uppercase', 
+                    color: 'var(--text-secondary)', 
+                    margin: 0,
+                    letterSpacing: '0.5px'
+                  }}>{item.label}</p>
+                  <p className="details-value" style={{ 
+                    fontSize: '1.25rem', 
+                    fontWeight: '400', 
+                    margin: 0,
+                    color: item.highlight ? 'var(--danger-color)' : 'var(--text-primary)'
+                  }}>
+                    {item.value}
+                  </p>
+                </div>
+              ))}
             </div>
 
             <div className="details-breakdown">

@@ -1423,7 +1423,7 @@ export function useBudgetCalculations(month, year) {
 
     const validExpenses = expenses.filter(e => {
        if (e.archivedAt || e.status === 'Cancelled') return false
-       const eDate = new Date(e.approvedAt || e.createdAt || e.eventDate || e.date)
+       const eDate = new Date(e.eventDate || e.date || e.approvedAt || e.createdAt)
        if (isNaN(eDate.getTime())) return false
        
        if (month !== null && month !== undefined) {
