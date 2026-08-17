@@ -12,11 +12,27 @@ function formatCurrency(amount) {
   return currency.format(amount)
 }
 
-function AnnualReportPreview({ data, onClose }) {
+function AnnualReportPreview({ data, onClose, onSave }) {
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const contentRef = useRef(null)
 
-  function handlePrint() {
-    window.print()
+  async function handlePrint(e) {
+    e.preventDefault()
+    if (onSave) {
+      setIsSaving(true)
+      setSaveError('')
+      try {
+        await onSave(data)
+        setTimeout(() => window.print(), 500)
+      } catch (err) {
+        setSaveError('Failed to save document record: ' + err.message)
+      } finally {
+        setIsSaving(false)
+      }
+    } else {
+      window.print()
+    }
   }
 
   const mooeLabels = {
@@ -76,11 +92,12 @@ function AnnualReportPreview({ data, onClose }) {
   return (
     <div className="print-preview-overlay">
       <div className="print-preview-toolbar">
-        <button type="button" className="secondary-button" onClick={onClose}>
+        {saveError && <span style={{ color: '#ef4444', marginRight: '16px', fontSize: '0.9rem' }}>{saveError}</span>}
+        <button type="button" className="close-btn" onClick={onClose} disabled={isSaving}>
           <X size={16} /> Close
         </button>
-        <button type="button" className="primary-button" onClick={handlePrint}>
-          <Printer size={16} /> Print
+        <button type="button" className="print-btn" onClick={handlePrint} disabled={isSaving}>
+          <Printer size={16} /> {isSaving ? 'Saving...' : 'Print / Save as PDF'}
         </button>
       </div>
 

@@ -1,10 +1,8 @@
-import { Fragment, useMemo, useState, useEffect } from 'react'
+import { Fragment, useMemo, useState, useEffect, useRef } from 'react'
 import { useBudget } from '../context/BudgetContext'
 import RoleGate from '../components/RoleGate'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
-
-import { useRef } from 'react'
 import CurrencyInput from '../components/CurrencyInput'
 import { useNotifications } from '../context/NotificationContext'
 import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
@@ -15,15 +13,13 @@ const currency = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 0,
 })
 
-function EventsPage() {
-  const { role } = useAuth()
-  const { expenses, updateProjectStatus } = useBudget()
-  const [expanded, setExpanded] = useState({})
-
-
-  const { user } = useAuth()
+function ProjectsEventsPage() {
+  const { role, user } = useAuth()
+  const { expenses, updateProjectStatus, refreshExpensesFromSupabase, updateExpenseReceipt } = useBudget()
   const { addNotification } = useNotifications()
-  const { refreshExpensesFromSupabase, updateExpenseReceipt } = useBudget()
+
+  const [activeTab, setActiveTab] = useState('projects') // 'projects' | 'events'
+  const [expanded, setExpanded] = useState({})
 
   const [errorsById, setErrorsById] = useState({})
   const [uploadingId, setUploadingId] = useState(null)
@@ -83,7 +79,6 @@ function EventsPage() {
 
       if (uploadError) throw Object.assign(uploadError, { uploadStep: 'storage' })
 
-      // 2. Persist one authoritative database row for this attachment
       const { error: dbError } = await insertReceiptRecord(
         supabase, expense, file, filePath, user, role
       )
@@ -92,7 +87,6 @@ function EventsPage() {
         throw Object.assign(dbError, { uploadStep: 'receipt_record' })
       }
 
-      // 3. Link receipt to expenses table in Supabase
       const updatePayload = { receipt_url: filePath, receipt_name: file.name }
       if (appendedNotes) {
         updatePayload.remarks = expense.remarks ? `${expense.remarks}\n\n${appendedNotes}` : appendedNotes
@@ -107,7 +101,6 @@ function EventsPage() {
         console.warn('Could not update expenses table in Supabase:', linkError)
       }
 
-      // 4. Update local state
       updateExpenseReceipt(expense.id, filePath, file.name)
 
       await refreshExpensesFromSupabase()
@@ -177,28 +170,35 @@ function EventsPage() {
     setScanStatus('idle')
   }
 
-
-
-
-  // Filter only parent expenses (approved requests) of type 'Event'
-  const parentEvents = useMemo(() => {
+  const filteredItems = useMemo(() => {
     return expenses.filter((item) => {
+      const isProject = !item.type || item.type === 'Project'
+      const isEvent = item.type === 'Event'
       const status = item.status || 'Approved'
-      return !item.isAdditional && ['Approved', 'Released'].includes(status) && !item.archivedAt && item.type === 'Event'
+      const isApproved = !item.isAdditional && ['Approved', 'Released'].includes(status) && !item.archivedAt
+
+      if (activeTab === 'projects') return isApproved && isProject
+      if (activeTab === 'events') return isApproved && isEvent
+      return false
     })
-  }, [expenses])
+  }, [expenses, activeTab])
 
   function toggleDetails(id) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
-  function renderEventDetails(project, columnCount) {
-    if (!expanded[project.id]) return null
+  function handleTabChange(tab) {
+    setActiveTab(tab)
+    setExpanded({})
+  }
 
-    const additionalExpenses = expenses.filter(e => e.isAdditional && e.parentProjectId === project.id && !e.archivedAt)
+  function renderItemDetails(item, columnCount) {
+    if (!expanded[item.id]) return null
+
+    const additionalExpenses = expenses.filter(e => e.isAdditional && e.parentProjectId === item.id && !e.archivedAt)
     const additionalSum = additionalExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
     
-    const approvedBudget = Number(project.amount || 0)
+    const approvedBudget = Number(item.amount || 0)
     const totalExpenses = approvedBudget + additionalSum
     const remainingBalance = approvedBudget - totalExpenses
     const utilization = approvedBudget > 0 ? Math.round((totalExpenses / approvedBudget) * 100) : 0
@@ -219,8 +219,8 @@ function EventsPage() {
                 { label: 'Additional Expenses', value: currency.format(additionalSum) },
                 { label: 'Remaining Balance', value: currency.format(remainingBalance), highlight: remainingBalance < 0 },
                 { label: 'Budget Utilization', value: `${utilization}%` },
-                { label: 'Date Approved', value: project.approvedAt ? new Date(project.approvedAt).toLocaleDateString() : '—' }
-              ].map((item, i) => (
+                { label: 'Date Approved', value: item.approvedAt ? new Date(item.approvedAt).toLocaleDateString() : '—' }
+              ].map((stat, i) => (
                 <div key={i} style={{ 
                   backgroundColor: 'var(--background-color, #ffffff)', 
                   padding: '20px', 
@@ -237,14 +237,14 @@ function EventsPage() {
                     color: 'var(--text-secondary)', 
                     margin: 0,
                     letterSpacing: '0.5px'
-                  }}>{item.label}</p>
+                  }}>{stat.label}</p>
                   <p className="details-value" style={{ 
                     fontSize: '1.25rem', 
                     fontWeight: '400', 
                     margin: 0,
-                    color: item.highlight ? 'var(--danger-color)' : 'var(--text-primary)'
+                    color: stat.highlight ? 'var(--danger-color)' : 'var(--text-primary)'
                   }}>
-                    {item.value}
+                    {stat.value}
                   </p>
                 </div>
               ))}
@@ -278,15 +278,14 @@ function EventsPage() {
                   </tfoot>
                 </table>
               ) : (
-                <p className="details-value" style={{ color: 'var(--text-secondary)' }}>No additional expenses linked to this event.</p>
+                <p className="details-value" style={{ color: 'var(--text-secondary)' }}>No additional expenses linked to this {activeTab === 'projects' ? 'project' : 'event'}.</p>
               )}
             </div>
-
             
-            {project.description && (
+            {item.description && (
               <div style={{ marginTop: '24px' }}>
                 <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '4px' }}>Description</p>
-                <p className="details-value">{project.description}</p>
+                <p className="details-value">{item.description}</p>
               </div>
             )}
           </div>
@@ -300,21 +299,38 @@ function EventsPage() {
       <header className="dashboard-header">
         <div className="header-left">
           <div>
-            <p className="eyebrow">Events Dashboard</p>
-            <h1>Approved Events</h1>
-            <p>Monitor budgets, expenses, and completion status of all approved events.</p>
+            <p className="eyebrow">Projects & Events Dashboard</p>
+            <h1>Projects & Events</h1>
+            <p>Monitor budgets, expenses, and completion status of all approved projects and events.</p>
           </div>
         </div>
       </header>
 
       <section className="dashboard-content">
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
+          <button
+            className={activeTab === 'projects' ? 'primary-button' : 'secondary-button'}
+            onClick={() => handleTabChange('projects')}
+            style={{ minWidth: '150px' }}
+          >
+            Projects
+          </button>
+          <button
+            className={activeTab === 'events' ? 'primary-button' : 'secondary-button'}
+            onClick={() => handleTabChange('events')}
+            style={{ minWidth: '150px' }}
+          >
+            Events
+          </button>
+        </div>
+
         <div className="overview-card">
           <p className="eyebrow">Overview</p>
-          <h2>All Approved Events</h2>
+          <h2>{activeTab === 'projects' ? 'All Approved Projects' : 'All Approved Events'}</h2>
           <table className="data-table">
             <thead>
               <tr>
-                <th>Event Title</th>
+                <th>{activeTab === 'projects' ? 'Project Title' : 'Event Title'}</th>
                 <th>Category</th>
                 <th>Total Budget</th>
                 <th>Utilization</th>
@@ -323,19 +339,19 @@ function EventsPage() {
               </tr>
             </thead>
             <tbody>
-              {parentEvents.length ? (
-                parentEvents.map((project) => {
-                  const additionalExpenses = expenses.filter(e => e.isAdditional && e.parentProjectId === project.id && !e.archivedAt)
+              {filteredItems.length ? (
+                filteredItems.map((item) => {
+                  const additionalExpenses = expenses.filter(e => e.isAdditional && e.parentProjectId === item.id && !e.archivedAt)
                   const additionalSum = additionalExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
-                  const approvedBudget = Number(project.amount || 0)
+                  const approvedBudget = Number(item.amount || 0)
                   const totalExpenses = approvedBudget + additionalSum
                   const utilization = approvedBudget > 0 ? Math.min(100, Math.round((totalExpenses / approvedBudget) * 100)) : 0
                   
                   return (
-                    <Fragment key={project.id}>
+                    <Fragment key={item.id}>
                       <tr>
-                        <td data-label="Event Title">{project.project || project.event || 'Untitled'}</td>
-                        <td data-label="Category">{project.category || '—'}</td>
+                        <td data-label={activeTab === 'projects' ? 'Project Title' : 'Event Title'}>{item.project || item.event || 'Untitled'}</td>
+                        <td data-label="Category">{item.category || '—'}</td>
                         <td data-label="Total Budget">{currency.format(approvedBudget)}</td>
                         <td data-label="Utilization">
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -349,16 +365,16 @@ function EventsPage() {
                           {role === 'SK Chairman' ? (
                             <select
                               className="project-status-select"
-                              value={project.projectStatus || 'Ongoing'}
-                              onChange={(e) => updateProjectStatus(project.requestId || project.id, e.target.value)}
-                              aria-label="Update Event Status"
+                              value={item.projectStatus || 'Ongoing'}
+                              onChange={(e) => updateProjectStatus(item.requestId || item.id, e.target.value)}
+                              aria-label={`Update ${activeTab === 'projects' ? 'Project' : 'Event'} Status`}
                             >
                               <option value="Ongoing">Ongoing</option>
                               <option value="Completed">Completed</option>
                             </select>
                           ) : (
-                            <span className={`status-pill status-${(project.projectStatus || 'Ongoing').toLowerCase()}`}>
-                              {project.projectStatus || 'Ongoing'}
+                            <span className={`status-pill status-${(item.projectStatus || 'Ongoing').toLowerCase()}`}>
+                              {item.projectStatus || 'Ongoing'}
                             </span>
                           )}
                         </td>
@@ -366,20 +382,20 @@ function EventsPage() {
                           <button
                             className="secondary-button"
                             type="button"
-                            onClick={() => toggleDetails(project.id)}
+                            onClick={() => toggleDetails(item.id)}
                           >
-                            {expanded[project.id] ? 'Hide Details' : 'View Details'}
+                            {expanded[item.id] ? 'Hide Details' : 'View Details'}
                           </button>
                         </td>
                       </tr>
-                      {renderEventDetails(project, 6)}
+                      {renderItemDetails(item, 6)}
                     </Fragment>
                   )
                 })
               ) : (
                 <tr>
                   <td colSpan="6" className="empty-state">
-                    No approved events yet.
+                    No approved {activeTab === 'projects' ? 'projects' : 'events'} yet.
                   </td>
                 </tr>
               )}
@@ -443,8 +459,7 @@ function EventsPage() {
         </div>
       ) : null}
     </RoleGate>
-
   )
 }
 
-export default EventsPage
+export default ProjectsEventsPage

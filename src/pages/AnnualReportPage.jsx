@@ -6,6 +6,7 @@ import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import AnnualReportPreview from '../components/documents/AnnualReportPreview'
 import { useAuth } from '../context/AuthContext'
+import { useDocuments } from '../context/DocumentContext'
 import YearSpinner from '../components/YearSpinner'
 import { supabase } from '../supabase/supabaseClient'
 
@@ -13,6 +14,7 @@ const currentYear = new Date().getFullYear()
 
 function AnnualReportPage() {
   const { budgets, expenses } = useBudget()
+  const { addDocument } = useDocuments()
   const { profileName, role, profileSurname } = useAuth()
   const navigate = useNavigate()
   
@@ -208,6 +210,17 @@ function AnnualReportPage() {
     setShowPreview(true)
   }
 
+  async function handleSaveDocument(previewData) {
+    if (!previewData) return
+    await addDocument({
+      name: `Annual Report ${selectedYear}`,
+      project: '',
+      generatedBy: profileName || role,
+      type: 'Annual Report',
+      data: previewData,
+    })
+  }
+
   return (
     <RoleGate allow={['SK Chairman', 'SK Treasurer']}>
       <header className="dashboard-header">
@@ -225,7 +238,7 @@ function AnnualReportPage() {
           </button>
           <button type="button" className="primary-button" onClick={handlePreview}>
             <Printer size={16} />
-            Preview & Print
+            Preview Document
           </button>
         </div>
       </header>
@@ -543,7 +556,7 @@ function AnnualReportPage() {
           <div style={{ paddingBottom: '32px' }}>
             <button type="submit" className="primary-button" onClick={handlePreview}>
               <Printer size={16} />
-              Preview & Generate PDF
+              Preview Document
             </button>
           </div>
         </form>
@@ -595,6 +608,7 @@ function AnnualReportPage() {
             projectOverrides
           }}
           onClose={() => setShowPreview(false)}
+          onSave={(data) => handleSaveDocument(data)}
         />
       )}
     </RoleGate>

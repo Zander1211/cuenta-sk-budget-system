@@ -1,10 +1,13 @@
+import { useState } from 'react'
 import '../PrintPreview.css'
+import './AdditionalDocuments.css'
+import { Printer, X } from 'lucide-react'
 import logo from '../../assets/logo.png'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
   currency: 'PHP',
-  maximumFractionDigits: 0,
+  maximumFractionDigits: 2,
 })
 
 function formatDate(dateStr) {
@@ -28,9 +31,26 @@ const tocSections = [
   { num: 'VI', title: 'Appendices and Attachments', page: '6' },
 ]
 
-function NarrativeReportPreview({ data, onClose }) {
-  function handlePrint() {
-    window.print()
+function NarrativeReportPreview({ data, onClose, onSave }) {
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  async function handlePrint(e) {
+    e.preventDefault()
+    if (onSave) {
+      setIsSaving(true)
+      setSaveError('')
+      try {
+        await onSave(data)
+        setTimeout(() => window.print(), 500)
+      } catch (err) {
+        setSaveError('Failed to save document record: ' + err.message)
+      } finally {
+        setIsSaving(false)
+      }
+    } else {
+      window.print()
+    }
   }
 
   const hasFinancial =
@@ -49,11 +69,12 @@ function NarrativeReportPreview({ data, onClose }) {
     <div className="print-preview-overlay">
       <div className="print-preview-container" style={{ maxWidth: '900px' }}>
         <div className="print-preview-toolbar">
-          <button type="button" className="print-btn" onClick={handlePrint}>
-            Print / Save as PDF
+          {saveError && <span style={{ color: '#ef4444', marginRight: '16px', fontSize: '0.9rem' }}>{saveError}</span>}
+          <button type="button" className="close-btn" onClick={onClose} disabled={isSaving}>
+            <X size={16} /> Close
           </button>
-          <button type="button" className="close-btn" onClick={onClose}>
-            Close Preview
+          <button type="button" className="print-btn" onClick={handlePrint} disabled={isSaving}>
+            <Printer size={16} /> {isSaving ? 'Saving...' : 'Print / Save as PDF'}
           </button>
         </div>
 

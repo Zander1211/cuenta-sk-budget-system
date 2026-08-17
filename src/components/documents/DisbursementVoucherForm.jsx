@@ -233,7 +233,7 @@ function DisbursementVoucherForm({ profileName, role, selectedRequest, onPreview
           onClick={handlePreview}
           disabled={generatingNumber}
         >
-          {generatingNumber ? 'Generating...' : 'Preview & Print'}
+          {generatingNumber ? 'Generating...' : 'Preview Document'}
         </button>
       </div>
     </div>

@@ -372,7 +372,7 @@ function ProjectDesignForm({ profileName, role, selectedRequest, onPreview }) {
 
       <div className="doc-gen-actions">
         <button type="button" className="primary-button" onClick={handlePreview}>
-          Preview & Print
+          Preview Document
         </button>
       </div>
     </div>

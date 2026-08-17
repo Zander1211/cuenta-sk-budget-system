@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useBudget } from '../context/BudgetContext'
 import { useAuth } from '../context/AuthContext'
 import { useDocuments } from '../context/DocumentContext'
@@ -35,7 +35,7 @@ const DOC_TYPES = [
 ]
 
 // Document types that use the request auto-fill dropdown
-const REQUEST_LINKED_DOCS = ['pr', 'po', 'project']
+const REQUEST_LINKED_DOCS = ['pr', 'po', 'project', 'payroll']
 
 const DEFAULTS = {
   barangay: 'UPPER GLAD 2',
@@ -125,13 +125,28 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
 
   const eligibleRequests = useMemo(
     () =>
-      requests.filter(
-        (r) =>
-          (r.status === 'Approved' || r.status === 'Pending' || !r.status) &&
-          !r.archivedAt
-      ),
-    [requests]
+      requests.filter((r) => {
+        if (r.archivedAt) return false;
+        
+        const isPayrollRequest = r.type === 'Payroll' || r.category === 'Payroll';
+        
+        if (docType === 'payroll') {
+           // For payroll document, strictly require Approved payroll requests
+           return isPayrollRequest && r.status === 'Approved';
+        } else {
+           // For other docs, exclude payroll requests, and allow Approved/Pending
+           if (isPayrollRequest) return false;
+           return r.status === 'Approved' || r.status === 'Pending' || !r.status;
+        }
+      }),
+    [requests, docType]
   )
+
+  useEffect(() => {
+    if (docType === 'payroll' && eligibleRequests.length === 1 && !selectedRequestId) {
+      setSelectedRequestId(eligibleRequests[0].id)
+    }
+  }, [docType, eligibleRequests, selectedRequestId])
 
   const selectedRequest = useMemo(
     () => (selectedRequestId ? requests.find((r) => r.id === selectedRequestId) : null),
@@ -242,13 +257,6 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
         },
       }
       setPreview(prData)
-      addDocument({
-        name: `Purchase Request ${number}`,
-        project: selectedRequest ? selectedRequest.event : '',
-        generatedBy: profileName || role,
-        type: 'Purchase Request',
-        data: prData,
-      })
     } else {
       const poData = {
         type: 'po',
@@ -274,29 +282,27 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
         },
       }
       setPreview(poData)
-      addDocument({
-        name: `Purchase Order ${number}`,
-        project: selectedRequest ? selectedRequest.event : '',
-        generatedBy: profileName || role,
-        type: 'Purchase Order',
-        data: poData,
-      })
     }
   }
 
   // Handler for new document type previews
   function handleNewDocPreview(previewData) {
     setPreview(previewData)
-    // Extract a nice name based on the type
+  }
+
+  async function handleSaveDocument(previewData) {
+    if (!previewData) return
+
     let name = 'Document'
     const typeLabel = DOC_TYPES.find(d => d.id === docType)?.label || 'Document'
     
-    // Attempt to extract specific numbers if present
     if (docType === 'dv' && previewData.data.dvNumber) name = `Disbursement Voucher ${previewData.data.dvNumber}`
-    else if (docType === 'payroll' && previewData.data.payrollNo) name = `Payroll ${previewData.data.payrollNo}`
+    else if (docType === 'payroll' && previewData.data.payrollNumber) name = `Payroll ${previewData.data.payrollNumber}`
+    else if (docType === 'pr' && previewData.data.prNumber) name = `Purchase Request ${previewData.data.prNumber}`
+    else if (docType === 'po' && previewData.data.poNumber) name = `Purchase Order ${previewData.data.poNumber}`
     else name = typeLabel
 
-    addDocument({
+    await addDocument({
       name,
       project: selectedRequest ? selectedRequest.event : '',
       generatedBy: profileName || role,
@@ -318,10 +324,12 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
           />
         )
       case 'payroll':
+        if (eligibleRequests.length === 0) return null;
         return (
           <PayrollForm
             profileName={profileName}
             role={role}
+            selectedRequest={selectedRequest}
             onPreview={handleNewDocPreview}
           />
         )
@@ -362,19 +370,19 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
 
     switch (preview.type) {
       case 'pr':
-        return <PurchaseRequestPreview data={preview.data} onClose={() => setPreview(null)} />
+        return <PurchaseRequestPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
       case 'po':
-        return <PurchaseOrderPreview data={preview.data} onClose={() => setPreview(null)} />
+        return <PurchaseOrderPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
       case 'dv':
-        return <DisbursementVoucherPreview data={preview.data} onClose={() => setPreview(null)} />
+        return <DisbursementVoucherPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
       case 'payroll':
-        return <PayrollPreview data={preview.data} onClose={() => setPreview(null)} />
+        return <PayrollPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
       case 'project':
-        return <ProjectDesignPreview data={preview.data} onClose={() => setPreview(null)} />
+        return <ProjectDesignPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
       case 'itinerary':
-        return <ItineraryOfTravelPreview data={preview.data} onClose={() => setPreview(null)} />
+        return <ItineraryOfTravelPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
       case 'transmittal':
-        return <TransmittalLetterPreview data={preview.data} onClose={() => setPreview(null)} />
+        return <TransmittalLetterPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
       default:
         return null
     }
@@ -401,17 +409,23 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
       {/* Select existing request — only for request-linked docs */}
       {showRequestSelector ? (
         <div className="doc-gen-form" style={{ marginBottom: isPrOrPo ? 0 : '16px' }}>
-          <label className="field">
-            <span>Select approved request to auto-fill</span>
-            <select value={selectedRequestId} onChange={handleSelectRequest}>
-              <option value="">— Choose a request —</option>
-              {eligibleRequests.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.event} — {currency.format(r.amount)} ({r.status || 'Pending'})
-                </option>
-              ))}
-            </select>
-          </label>
+          {docType === 'payroll' && eligibleRequests.length === 0 ? (
+            <div className="form-error" style={{ padding: '12px', backgroundColor: '#fee2e2', color: '#b91c1c', borderRadius: '4px', border: '1px solid #f87171' }}>
+              No approved payroll record found for this document.
+            </div>
+          ) : (
+            <label className="field">
+              <span>Select approved request to auto-fill</span>
+              <select value={selectedRequestId} onChange={handleSelectRequest}>
+                <option value="">— Choose a request —</option>
+                {eligibleRequests.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.event} — {currency.format(r.amount)} ({r.status || 'Pending'})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
       ) : null}
 
@@ -655,7 +669,7 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
               onClick={handlePreview}
               disabled={generatingNumber || !items.length}
             >
-              {generatingNumber ? 'Generating...' : 'Preview & Print'}
+              {generatingNumber ? 'Generating...' : 'Preview Document'}
             </button>
           </div>
         </div>

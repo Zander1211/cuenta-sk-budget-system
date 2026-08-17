@@ -71,7 +71,7 @@ async function getNextPayrollNumber() {
   }
 }
 
-function PayrollForm({ profileName, role, onPreview }) {
+function PayrollForm({ profileName, role, selectedRequest, onPreview }) {
   const [payrollNumber, setPayrollNumber] = useState('')
   const [periodCovered, setPeriodCovered] = useState(getCurrentMonthRange())
   const [rows, setRows] = useState(() => Array.from({ length: 5 }, createEmptyRow))
@@ -87,6 +87,28 @@ function PayrollForm({ profileName, role, onPreview }) {
   useEffect(() => {
     if (role === 'SK Kagawad') setSkKagawad(profileName || '')
   }, [profileName, role])
+
+  useEffect(() => {
+    if (selectedRequest) {
+      if (selectedRequest.event) {
+        setPeriodCovered(selectedRequest.event)
+      }
+      
+      const breakdown = Array.isArray(selectedRequest.breakdown) ? selectedRequest.breakdown : []
+      if (breakdown.length > 0) {
+        const mapped = breakdown.map(item => ({
+          name: item.name || '',
+          position: item.position || '',
+          honoraria: item.honoraria !== undefined ? Number(item.honoraria) : '',
+          serviceRendered: item.serviceRendered || '',
+          cbcLbf: item.cbcLbf !== undefined ? Number(item.cbcLbf) : ''
+        }))
+        setRows(mapped)
+      } else {
+        setRows(Array.from({ length: 5 }, createEmptyRow))
+      }
+    }
+  }, [selectedRequest])
 
   function updateRow(index, field, value) {
     setRows((prev) =>
@@ -311,7 +333,7 @@ function PayrollForm({ profileName, role, onPreview }) {
           onClick={handlePreview}
           disabled={generatingNumber}
         >
-          {generatingNumber ? 'Generating...' : 'Preview & Print'}
+          {generatingNumber ? 'Generating...' : 'Preview Document'}
         </button>
       </div>
     </div>

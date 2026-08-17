@@ -4,6 +4,7 @@ import { ArrowLeft, PlusCircle, Trash2, Image, Upload } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import { useAuth } from '../context/AuthContext'
+import { useDocuments } from '../context/DocumentContext'
 import NarrativeReportPreview from '../components/documents/NarrativeReportPreview'
 import { savePhoto, getPhotosByProject, deletePhoto } from '../utils/photoDB'
 
@@ -24,6 +25,7 @@ const DEFAULTS = {
 function NarrativeReportPage() {
   const navigate = useNavigate()
   const { requests, expenses } = useBudget()
+  const { addDocument } = useDocuments()
   const { profileName, role } = useAuth()
 
   const [selectedRequestId, setSelectedRequestId] = useState('')
@@ -80,9 +82,11 @@ function NarrativeReportPage() {
   const eligibleRequests = useMemo(
     () =>
       requests.filter(
-        (r) =>
-          (r.status === 'Approved' || r.status === 'Pending' || !r.status) &&
-          !r.archivedAt
+        (r) => {
+          if (r.archivedAt) return false;
+          if (r.type === 'Payroll' || r.category === 'Payroll') return false;
+          return (r.status === 'Approved' || r.status === 'Pending' || !r.status);
+        }
       ),
     [requests]
   )
@@ -306,6 +310,17 @@ function NarrativeReportPage() {
       financialData,
       printMode,
       includeCoverPage,
+    })
+  }
+
+  async function handleSaveDocument(previewData) {
+    if (!previewData) return
+    await addDocument({
+      name: `Narrative Report - ${projectTitle || 'Untitled'}`,
+      project: projectTitle || '',
+      generatedBy: profileName || role,
+      type: 'Narrative Report',
+      data: previewData,
     })
   }
 
@@ -780,7 +795,7 @@ function NarrativeReportPage() {
             onClick={handlePreview}
             disabled={!projectTitle.trim()}
           >
-            Preview &amp; Generate PDF
+            Preview Document
           </button>
           <button
             type="button"
@@ -793,7 +808,11 @@ function NarrativeReportPage() {
       </section>
 
       {preview ? (
-        <NarrativeReportPreview data={preview} onClose={() => setPreview(null)} />
+        <NarrativeReportPreview 
+          data={preview} 
+          onClose={() => setPreview(null)} 
+          onSave={(data) => handleSaveDocument(data)} 
+        />
       ) : null}
     </RoleGate>
   )

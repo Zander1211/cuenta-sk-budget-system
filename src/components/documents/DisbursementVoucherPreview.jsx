@@ -1,4 +1,5 @@
 import '../PrintPreview.css'
+import { useState } from 'react'
 import './AdditionalDocuments.css'
 
 const currency = new Intl.NumberFormat('en-PH', {
@@ -14,7 +15,9 @@ function formatDateLocal(dateStr) {
   return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
 }
 
-function DisbursementVoucherPreview({ data, onClose }) {
+function DisbursementVoucherPreview({ data, onClose, onSave }) {
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const {
     dvNumber,
     date,
@@ -32,9 +35,22 @@ function DisbursementVoucherPreview({ data, onClose }) {
     bankName,
   } = data
 
-  function handlePrint(e) {
+  async function handlePrint(e) {
     e.preventDefault()
-    window.print()
+    if (onSave) {
+      setIsSaving(true)
+      setSaveError('')
+      try {
+        await onSave()
+        setTimeout(() => window.print(), 500)
+      } catch (err) {
+        setSaveError('Failed to save document record: ' + err.message)
+      } finally {
+        setIsSaving(false)
+      }
+    } else {
+      window.print()
+    }
   }
 
   const accountingRows = Array.from({ length: 5 }, () => ({
@@ -48,11 +64,12 @@ function DisbursementVoucherPreview({ data, onClose }) {
     <div className="print-preview-overlay">
       <div className="print-preview-container">
         <div className="print-preview-toolbar">
-          <button type="button" className="close-btn" onClick={onClose}>
+          {saveError && <span style={{ color: '#ef4444', marginRight: '16px', fontSize: '0.9rem' }}>{saveError}</span>}
+          <button type="button" className="close-btn" onClick={onClose} disabled={isSaving}>
             Close
           </button>
-          <button type="button" className="print-btn" onClick={handlePrint}>
-            Print / Save as PDF
+          <button type="button" className="print-btn" onClick={handlePrint} disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Print / Save as PDF'}
           </button>
         </div>
 

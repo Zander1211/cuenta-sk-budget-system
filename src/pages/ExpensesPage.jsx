@@ -390,56 +390,100 @@ function ExpensesPage() {
     const additionalExpenses = expenses.filter(e => e.parentProjectId === expense.id)
     const additionalTotal = additionalExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
 
+    const totalExpense = totalAmount + additionalTotal
+
     return (
       <tr className="details-row">
         <td colSpan={columnCount} style={{ padding: 0 }}>
-          <div className="details-panel" style={{ padding: '24px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-            <div className="details-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-              <div>
-                <p className="details-label" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Project / Event</p>
-                <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>{expense.event || expense.project || '—'}</p>
+          <div className="details-panel" style={{ padding: '32px 24px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+            
+            {/* Basic Information Section */}
+            <div style={{ marginBottom: '32px' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#111827', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Basic Information</h3>
+              <div className="details-grid" style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                gap: '16px'
+              }}>
+                {[
+                  { label: 'Description', value: expense.description || expense.project || expense.event || '—' },
+                  { label: 'Category', value: expense.category || '—' },
+                  { label: 'Date', value: expense.date || expense.approvedAt ? new Date(expense.date || expense.approvedAt).toLocaleDateString() : '—' },
+                  { label: 'Related Project / Event / Payroll', value: expense.event || expense.project || expense.payrollNumber || '—' },
+                  { label: 'Requested By', value: expense.requestedBy || '—' },
+                ].map((stat, i) => (
+                  <div key={i} style={{ 
+                    backgroundColor: 'var(--background-color, #ffffff)', 
+                    padding: '20px 24px', 
+                    borderRadius: '12px', 
+                    border: '1px solid var(--border-color, #e5e7eb)', 
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px'
+                  }}>
+                    <p className="details-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: '#6b7280', margin: 0, letterSpacing: '0.5px' }}>{stat.label}</p>
+                    <p className="details-value" style={{ fontSize: '1.05rem', margin: 0, color: '#111827', lineHeight: '1.4' }}>{stat.value}</p>
+                  </div>
+                ))}
+                
+                {/* Receipt Status Card */}
+                <div style={{ 
+                  backgroundColor: 'var(--background-color, #ffffff)', 
+                  padding: '20px 24px', 
+                  borderRadius: '12px', 
+                  border: '1px solid var(--border-color, #e5e7eb)', 
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px'
+                }}>
+                  <p className="details-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: '#6b7280', margin: 0, letterSpacing: '0.5px' }}>Receipt Status</p>
+                  <div>
+                    <span style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      padding: '4px 12px', 
+                      borderRadius: '999px', 
+                      fontSize: '0.85rem', 
+                      fontWeight: 600, 
+                      backgroundColor: hasReceipt ? '#dcfce7' : '#fee2e2', 
+                      color: hasReceipt ? '#15803d' : '#dc2626' 
+                    }}>
+                      {hasReceipt ? (receiptCount > 1 ? `${receiptCount} Receipts Uploaded` : '1 Receipt Uploaded') : 'Missing'}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="details-label" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Category</p>
-                <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>{expense.category || '—'}</p>
-              </div>
-              <div>
-                <p className="details-label" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Total Amount</p>
-                <p className="details-value" style={{ margin: 0, fontSize: '0.95rem', fontWeight: 500, color: '#059669' }}>{currency.format(totalAmount)}</p>
-              </div>
-              <div>
-                <p className="details-label" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Total Cost (Breakdown)</p>
-                <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>
-                  {breakdownItems.length ? currency.format(breakdownTotal) : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="details-label" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Event Date</p>
-                <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>
-                  {expense.eventDate
-                    ? new Date(expense.eventDate).toLocaleDateString()
-                    : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="details-label" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Venue</p>
-                <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>{expense.venue || '—'}</p>
-              </div>
-              <div>
-                <p className="details-label" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Requested By</p>
-                <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>{expense.requestedBy || '—'}</p>
-              </div>
-              <div>
-                <p className="details-label" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Approved Date</p>
-                <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>
-                  {expense.approvedAt
-                    ? new Date(expense.approvedAt).toLocaleDateString()
-                    : '—'}
-                </p>
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <p className="details-label" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Project Description</p>
-                <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>{expense.description || '—'}</p>
+            </div>
+
+            {/* Financial Information Section */}
+            <div style={{ marginBottom: '32px' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#111827', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Financial Information</h3>
+              <div className="details-grid" style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                gap: '16px'
+              }}>
+                {[
+                  { label: 'Amount', value: currency.format(totalAmount), highlight: false },
+                  { label: 'Additional Expenses', value: currency.format(additionalTotal), highlight: false },
+                  { label: 'Total Expense', value: currency.format(totalExpense), highlight: true },
+                ].map((stat, i) => (
+                  <div key={i} style={{ 
+                    backgroundColor: 'var(--background-color, #ffffff)', 
+                    padding: '20px 24px', 
+                    borderRadius: '12px', 
+                    border: '1px solid var(--border-color, #e5e7eb)', 
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px'
+                  }}>
+                    <p className="details-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: '#6b7280', margin: 0, letterSpacing: '0.5px' }}>{stat.label}</p>
+                    <p className="details-value" style={{ fontSize: '1.25rem', fontWeight: stat.highlight ? 600 : 400, margin: 0, color: stat.highlight ? '#059669' : '#111827' }}>{stat.value}</p>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -480,30 +524,9 @@ function ExpensesPage() {
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 600, backgroundColor: '#dcfce7', color: '#15803d' }}>
                             ✅ Uploaded ({addReceiptCount})
                           </span>
-                        ) : canUpload ? (
-                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            <input
-                              type="file"
-                              accept="image/*,application/pdf"
-                              style={{ width: '150px' }}
-                              onChange={(event) =>
-                                handleFileChange(addEx.id, event.target.files?.[0] || null)
-                              }
-                            />
-                            <button
-                              type="button"
-                              className="secondary-button"
-                              onClick={() => handleUpload(addEx)}
-                              disabled={uploadingId === addEx.id}
-                              style={{ padding: '4px 8px', fontSize: '0.85rem' }}
-                            >
-                              {uploadingId === addEx.id ? 'Uploading...' : 'Upload'}
-                            </button>
-                            {errorsById[addEx.id] ? ( <span className="form-error" style={{ marginLeft: '4px', fontSize: '0.8rem' }}>{errorsById[addEx.id]}</span> ) : null}
-                          </div>
                         ) : (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 600, backgroundColor: '#fee2e2', color: '#dc2626' }}>
-                            ❌ Missing (0)
+                            ❌ Missing
                           </span>
                         )}
                       </td>
@@ -545,47 +568,7 @@ function ExpensesPage() {
               </table>
             </div>
 
-            {/* Receipt status + upload section */}
-            <div className="details-receipt-section" style={{ marginTop: '24px' }}>
-              <p className="details-label" style={{ margin: '0 0 12px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Receipts</p>
-              <div className="details-receipt-actions">
-                {hasReceipt ? (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '999px', fontSize: '0.85rem', fontWeight: 600, backgroundColor: '#dcfce7', color: '#15803d' }}>
-                    ✅ Uploaded ({receiptCount})
-                  </span>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'flex-start' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '999px', fontSize: '0.85rem', fontWeight: 600, backgroundColor: '#fee2e2', color: '#dc2626' }}>
-                      ❌ Missing (0)
-                    </span>
-                    {canUpload && (
-                      <div className="field-row" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                        <input
-                          type="file"
-                          accept="image/*,application/pdf"
-                          capture="environment"
-                          onChange={(event) =>
-                            handleFileChange(expense.id, event.target.files?.[0] || null)
-                          }
-                          style={{ padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: '#fff' }}
-                        />
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => handleUpload(expense)}
-                          disabled={uploadingId === expense.id}
-                        >
-                          {uploadingId === expense.id ? 'Uploading...' : 'Upload'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {errorsById[expense.id] ? (
-                  <p className="form-error" style={{ marginTop: '8px' }}>{errorsById[expense.id]}</p>
-                ) : null}
-              </div>
-            </div>
+
           </div>
         </td>
       </tr>
@@ -829,16 +812,6 @@ function ExpensesPage() {
                             >
                               {expanded[expense.id] ? 'Hide' : 'Details'}
                             </button>
-                            {hasReceipt && (
-                              <button
-                                className="primary-button"
-                                type="button"
-                                onClick={() => handlePrintReceipt(expense)}
-                                style={{ padding: '6px 12px', fontSize: '0.85rem' }}
-                              >
-                                Print
-                              </button>
-                            )}
                             {isTreasurer && (
                               <button
                                 className="secondary-button"

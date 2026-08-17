@@ -41,16 +41,10 @@ const navItems = [
     icon: Wallet
   },
   {
-    label: 'Projects',
-    path: '/dashboard/projects',
+    label: 'Projects & Events',
+    path: '/dashboard/projects-events',
     roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
     icon: Briefcase
-  },
-  {
-    label: 'Events',
-    path: '/dashboard/events',
-    roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
-    icon: CheckSquare
   },
   {
     label: 'Payroll',
