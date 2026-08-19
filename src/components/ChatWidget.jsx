@@ -113,9 +113,17 @@ class ChatErrorBoundary extends React.Component {
 }
 
 export default function ChatWidget() {
+  const { user } = useAuth()
+
+  /*
+   * Keying on the user id remounts the widget whenever someone signs in or
+   * out, which discards the conversation as a consequence of React's own
+   * lifecycle. That is stronger than clearing state in an effect: there is no
+   * render in between where the previous user's messages could still be shown.
+   */
   return (
     <ChatErrorBoundary>
-      <ChatWidgetInner />
+      <ChatWidgetInner key={user?.id || 'signed-out'} />
     </ChatErrorBoundary>
   )
 }
@@ -127,7 +135,8 @@ function ChatWidgetInner() {
   const [isLoading, setIsLoading] = useState(false)
   const [hasUnread, setHasUnread] = useState(false)
   const [initialized, setInitialized] = useState(false)
-  const [historyLoaded, setHistoryLoaded] = useState(false)
+  // Nothing is loaded from storage any more, so the widget is ready immediately.
+  const [historyLoaded] = useState(true)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -146,81 +155,45 @@ function ChatWidgetInner() {
 
   const LOCAL_CHAT_KEY = 'cuenta.chat_history.v1'
 
-  const getLocalChat = (userId) => {
-    if (!userId) return []
-    try {
-      const raw = window.localStorage.getItem(`${LOCAL_CHAT_KEY}_${userId}`)
-      return raw ? JSON.parse(raw) : []
-    } catch {
-      return []
-    }
-  }
-
-  const saveLocalChat = (userId, message) => {
-    if (!userId) return
-    try {
-      const existing = getLocalChat(userId)
-      const updated = [...existing, message].slice(-50)
-      window.localStorage.setItem(`${LOCAL_CHAT_KEY}_${userId}`, JSON.stringify(updated))
-    } catch {}
-  }
-
-  // Load chat history from Supabase (with localStorage fallback)
+  /**
+   * Conversations are held in React state only, for the lifetime of the
+   * session. Nothing is written to the database or to storage, so signing out
+   * (or closing the tab) leaves nothing behind.
+   *
+   * This is deliberate. Cue answers questions about budgets, expenses and
+   * approvals, so a transcript is a record of what an official was looking
+   * into. On a shared barangay computer that transcript should not survive the
+   * session, and it is not something the system needs to keep.
+   *
+   * The purge below clears anything the earlier persisting version left on
+   * this device or in the chat_history table.
+   */
   useEffect(() => {
     let mounted = true
-    async function loadHistory() {
-      if (mounted) setMessages([])
 
-      if (!user?.id) {
-        if (mounted) {
-          setHistoryLoaded(true)
-          setInitialized(false)
-        }
-        return
+    // Drop transcripts written before chat became ephemeral. State itself does
+    // not need clearing here: ChatWidget keys this component on the user id, so
+    // signing in or out remounts it with fresh state.
+    try {
+      for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+        const key = window.localStorage.key(i)
+        if (key && key.startsWith(LOCAL_CHAT_KEY)) window.localStorage.removeItem(key)
       }
-
-      try {
-        const { data, error } = await supabase
-          .from('chat_history')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: true })
-
-        if (!error && data && data.length > 0) {
-          const history = data.map(row => ({
-            role: row.role,
-            content: row.content,
-            timestamp: row.created_at,
-          }))
-          if (mounted) {
-            setMessages(history)
-            setInitialized(true)
-          }
-        } else {
-          const localHistory = getLocalChat(user.id)
-          if (mounted) {
-            setMessages(localHistory)
-            if (localHistory.length > 0) {
-              setInitialized(true)
-            }
-          }
-        }
-      } catch {
-        const localHistory = getLocalChat(user.id)
-        if (mounted) {
-          setMessages(localHistory)
-          if (localHistory.length > 0) {
-            setInitialized(true)
-          }
-        }
-      } finally {
-        if (mounted) setHistoryLoaded(true)
-      }
+    } catch {
+      // Storage can be unavailable in private mode; nothing to clean up then.
     }
 
-    setHistoryLoaded(false)
-    setInitialized(false)
-    loadHistory()
+    if (user?.id) {
+      supabase
+        .from('chat_history')
+        .delete()
+        .eq('user_id', user.id)
+        .then(({ error }) => {
+          if (error && mounted) {
+            console.warn('[Cue] Could not purge stored chat history:', error.message)
+          }
+        })
+    }
 
     return () => { mounted = false }
   }, [user?.id])
@@ -456,6 +429,15 @@ function ChatWidgetInner() {
       return generateDataDrivenRecommendation(systemCtx, allBudgets, allExpenses, allRequests, targetMonth, targetYear, currentYear)
     }
 
+    /* "What are the spending patterns" is a question about shape, not size.
+       Answering it with a single total is the wrong shape of answer, so this
+       is checked before the plain expense-total rules below. */
+    const isPatternQuery = /\b(pattern|patterns|trend|trends|breakdown|break down|distribution|spread|analyse|analyze|analysis|habits?|behaviou?r|compare|comparison|by month|per month|by category|per category|where.*(going|spent|spend))\b/.test(text)
+
+    if (isPatternQuery) {
+      return buildSpendingPatternAnalysis(systemCtx, allExpenses, targetYear, targetMonth)
+    }
+
     // -------------------------------------------------------------
     // RULE A: SPECIFIC YEAR AND MONTH REQUESTED (e.g. "July 2026", "July 2025")
     // -------------------------------------------------------------
@@ -574,6 +556,164 @@ function ChatWidgetInner() {
     return `Your overall total budget recorded is ₱${Number(totalB).toLocaleString('en-PH')} and you have ₱${Number(totalR).toLocaleString('en-PH')} remaining.`
   }
 
+  /**
+   * Answers "what are the spending patterns" with an actual distribution.
+   *
+   * A pattern question asks how spending is shaped across time and category,
+   * so the answer reports where the money concentrates, which months are busy
+   * or quiet, the direction of travel, and how much of it is backed by
+   * receipts. A single total answers none of that.
+   *
+   * Every figure is computed from recorded expenses. Nothing is estimated, and
+   * where there is too little data to support a claim the claim is omitted
+   * rather than softened.
+   */
+  function buildSpendingPatternAnalysis(systemCtx, allExpenses, targetYear, targetMonth) {
+    const peso = value => `₱${Number(value || 0).toLocaleString('en-PH')}`
+
+    let scope = allExpenses
+    let periodLabel = 'all recorded periods'
+
+    if (targetYear) {
+      scope = scope.filter(e => Number(e.year) === targetYear)
+      periodLabel = String(targetYear)
+    }
+    if (targetMonth) {
+      scope = scope.filter(e => String(e.month || '').toLowerCase() === targetMonth.toLowerCase())
+      periodLabel = targetYear ? `${targetMonth} ${targetYear}` : targetMonth
+    }
+
+    if (scope.length === 0) {
+      return `No expenses have been recorded for ${periodLabel}, so there is no spending pattern to describe yet.`
+    }
+
+    const total = scope.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+
+    // ── Distribution across months ──────────────────────────────────────
+    const byMonth = new Map()
+    for (const expense of scope) {
+      const key = expense.monthNumber || 0
+      const entry = byMonth.get(key) || { month: expense.month || 'Undated', number: key, total: 0, count: 0 }
+      entry.total += Number(expense.amount) || 0
+      entry.count += 1
+      byMonth.set(key, entry)
+    }
+    const months = [...byMonth.values()].sort((a, b) => a.number - b.number)
+    const activeMonths = months.filter(m => m.total > 0)
+
+    // ── Distribution across categories ──────────────────────────────────
+    const byCategory = new Map()
+    for (const expense of scope) {
+      const key = expense.category || 'Other'
+      const entry = byCategory.get(key) || { category: key, total: 0, count: 0 }
+      entry.total += Number(expense.amount) || 0
+      entry.count += 1
+      byCategory.set(key, entry)
+    }
+    const categories = [...byCategory.values()].sort((a, b) => b.total - a.total)
+
+    const lines = []
+    lines.push(`Spending pattern for ${periodLabel}`)
+    lines.push('')
+    lines.push(
+      `${peso(total)} across ${scope.length} expense${scope.length === 1 ? '' : 's'}` +
+        (activeMonths.length ? ` in ${activeMonths.length} active month${activeMonths.length === 1 ? '' : 's'}.` : '.'),
+    )
+
+    // ── Where it concentrates ───────────────────────────────────────────
+    lines.push('')
+    lines.push('By category')
+    for (const row of categories.slice(0, 5)) {
+      const share = total > 0 ? Math.round((row.total / total) * 100) : 0
+      lines.push(`  ${row.category}: ${peso(row.total)} (${share}%, ${row.count} item${row.count === 1 ? '' : 's'})`)
+    }
+    if (categories.length > 5) {
+      const rest = categories.slice(5).reduce((sum, row) => sum + row.total, 0)
+      lines.push(`  ${categories.length - 5} other categories: ${peso(rest)}`)
+    }
+
+    // ── Month by month ──────────────────────────────────────────────────
+    if (activeMonths.length > 1) {
+      lines.push('')
+      lines.push('By month')
+      for (const row of activeMonths) {
+        const share = total > 0 ? Math.round((row.total / total) * 100) : 0
+        lines.push(`  ${row.month}: ${peso(row.total)} (${share}%)`)
+      }
+    }
+
+    // ── What the shape actually says ────────────────────────────────────
+    const observations = []
+
+    const leader = categories[0]
+    if (leader && total > 0) {
+      const leadShare = (leader.total / total) * 100
+      if (leadShare >= 60) {
+        observations.push(
+          `Spending is heavily concentrated: ${leader.category} alone accounts for ${Math.round(leadShare)}% of the total.`,
+        )
+      } else if (categories.length >= 3 && leadShare < 40) {
+        observations.push(`Spending is spread fairly evenly across ${categories.length} categories.`)
+      }
+    }
+
+    if (activeMonths.length > 1) {
+      const peak = activeMonths.reduce((a, b) => (b.total > a.total ? b : a))
+      const quiet = activeMonths.reduce((a, b) => (b.total < a.total ? b : a))
+      const average = total / activeMonths.length
+
+      observations.push(
+        `${peak.month} was the heaviest month at ${peso(peak.total)}; ${quiet.month} was the lightest at ${peso(quiet.total)}. The average active month is ${peso(Math.round(average))}.`,
+      )
+
+      // Direction of travel, stated only when the sample can support it.
+      if (activeMonths.length >= 4) {
+        const midpoint = Math.floor(activeMonths.length / 2)
+        const firstHalf = activeMonths.slice(0, midpoint).reduce((sum, m) => sum + m.total, 0) / midpoint
+        const secondHalfMonths = activeMonths.slice(midpoint)
+        const secondHalf = secondHalfMonths.reduce((sum, m) => sum + m.total, 0) / secondHalfMonths.length
+
+        if (firstHalf > 0) {
+          const change = ((secondHalf - firstHalf) / firstHalf) * 100
+          if (Math.abs(change) >= 15) {
+            observations.push(
+              `Spending is ${change > 0 ? 'rising' : 'falling'}: the later months average ${Math.abs(Math.round(change))}% ${change > 0 ? 'more' : 'less'} than the earlier ones.`,
+            )
+          } else {
+            observations.push('The monthly pace has stayed broadly steady across the period.')
+          }
+        }
+      }
+    }
+
+    // ── Budget utilisation, when a budget exists for the period ─────────
+    const summaries = (systemCtx.monthlySummaries || []).filter(s => !targetYear || s.year === targetYear)
+    const budgeted = summaries.reduce((sum, s) => sum + (Number(s.allocatedBudget) || 0), 0)
+    if (budgeted > 0) {
+      const utilisation = Math.round((total / budgeted) * 100)
+      observations.push(
+        `Against ${peso(budgeted)} allocated, that is ${utilisation}% utilised with ${peso(Math.max(budgeted - total, 0))} unspent.`,
+      )
+    }
+
+    // ── Documentation coverage ──────────────────────────────────────────
+    const withReceipts = scope.filter(e => e.hasReceipt).length
+    if (withReceipts < scope.length) {
+      const missing = scope.length - withReceipts
+      observations.push(
+        `${missing} of ${scope.length} expense${scope.length === 1 ? '' : 's'} ${missing === 1 ? 'has' : 'have'} no receipt attached yet.`,
+      )
+    }
+
+    if (observations.length) {
+      lines.push('')
+      lines.push('What this shows')
+      for (const note of observations) lines.push(`  ${note}`)
+    }
+
+    return lines.join('\n')
+  }
+
   function generateDataDrivenRecommendation(systemCtx, allBudgets, allExpenses, allRequests, targetMonth, targetYear, currentYear) {
     const fmt = (n) => `₱${Number(n).toLocaleString('en-PH')}`
 
@@ -690,16 +830,6 @@ function ChatWidgetInner() {
     setMessages(updatedMessages)
     setIsLoading(true)
 
-    // Save user message to localStorage & Supabase (fire-and-forget)
-    saveLocalChat(user?.id, userMsg)
-    if (user?.id) {
-      supabase.from('chat_history').insert({
-        user_id: user.id,
-        role: 'user',
-        content: userText,
-      }).then().catch(() => {})
-    }
-
     const systemCtx = buildSystemContext()
 
     try {
@@ -740,16 +870,6 @@ function ChatWidgetInner() {
 
       setMessages(prev => [...prev, assistantMsg])
 
-      // Save assistant message to localStorage & Supabase
-      saveLocalChat(user?.id, assistantMsg)
-      if (user?.id) {
-        supabase.from('chat_history').insert({
-          user_id: user.id,
-          role: 'assistant',
-          content: replyText,
-        }).then().catch(() => {})
-      }
-
       if (!isOpen) setHasUnread(true)
 
     } catch (err) {
@@ -763,7 +883,6 @@ function ChatWidgetInner() {
       }
 
       setMessages(prev => [...prev, assistantFallbackMsg])
-      saveLocalChat(user?.id, assistantFallbackMsg)
     } finally {
       setIsLoading(false)
     }

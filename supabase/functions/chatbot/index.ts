@@ -251,31 +251,73 @@ serve(async (req: Request) => {
   console.log(`[Cue Edge Function] Budget: ₱${totalBudget} | Expenses: ₱${totalExpenses} | Remaining: ₱${remaining}`)
   console.log(`[Cue Edge Function] Sending ${formattedMessages.length} messages to Groq (llama-3.3-70b-versatile)...`)
 
-  try {
-    const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${groqApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: formattedMessages,
-        temperature: 0.5,
-        max_tokens: 800,
-      }),
-    })
+  /*
+   * Groq retires models periodically, and a retired name returns 404 from the
+   * completions endpoint. Pinning a single name means the day it is retired the
+   * assistant silently degrades to the client-side rule engine, which is what
+   * happened with llama-3.3-70b-versatile.
+   *
+   * GROQ_MODEL overrides the list without a redeploy. Otherwise each candidate
+   * is tried in turn and the first that answers wins, so one retirement no
+   * longer takes the chatbot down.
+   */
+  const configuredModel = Deno.env.get('GROQ_MODEL')
+  const candidateModels = configuredModel
+    ? [configuredModel]
+    : [
+        'llama-3.3-70b-versatile',
+        'meta-llama/llama-4-scout-17b-16e-instruct',
+        'openai/gpt-oss-120b',
+        'llama-3.1-8b-instant',
+      ]
 
-    if (!groqResponse.ok) {
-      const errorText = await groqResponse.text()
-      console.error(`[Cue Edge Function] Groq API error: ${groqResponse.status} — ${errorText}`)
+  try {
+    let groqResponse: Response | null = null
+    let usedModel = ''
+    const attempts: string[] = []
+
+    for (const model of candidateModels) {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${groqApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: formattedMessages,
+          temperature: 0.5,
+          max_tokens: 800,
+        }),
+      })
+
+      if (response.ok) {
+        groqResponse = response
+        usedModel = model
+        break
+      }
+
+      const errorText = await response.text()
+      attempts.push(`${model} -> ${response.status}`)
+      console.error(`[Cue Edge Function] Groq rejected ${model}: ${response.status} - ${errorText}`)
+
+      // 404 means this model is gone; anything else (401 key, 429 rate limit,
+      // 5xx outage) will fail identically for the rest, so stop early.
+      if (response.status !== 404) break
+    }
+
+    if (!groqResponse) {
       return new Response(JSON.stringify({
-        error: `Groq API error: ${groqResponse.status}`,
+        error: `Groq API error. Tried: ${attempts.join(', ')}`,
         code: 'AI_ERROR',
       }), {
         status: 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
+    }
+
+    if (usedModel !== candidateModels[0]) {
+      console.warn(`[Cue Edge Function] Fell back to ${usedModel}. Set GROQ_MODEL to pin it.`)
     }
 
     const data = await groqResponse.json()
