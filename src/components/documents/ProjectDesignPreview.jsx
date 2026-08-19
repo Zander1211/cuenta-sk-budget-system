@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import '../PrintPreview.css'
 import './AdditionalDocuments.css'
-import logo from '../../assets/logo.png'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -66,9 +65,8 @@ function ProjectDesignPreview({ data, onClose, onSave }) {
         </div>
 
         <div className="print-page">
-          {/* Government Letterhead with logos */}
+          {/* Government Letterhead */}
           <div className="gov-letterhead" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '30px' }}>
-            <img src={logo} alt="SK Logo" style={{ width: '100px', height: '100px', position: 'absolute', left: '50px', top: '0', objectFit: 'contain' }} />
             <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
               <p style={{ margin: 0 }}>Republic of the Philippines</p>
               <p style={{ margin: 0, fontWeight: 'bold' }}>REGION XII</p>

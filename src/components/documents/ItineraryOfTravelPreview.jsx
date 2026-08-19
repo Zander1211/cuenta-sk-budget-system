@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import '../PrintPreview.css'
 import './AdditionalDocuments.css'
-
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
   currency: 'PHP',
@@ -96,11 +95,13 @@ function ItineraryOfTravelPreview({ data, onClose, onSave }) {
           </div>
 
           {/* Letterhead */}
-          <div className="gov-letterhead">
-            <p className="gov-line">Republic of the Philippines</p>
-            <p className="gov-line">Province of Cotabato</p>
-            <p className="gov-line">Municipality of Midsayap</p>
-            <p className="gov-line-bold">BARANGAY UPPER GLAD II</p>
+          <div className="gov-letterhead" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '30px' }}>
+            <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
+              <p className="gov-line" style={{ margin: 0 }}>Republic of the Philippines</p>
+              <p className="gov-line" style={{ margin: 0 }}>Province of Cotabato</p>
+              <p className="gov-line" style={{ margin: 0 }}>Municipality of Midsayap</p>
+              <p className="gov-line-bold" style={{ margin: 0 }}>BARANGAY UPPER GLAD II</p>
+            </div>
           </div>
 
           {/* Title */}

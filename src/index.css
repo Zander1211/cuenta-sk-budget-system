@@ -163,76 +163,9 @@ body {
 	gap: 12px;
 }
 
-.login-page {
-	display: flex;
-	justify-content: center;
-	align-items: center;
-	min-height: 100vh;
-}
-
-.login-shell {
-	width: min(720px, 100%);
-	display: grid;
-	grid-template-columns: 1fr;
-	border-radius: 0;
-	overflow: hidden;
-	box-shadow: var(--shadow);
-	border: 1px solid rgba(255, 255, 255, 0.65);
-	position: relative;
-	z-index: 1;
-	animation: shellFloat 0.7s ease both;
-}
-
-.brand-panel {
-	padding: 54px 52px;
-	background: linear-gradient(160deg, var(--sea) 0%, var(--sea-soft) 60%, var(--cuenta-green, #0a5c6d) 100%);
-	color: #f4f6fb;
-	display: flex;
-	flex-direction: column;
-	gap: 22px;
-	animation: panelReveal 0.6s ease both;
-}
-
-.brand-panel h1 {
-	font-size: clamp(1.8rem, 2.4vw, 2.6rem);
-	line-height: 1.1;
-	margin: 0;
-}
-
-.brand-panel p {
-	margin: 0;
-	color: rgba(244, 246, 251, 0.8);
-	font-size: 1.05rem;
-	line-height: 1.5;
-}
-
-.brand-badge {
-	font-family: 'Montserrat', sans-serif;
-	font-size: 0.7rem;
-	letter-spacing: 0.28rem;
-	text-transform: uppercase;
-	background: rgba(109, 227, 183, 0.18);
-	color: #d5fff0;
-	padding: 10px 16px;
-	border-radius: 999px;
-	width: fit-content;
-}
-
-.brand-stats {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 18px;
-	margin-top: auto;
-}
-
-.brand-stats div {
-	background: rgba(9, 16, 28, 0.5);
-	border: 1px solid rgba(109, 227, 183, 0.3);
-	padding: 18px;
-	border-radius: 18px;
-	display: grid;
-	gap: 6px;
-}
+/* Login styling lives in `pages/LoginPage.css`, scoped to that page.
+   The `.brand-panel` / `.brand-stats` blocks that used to sit here were left
+   over from an earlier sign-in layout and were referenced by nothing. */
 
 .stat-value {
 	font-size: 1.5rem;
@@ -246,69 +179,6 @@ body {
 	color: rgba(244, 246, 251, 0.65);
 }
 
-.login-panel {
-	background: var(--bone);
-	padding: 54px 52px;
-	display: flex;
-	flex-direction: column;
-	gap: 26px;
-	animation: panelReveal 0.7s ease both;
-	animation-delay: 0.12s;
-}
-
-.login-header {
-	text-align: left;
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	align-items: flex-start;
-	background: linear-gradient(135deg, var(--sea) 0%, #0a5c6d 100%);
-	padding: clamp(24px, 3.5vw, 40px);
-	color: #ffffff;
-}
-.login-header h2 { color: #ffffff; }
-.login-header .subcopy { color: rgba(255, 255, 255, 0.9); }
-.login-header .eyebrow { color: rgba(255, 255, 255, 0.7); font-weight: 600; font-size: 0.85rem; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 8px; }
-.login-logo-container {
-    background: #ffffff;
-    padding: 12px;
-    border-radius: 50%;
-    display: inline-flex;
-    margin-bottom: 32px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-.login-right-side {
-    background: #ffffff;
-    padding: clamp(24px, 3.5vw, 40px);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-
-
-.login-logo-container {
-	display: flex;
-	justify-content: center;
-	margin-bottom: 24px;
-}
-
-.login-logo {
-	height: clamp(120px, 20vw, 160px);
-	width: auto;
-	max-width: 100%;
-	object-fit: contain;
-}
-
-.login-header h2 {
-	margin: 10px 0 6px;
-	font-size: clamp(1.6rem, 2vw, 2.2rem);
-}
-
-.login-header .subcopy {
-	margin: 0;
-	color: var(--ink-soft);
-}
-
 .eyebrow {
 	font-family: 'Montserrat', sans-serif;
 	font-size: 0.78rem; /* was 0.75rem */
@@ -316,11 +186,6 @@ body {
 	letter-spacing: 0.18rem;
 	color: var(--sea);
 	margin: 0;
-}
-
-.login-form {
-	display: grid;
-	gap: 24px;
 }
 
 .field {
@@ -462,15 +327,6 @@ body {
 	flex-wrap: wrap;
 	gap: 12px;
 	margin-top: 16px;
-}
-
-.login-footer {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	font-size: 0.95rem;
-	color: var(--ink-soft);
-	gap: 12px;
 }
 
 .ghost-button {
@@ -6132,167 +5988,6 @@ td.nr-info-label {
 	}
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   LOGIN — Vanta clouds backdrop + frosted sign-in card
-   The canvas is a fixed, non-interactive layer behind everything;
-   the gradient on .login-page stays as the fallback for reduced
-   motion or a WebGL failure, so the page is never bare.
-   ═══════════════════════════════════════════════════════════════ */
-.login-page {
-	position: relative;
-	isolation: isolate;
-	justify-content: flex-start;
-	padding: clamp(20px, 3vh, 32px) clamp(28px, 8vw, 128px);
-	background-color: #ffffff;
-	background-image: url('./assets/login-background.png');
-	background-position: right bottom;
-	background-size: cover;
-	background-repeat: no-repeat;
-}
-
-.login-vanta {
-	position: fixed;
-	inset: 0;
-	z-index: -1;
-	pointer-events: none;
-}
-
-/* The shell reads as glass sitting on the sky */
-.login-shell {
-	width: min(720px, 92vw);
-	max-height: calc(100vh - 48px);
-	background: transparent;
-	backdrop-filter: blur(4px);
-	-webkit-backdrop-filter: blur(4px);
-	border: 1px solid rgba(255, 255, 255, 0.2);
-	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2), 0 28px 60px rgba(0, 0, 0, 0.15);
-	border-radius: 0;
-	transition: box-shadow 0.4s ease, transform 0.4s ease;
-}
-
-.login-shell:hover {
-	box-shadow: none;
-}
-
-.login-panel {
-	background: transparent;
-	padding: 0;
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	align-items: stretch;
-	gap: 0;
-}
-
-.login-logo {
-	height: clamp(48px, 6vh, 60px);
-	filter: drop-shadow(0 6px 14px rgba(2, 53, 60, 0.15));
-	animation: softPulse 4s ease-in-out infinite;
-}
-
-.login-logo-container {
-	margin-bottom: 4px;
-	position: relative;
-}
-
-.login-logo-container::after {
-	content: '';
-	position: absolute;
-	inset: 15%;
-	border-radius: 50%;
-	background: radial-gradient(circle, rgba(63, 208, 201, 0.12), transparent 70%);
-	filter: blur(20px);
-	z-index: -1;
-	pointer-events: none;
-	animation: glowPulse 4s ease-in-out infinite;
-}
-
-.login-header h2 {
-	margin: 4px 0 2px;
-	font-size: clamp(1.2rem, 2.5vw, 1.4rem);
-	letter-spacing: -0.01em;
-}
-
-.login-header .subcopy {
-	margin: 0;
-	color: var(--ink-soft);
-	font-size: 0.85rem;
-}
-
-/* Inputs read as inset wells against the frosted card */
-.login-form .field input {
-	padding: 8px 10px;
-	font-size: 0.9rem;
-	background: rgba(255, 255, 255, 0.85);
-	border: 1px solid rgba(12, 46, 48, 0.14);
-	box-shadow: inset 0 1px 2px rgba(12, 46, 48, 0.06);
-	transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
-}
-
-.login-form .field input:focus {
-	background: #fff;
-	border-color: var(--palette-emerald);
-	box-shadow:
-		inset 0 1px 2px rgba(2, 53, 60, 0.04),
-		0 0 0 3px rgba(46, 175, 125, 0.18),
-		0 0 12px rgba(63, 208, 201, 0.06);
-	outline: none;
-}
-
-.login-form .primary-button {
-	width: 100%;
-	min-height: 40px;
-	font-size: 0.95rem;
-	letter-spacing: 0.02em;
-	box-shadow: 0 6px 18px rgba(2, 53, 60, 0.18), 0 2px 8px rgba(46, 175, 125, 0.20);
-	position: relative;
-	overflow: hidden;
-}
-
-.login-form .primary-button::before {
-	content: '';
-	position: absolute;
-	top: 0;
-	left: -100%;
-	width: 100%;
-	height: 100%;
-	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
-	transition: none;
-	animation: none;
-}
-
-.login-form .primary-button:hover::before {
-	animation: shimmer 1.5s ease forwards;
-}
-
-.login-form .captcha-instruction {
-	margin-top: 2px !important;
-	margin-bottom: 2px !important;
-}
-
-.login-form {
-	gap: 10px;
-}
-
-.login-footer {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	gap: 8px;
-	flex-wrap: wrap;
-	padding-top: 2px;
-	border-top: 1px solid rgba(12, 46, 48, 0.10);
-	font-size: 0.88rem;
-	color: var(--ink-soft);
-}
-
-/* reCAPTCHA is a fixed 304px widget — scale it down on narrow phones
-   rather than letting it push the card into horizontal overflow. */
-@media (max-width: 380px) {
-	.login-form .captcha-container {
-		transform: scale(0.86);
-		transform-origin: center;
-	}
-}
 
 /* ═══════════════════════════════════════════════════════════════
    ROUTE ERROR BOUNDARY — visible failure instead of a white screen

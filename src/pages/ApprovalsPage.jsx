@@ -267,15 +267,22 @@ function ApprovalsPage() {
                             <button className="secondary-button" style={{ padding: '6px 12px' }} onClick={() => setViewDetailsReq(req)}>
                               <Eye size={14} /> View
                             </button>
-                            {isPending && (
-                              <>
-                                <button className="primary-button" style={{ padding: '6px 12px' }} disabled={approvingId === req.id} onClick={() => setApproveConfirmId(req.id)}>
-                                  {approvingId === req.id ? 'Approving...' : 'Approve'}
-                                </button>
-                                <button className="secondary-button" style={{ padding: '6px 12px', color: '#e53e3e', borderColor: '#e53e3e' }} onClick={() => setRejectingId(req.id)}>
-                                  Reject
-                                </button>
-                              </>
+                            {!req.archivedAt ? (
+                              <button type="button" className="secondary-button" style={{ padding: '6px 12px' }} onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm("Are you sure you want to archive this request?")) {
+                                  archiveRequest(req.id);
+                                }
+                              }}>
+                                <Archive size={14} /> Archive
+                              </button>
+                            ) : (
+                              <button type="button" className="secondary-button" style={{ padding: '6px 12px' }} onClick={(e) => {
+                                e.stopPropagation();
+                                restoreRequest(req.id);
+                              }}>
+                                <RotateCcw size={14} /> Restore
+                              </button>
                             )}
                           </div>
                         </td>
@@ -431,24 +438,7 @@ function ApprovalsPage() {
                  </button>
               )}
 
-              {/* Archive / Restore actions */}
-              {!activeViewDetailsReq.archivedAt ? (
-                 <button type="button" className="secondary-button" onClick={() => {
-                   if (window.confirm("Are you sure you want to archive this request?")) {
-                     archiveRequest(activeViewDetailsReq.id);
-                     setViewDetailsReq(null);
-                   }
-                 }}>
-                    <Archive size={16} /> Archive
-                 </button>
-              ) : (
-                 <button type="button" className="secondary-button" onClick={() => {
-                   restoreRequest(activeViewDetailsReq.id);
-                   setViewDetailsReq(null);
-                 }}>
-                    <RotateCcw size={16} /> Restore
-                 </button>
-              )}
+
             </div>
           </div>
         </div>

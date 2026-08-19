@@ -1,34 +1,43 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState, useRef } from 'react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import { supabase } from '../supabase/supabaseClient'
-import CurrencyInput from '../components/CurrencyInput'
 import { useAuth } from '../context/AuthContext'
+import { useAuditLog } from '../context/AuditLogContext'
 import { useNotifications } from '../context/NotificationContext'
-import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
+import {
+  validateReceiptFile,
+  getUploadErrorMessage,
+  generateReceiptPath,
+  generateReceiptScanPaths,
+  logUploadDebugInfo,
+  insertReceiptRecord,
+  insertScannedReceiptRecord,
+  formatOcrMetadataNote,
+} from '../utils/uploadUtils'
+
+// The scanner pulls in the image pipeline and, on demand, the OCR engine.
+// Splitting it out keeps that weight off users who only view receipts.
+const ReceiptScanModal = lazy(() => import('../components/receipts/ReceiptScanModal'))
 
 function ReceiptsPage() {
   const { user, role } = useAuth()
   const { addNotification } = useNotifications()
+  const { addLog } = useAuditLog()
   const { expenses, refreshExpensesFromSupabase, expensesSyncStatus, updateExpenseReceipt } = useBudget()
   const [errorsById, setErrorsById] = useState({})
   const [uploadingId, setUploadingId] = useState(null)
   const [feedback, setFeedback] = useState(null)
   const [receiptLinks, setReceiptLinks] = useState({})
   const [scanModalOpen, setScanModalOpen] = useState(false)
-  const [scanFile, setScanFile] = useState(null)
-  const [scanStatus, setScanStatus] = useState('idle') // 'camera', 'camera_error', 'scanning', 'review', 'uploading'
   const [activeExpense, setActiveExpense] = useState(null)
   const [viewerExpense, setViewerExpense] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterCategory, setFilterCategory] = useState('all')
-  const [ocrData, setOcrData] = useState({ vendor: '', receiptNumber: '', date: '', amount: '', items: '' })
-  
+
   const uploadInputRef = useRef(null)
   const pendingUploadExpenseRef = useRef(null)
-  const videoRef = useRef(null)
-  const streamRef = useRef(null)
   const RECEIPTS_BUCKET = 'receipts'
 
   function formatReceiptName(fileName) {
@@ -100,14 +109,26 @@ function ReceiptsPage() {
       const updates = {}
 
       const recordIds = approvedExpenses.map((expense) => String(expense.id))
-      const { data: receiptRows, error } = await supabase
+      // `original_path` and `is_scanned` only exist once the receipt-scan
+      // migration has run. Falling back to the original column list keeps the
+      // page working against an older database rather than showing nothing.
+      let receiptRows
+      const scanAware = await supabase
         .from('receipt_records')
-        .select('id, record_id, file_path, file_name, file_type, uploaded_at')
+        .select('id, record_id, file_path, original_path, is_scanned, ocr_metadata, file_name, file_type, uploaded_at')
         .in('record_id', recordIds)
         .order('uploaded_at', { ascending: true })
 
-      if (error) {
-        console.error('Could not load receipt records:', error)
+      if (scanAware.error) {
+        const legacy = await supabase
+          .from('receipt_records')
+          .select('id, record_id, file_path, file_name, file_type, uploaded_at')
+          .in('record_id', recordIds)
+          .order('uploaded_at', { ascending: true })
+        receiptRows = legacy.data
+        if (legacy.error) console.error('Could not load receipt records:', legacy.error)
+      } else {
+        receiptRows = scanAware.data
       }
 
       await Promise.all((receiptRows || []).map(async (receipt) => {
@@ -118,12 +139,27 @@ function ReceiptsPage() {
         if (data?.signedUrl) {
           const key = String(receipt.record_id)
           if (!updates[key]) updates[key] = []
+
+          // The processed scan is what `file_path` points at, so the default
+          // `url` is already the scan. The photograph is signed separately and
+          // only offered as an explicit alternative.
+          let originalUrl = null
+          if (receipt.original_path) {
+            const { data: originalData } = await supabase.storage
+              .from(RECEIPTS_BUCKET)
+              .createSignedUrl(receipt.original_path, 60 * 60)
+            originalUrl = originalData?.signedUrl || null
+          }
+
           updates[key].push({
             id: receipt.id,
             url: data.signedUrl,
             path: receipt.file_path,
             name: receipt.file_name || 'Receipt',
             type: receipt.file_type,
+            isScanned: Boolean(receipt.is_scanned),
+            originalUrl,
+            ocrMetadata: receipt.ocr_metadata || null,
           })
         }
       }))
@@ -162,32 +198,6 @@ function ReceiptsPage() {
       mounted = false
     }
   }, [approvedExpenses])
-
-  function stopCamera() {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop())
-      streamRef.current = null
-    }
-  }
-
-  useEffect(() => {
-    if (scanStatus === 'camera') {
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        .then(stream => {
-          streamRef.current = stream
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream
-          }
-        })
-        .catch(err => {
-          console.error("Camera error:", err)
-          setScanStatus('camera_error')
-        })
-    } else {
-      stopCamera()
-    }
-    return () => stopCamera()
-  }, [scanStatus])
 
   async function uploadReceipt(expense, file, { appendedNotes = '' } = {}) {
     if (!expense || !['Project', 'Event', 'Payroll'].includes(expense.type || 'Project')) {
@@ -307,8 +317,8 @@ function ReceiptsPage() {
 
   function triggerCamera(expense) {
     setActiveExpense(expense)
+    setFeedback(null)
     setScanModalOpen(true)
-    setScanStatus('camera')
   }
 
   function triggerUpload(expense) {
@@ -319,30 +329,6 @@ function ReceiptsPage() {
     setErrorsById((prev) => ({ ...prev, [expense.id]: '' }))
     if (uploadInputRef.current) uploadInputRef.current.value = ''
     uploadInputRef.current?.click()
-  }
-
-  function capturePhoto() {
-    if (!videoRef.current) return
-    const canvas = document.createElement('canvas')
-    canvas.width = videoRef.current.videoWidth
-    canvas.height = videoRef.current.videoHeight
-    const ctx = canvas.getContext('2d')
-    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
-    canvas.toBlob(blob => {
-      const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' })
-      setScanFile(file)
-      setScanStatus('scanning')
-      setTimeout(() => {
-        setOcrData({
-          vendor: 'Local Vendor Inc.',
-          receiptNumber: `RCP-${Math.floor(Math.random() * 10000)}`,
-          date: new Date().toISOString().split('T')[0],
-          amount: activeExpense?.amount || '',
-          items: 'Office Supplies, Event Materials'
-        })
-        setScanStatus('review')
-      }, 2000)
-    }, 'image/jpeg')
   }
 
   async function handleFileSelected(event) {
@@ -365,30 +351,150 @@ function ReceiptsPage() {
     }
   }
 
-  async function confirmScanUpload() {
-    if (!activeExpense || !scanFile || scanStatus === 'uploading') return
+  /**
+   * Persists a completed scan.
+   *
+   * Three artefacts are stored and kept distinct: the processed scan (the
+   * image Cuenta displays), the original photograph (the underlying evidence),
+   * and the verified OCR metadata (supplementary).
+   *
+   * Deliberately absent: any write to the expense's own `amount`, `date` or
+   * category. OCR never alters a financial record. The only thing it adds to
+   * the expense is an appended remark, which is descriptive, not accounting.
+   */
+  async function saveScannedReceipt({ scanFile, originalFile, metadata, scanSettings }) {
+    const expense = activeExpense
+    if (!expense) throw new Error('No record is selected for this scan.')
 
-    setScanStatus('uploading')
-    const appendedNotes = [
-      ocrData.vendor ? `Vendor: ${ocrData.vendor}` : '',
-      ocrData.receiptNumber ? `Receipt #: ${ocrData.receiptNumber}` : '',
-      ocrData.date ? `Receipt date: ${ocrData.date}` : '',
-      ocrData.amount !== '' ? `Receipt amount: ${ocrData.amount}` : '',
-      ocrData.items ? `Items: ${ocrData.items}` : '',
-    ].filter(Boolean).join('\n')
+    const validationError = validateReceiptFile(scanFile, role)
+    if (validationError) throw new Error(validationError)
 
-    const { error } = await uploadReceipt(activeExpense, scanFile, {
-      appendedNotes,
-    })
+    const { scanPath, originalPath } = generateReceiptScanPaths(expense, scanFile, originalFile)
+    setUploadingId(expense.id)
 
-    if (error) {
-      setScanStatus('review')
-      return
+    let scanUploaded = false
+    let originalUploaded = false
+
+    try {
+      const { error: scanError } = await supabase.storage
+        .from(RECEIPTS_BUCKET)
+        .upload(scanPath, scanFile, { upsert: false })
+      if (scanError) throw Object.assign(scanError, { uploadStep: 'storage' })
+      scanUploaded = true
+
+      // The photograph is best-effort. Losing it must not cost the user the
+      // scan they just spent time adjusting, so a failure here is logged and
+      // the record is written without an original_path.
+      let storedOriginalPath = originalPath
+      const { error: originalError } = await supabase.storage
+        .from(RECEIPTS_BUCKET)
+        .upload(originalPath, originalFile, { upsert: false })
+      if (originalError) {
+        console.warn('The original photograph could not be stored.', originalError)
+        storedOriginalPath = null
+      } else {
+        originalUploaded = true
+      }
+
+      const { data: receiptData, error: dbError } = await insertScannedReceiptRecord(supabase, {
+        record: expense,
+        scanFile,
+        scanPath,
+        originalPath: storedOriginalPath,
+        ocrMetadata: metadata,
+        scanSettings,
+        user,
+        userRole: role,
+      })
+
+      if (dbError) throw Object.assign(dbError, { uploadStep: 'receipt_record' })
+
+      const appendedNotes = formatOcrMetadataNote(metadata)
+      const updatePayload = { receipt_url: scanPath, receipt_name: scanFile.name }
+      if (appendedNotes) {
+        updatePayload.remarks = expense.remarks
+          ? `${expense.remarks}\n\n${appendedNotes}`
+          : appendedNotes
+      }
+
+      const { error: linkError } = await supabase
+        .from('expenses')
+        .update(updatePayload)
+        .eq('id', expense.id)
+      if (linkError) console.warn('Could not link the scan to the expense record:', linkError)
+
+      updateExpenseReceipt(expense.id, scanPath, scanFile.name)
+
+      const { data: signedData } = await supabase.storage
+        .from(RECEIPTS_BUCKET)
+        .createSignedUrl(scanPath, 60 * 60)
+
+      let originalUrl = null
+      if (storedOriginalPath) {
+        const { data: originalSigned } = await supabase.storage
+          .from(RECEIPTS_BUCKET)
+          .createSignedUrl(storedOriginalPath, 60 * 60)
+        originalUrl = originalSigned?.signedUrl || null
+      }
+
+      if (signedData?.signedUrl) {
+        setReceiptLinks(prev => ({
+          ...prev,
+          [expense.id]: [
+            ...(prev[expense.id] || []),
+            {
+              id: receiptData?.[0]?.id || scanPath,
+              url: signedData.signedUrl,
+              path: scanPath,
+              name: scanFile.name,
+              type: scanFile.type,
+              isScanned: true,
+              originalUrl,
+              ocrMetadata: metadata,
+            },
+          ],
+        }))
+      }
+
+      await refreshExpensesFromSupabase()
+
+      const recordName = expense.event || expense.project || 'the selected record'
+      const message = `Scanned receipt saved and attached to ${recordName}.`
+      setFeedback({ type: 'success', message })
+      addNotification({ type: 'system', title: 'Receipt Scanned', message })
+      addLog({
+        action: 'Receipt Scanned',
+        actionType: 'Upload',
+        module: 'Receipts',
+        recordType: expense.type || 'Expense',
+        recordId: String(expense.id),
+        description: `Scanned receipt attached to ${recordName}`,
+        status: 'Success',
+        remarks: metadata?.receiptNumber ? `Receipt no: ${metadata.receiptNumber}` : '',
+      })
+
+      setScanModalOpen(false)
+      setActiveExpense(null)
+    } catch (error) {
+      // Roll back whatever landed in storage so a failed save cannot leave
+      // orphaned files behind.
+      if (scanUploaded) await supabase.storage.from(RECEIPTS_BUCKET).remove([scanPath])
+      if (originalUploaded) await supabase.storage.from(RECEIPTS_BUCKET).remove([originalPath])
+
+      logUploadDebugInfo(error, {
+        expenseId: expense.id,
+        filePath: scanPath,
+        step: error.uploadStep || 'unknown',
+      })
+
+      const message = error.uploadStep === 'receipt_record'
+        ? `The scan uploaded, but its receipt record could not be saved: ${error.message}`
+        : getUploadErrorMessage(error)
+      setFeedback({ type: 'error', message })
+      throw new Error(message, { cause: error })
+    } finally {
+      setUploadingId(null)
     }
-
-    setScanModalOpen(false)
-    setScanFile(null)
-    setScanStatus('idle')
   }
 
   return (
@@ -762,11 +868,15 @@ function ReceiptsPage() {
                             {rcpt.name || `Receipt #${idx + 1}`}
                           </span>
                           <span className="receipt-viewer-item-meta">
-                            Receipt #{idx + 1} {rcpt.type ? `• ${rcpt.type}` : ''}
+                            Receipt #{idx + 1} {rcpt.isScanned ? '• Scanned' : ''} {rcpt.type ? `• ${rcpt.type}` : ''}
                           </span>
                         </div>
                       </div>
                       <div className="receipt-viewer-item-actions">
+                        {/* `url` is the processed scan whenever one exists, so
+                            the primary action already opens the clean version.
+                            The photograph stays reachable as a secondary link
+                            for anyone who needs the raw evidence. */}
                         <a
                           href={rcpt.url}
                           target="_blank"
@@ -781,8 +891,27 @@ function ReceiptsPage() {
                             gap: '4px',
                           }}
                         >
-                          👁️ View File
+                          👁️ {rcpt.isScanned ? 'View Scan' : 'View File'}
                         </a>
+                        {rcpt.originalUrl ? (
+                          <a
+                            href={rcpt.originalUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="secondary-button"
+                            style={{
+                              padding: '6px 12px',
+                              fontSize: '0.82rem',
+                              textDecoration: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                            title="The unprocessed camera photograph"
+                          >
+                            🖼️ View Original
+                          </a>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -836,103 +965,17 @@ function ReceiptsPage() {
         </div>
       ) : null}
 
-      {scanModalOpen ? (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h2>Scanning Receipt</h2>
-              <p>Analyzing document with AI...</p>
-            </div>
-            <div className="modal-body">
-              {scanStatus === 'camera' ? (
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ background: '#000', borderRadius: '12px', overflow: 'hidden', marginBottom: '16px' }}>
-                    <video ref={videoRef} autoPlay playsInline style={{ width: '100%', maxHeight: '60vh', display: 'block' }}></video>
-                  </div>
-                  <button type="button" className="primary-button" onClick={capturePhoto} style={{ width: '100%', padding: '16px', fontSize: '1.1rem' }}>
-                    Capture Photo
-                  </button>
-                </div>
-              ) : scanStatus === 'camera_error' ? (
-                <div style={{ padding: '40px 0', textAlign: 'center' }}>
-                  <p style={{ color: 'var(--cherry)', marginBottom: '16px' }}>Camera access denied or unavailable.</p>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => {
-                      pendingUploadExpenseRef.current = activeExpense
-                      if (uploadInputRef.current) uploadInputRef.current.value = ''
-                      uploadInputRef.current?.click()
-                    }}
-                  >
-                    Upload File Instead
-                  </button>
-                </div>
-              ) : scanStatus === 'scanning' ? (
-                <div style={{ padding: '40px 0', textAlign: 'center' }}>
-                  <div className="spinner"></div>
-                  <p>Extracting data from receipt with OCR...</p>
-                </div>
-              ) : scanStatus === 'uploading' ? (
-                <div style={{ padding: '40px 0', textAlign: 'center' }}>
-                  <div className="spinner"></div>
-                  <p>Uploading and attaching receipt to {activeExpense?.project}...</p>
-                </div>
-              ) : scanStatus === 'review' ? (
-                <div className="details-panel" style={{ marginTop: '16px' }}>
-                  <p style={{ color: '#15803d', fontWeight: 'bold', margin: '0 0 12px' }}>✓ Data Extracted Successfully</p>
-                  <p style={{ fontSize: '0.9rem', color: 'var(--ink-soft)', marginBottom: '16px' }}>
-                    Please review and confirm the extracted details below before saving.
-                  </p>
-                  <div className="form-grid">
-                    <div className="field-group">
-                      <label>Store / Vendor Name</label>
-                      <input type="text" value={ocrData.vendor} onChange={e => setOcrData({...ocrData, vendor: e.target.value})} />
-                    </div>
-                    <div className="field-group">
-                      <label>Receipt Number</label>
-                      <input type="text" value={ocrData.receiptNumber} onChange={e => setOcrData({...ocrData, receiptNumber: e.target.value})} />
-                    </div>
-                    <div className="field-group">
-                      <label>Date</label>
-                      <input type="date" value={ocrData.date} onChange={e => setOcrData({...ocrData, date: e.target.value})} />
-                    </div>
-                    <div className="field-group">
-                      <label>Total Amount (₱)</label>
-                      <CurrencyInput value={ocrData.amount} onValueChange={val => setOcrData({...ocrData, amount: Number(val)})} />
-                    </div>
-                  </div>
-                  <div className="field-group" style={{ marginTop: '16px' }}>
-                    <label>Purchased Items</label>
-                    <textarea value={ocrData.items} rows={3} onChange={e => setOcrData({...ocrData, items: e.target.value})}></textarea>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => {
-                  setScanModalOpen(false)
-                  stopCamera()
-                }}
-                disabled={scanStatus === 'uploading'}
-              >
-                Cancel
-              </button>
-              {scanStatus === 'review' && activeExpense ? (
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={confirmScanUpload}
-                >
-                  Save & Attach
-                </button>
-              ) : null}
-            </div>
-          </div>
-        </div>
+      {scanModalOpen && activeExpense ? (
+        <Suspense fallback={null}>
+          <ReceiptScanModal
+            expense={activeExpense}
+            onSave={saveScannedReceipt}
+            onClose={() => {
+              setScanModalOpen(false)
+              setActiveExpense(null)
+            }}
+          />
+        </Suspense>
       ) : null}
     </RoleGate>
   )

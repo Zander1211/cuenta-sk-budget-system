@@ -29,12 +29,14 @@ export async function loginUser(email, password, recaptchaToken) {
 // REGISTER
 export async function registerUser(
   email,
-  password
+  password,
+  options = {}
 ) {
 
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
+    options,
   })
 
   return { data, error }
@@ -84,6 +86,27 @@ export async function verifyEmailOtp(email, token) {
     email,
     token,
     type: 'magiclink',
+  })
+
+  return { data, error }
+}
+
+// VERIFY SIGNUP OTP
+export async function verifySignupOtp(email, token) {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: 'signup',
+  })
+
+  return { data, error }
+}
+
+// RESEND SIGNUP OTP
+export async function resendSignupOtp(email) {
+  const { data, error } = await supabase.auth.resend({
+    type: 'signup',
+    email,
   })
 
   return { data, error }

@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Secrets. `*.local` already covers .env.local, but not the other env files,
+# and a service role key landing in any of them must never be committable.
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

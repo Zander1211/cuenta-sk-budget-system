@@ -29,6 +29,11 @@ function UserManagementPage() {
   const [formStatus, setFormStatus] = useState('')
   const { addLog } = useAuditLog()
 
+  // OTP Verification state
+  const [verificationStep, setVerificationStep] = useState(false)
+  const [otpCode, setOtpCode] = useState('')
+  const [pendingUser, setPendingUser] = useState(null)
+
   // Edit state
   const [editingRoleId, setEditingRoleId] = useState(null)
   const [editRoleValue, setEditRoleValue] = useState('')
@@ -114,64 +119,208 @@ function UserManagementPage() {
       return
     }
 
+    const isValidGmail = /^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(email)
+    if (!isValidGmail) {
+      setFormError('The email address is invalid or does not exist. Please enter a valid Gmail account.')
+      return
+    }
+
     setIsSubmitting(true)
 
-    const { data, error } = await adminClient.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: name,
-          role: formState.role,
+    try {
+      // Send custom OTP via our Gmail SMTP backend
+      const res = await fetch('/api/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok) {
+        setFormError(result.error || 'Failed to send verification code.')
+        setIsSubmitting(false)
+        return
+      }
+
+      // Move to verification step
+      setPendingUser({
+        name,
+        email,
+        password,
+        role: formState.role,
+      })
+      setVerificationStep(true)
+      setFormStatus('Verification code sent! Please check the inbox of ' + email)
+      setIsSubmitting(false)
+    } catch (err) {
+      setFormError('Failed to send verification code: ' + err.message)
+      setIsSubmitting(false)
+    }
+  }
+
+  async function handleVerifyOtp(event) {
+    event.preventDefault()
+    setFormError('')
+    setFormStatus('')
+
+    if (!otpCode.trim()) {
+      setFormError('Please enter the verification code.')
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      // Verify the custom OTP
+      const verifyRes = await fetch('/api/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingUser.email, code: otpCode.trim() }),
+      })
+
+      const verifyResult = await verifyRes.json()
+
+      if (!verifyRes.ok) {
+        setFormError(verifyResult.error || 'Invalid verification code.')
+        setIsSubmitting(false)
+        return
+      }
+
+      // Code verified! Now create the actual auth user
+      const { data, error } = await adminClient.auth.signUp({
+        email: pendingUser.email,
+        password: pendingUser.password,
+        options: {
+          data: {
+            full_name: pendingUser.name,
+            role: pendingUser.role,
+          },
         },
-      },
-    })
+      })
 
-    if (error) {
-      setFormError(error.message)
+      if (error) {
+        setFormError(error.message)
+        setIsSubmitting(false)
+        return
+      }
+
+      if (!data.user?.id) {
+        setFormError('Unable to create the account. Try again.')
+        setIsSubmitting(false)
+        return
+      }
+
+      // Insert into created_accounts
+      const { error: insertError } = await supabase.from('created_accounts').insert({
+        id: data.user.id,
+        full_name: pendingUser.name,
+        email: pendingUser.email,
+        role: pendingUser.role,
+      })
+
+      if (insertError) {
+        setFormError(insertError.message)
+        setIsSubmitting(false)
+        return
+      }
+
+      addLog({
+        action: `User Created — ${pendingUser.name}`,
+        actionType: 'User Created',
+        module: 'User Management',
+        recordType: 'User',
+        recordId: data.user.id,
+        description: `Created account for ${pendingUser.name} (${pendingUser.role})`,
+        newValue: { name: pendingUser.name, email: pendingUser.email, role: pendingUser.role },
+      })
+
+      setFormStatus('Account successfully created and verified!')
+      setFormState({
+        name: '',
+        email: '',
+        password: '',
+        role: roles[0],
+      })
+      setVerificationStep(false)
+      setOtpCode('')
+      setPendingUser(null)
+
+      await loadAccounts()
       setIsSubmitting(false)
-      return
-    }
-
-    if (!data.user?.id) {
-      setFormError('Unable to create the account. Try again.')
+    } catch (err) {
+      setFormError('Verification failed: ' + err.message)
       setIsSubmitting(false)
-      return
     }
+  }
 
-    const { error: insertError } = await supabase.from('created_accounts').insert({
-      id: data.user.id,
-      full_name: name,
-      email,
-      role: formState.role,
-    })
+  async function handleResendOtp() {
+    setFormError('')
+    setFormStatus('')
+    setIsSubmitting(true)
 
-    if (insertError) {
-      setFormError(insertError.message)
-      setIsSubmitting(false)
-      return
+    try {
+      const res = await fetch('/api/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingUser.email }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok) {
+        setFormError(result.error || 'Failed to resend code.')
+      } else {
+        setFormStatus('Verification code resent successfully to ' + pendingUser.email)
+      }
+    } catch (err) {
+      setFormError('Failed to resend code: ' + err.message)
     }
-
-    addLog({
-      action: `User Created — ${name}`,
-      actionType: 'User Created',
-      module: 'User Management',
-      recordType: 'User',
-      recordId: data.user.id,
-      description: `Created account for ${name} (${formState.role})`,
-      newValue: { name, email, role: formState.role },
-    })
-    setFormStatus('Account created. The user can log in after email verification.')
-
-    setFormState({
-      name: '',
-      email: '',
-      password: '',
-      role: roles[0],
-    })
-
-    await loadAccounts()
     setIsSubmitting(false)
+  }
+
+  async function handleCancelVerification() {
+    setVerificationStep(false)
+    setOtpCode('')
+    setPendingUser(null)
+    setFormError('')
+    setFormStatus('')
+  }
+
+  async function handleDeleteAccount(user) {
+    try {
+      setUpdatingId(user.id)
+      
+      const res = await fetch('/api/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id })
+      })
+
+      const result = await res.json()
+
+      if (!res.ok) {
+        alert(result.error || 'Failed to delete user.')
+        setUpdatingId(null)
+        return
+      }
+
+      addLog({
+        action: `User Deleted — ${user.full_name}`,
+        actionType: 'User Deleted',
+        module: 'User Management',
+        recordType: 'User',
+        recordId: user.id,
+        description: `Deleted account for ${user.full_name} (${user.role})`,
+        oldValue: { name: user.full_name, email: user.email, role: user.role },
+      })
+
+      await loadAccounts()
+      setUpdatingId(null)
+    } catch (err) {
+      alert('Failed to delete user: ' + err.message)
+      setUpdatingId(null)
+    }
   }
 
   // ── Edit Role ─────────────────────────────────────────────────
@@ -288,73 +437,130 @@ function UserManagementPage() {
           <div className="overview-card">
             <p className="eyebrow">New account</p>
             <h2>Create a user</h2>
-            <form className="user-form" onSubmit={handleSubmit}>
-              <label className="field">
-                <span>Full name</span>
-                <input
-                  type="text"
-                  name="name"
-                  value={formState.name}
-                  onChange={handleChange}
-                  placeholder="Juan Dela Cruz"
-                  required
-                />
-              </label>
+            
+            {!verificationStep ? (
+              <form className="user-form" onSubmit={handleSubmit}>
+                <label className="field">
+                  <span>Full name</span>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formState.name}
+                    onChange={handleChange}
+                    placeholder="Juan Dela Cruz"
+                    required
+                  />
+                </label>
 
-              <label className="field">
-                <span>Email address</span>
-                <input
-                  type="email"
-                  name="email"
-                  value={formState.email}
-                  onChange={handleChange}
-                  placeholder="user@barangay.gov"
-                  required
-                />
-              </label>
+                <label className="field">
+                  <span>Email address</span>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formState.email}
+                    onChange={handleChange}
+                    placeholder="user@gmail.com"
+                    required
+                  />
+                </label>
 
-              <label className="field">
-                <span>Password</span>
-                <input
-                  type="password"
-                  name="password"
-                  value={formState.password}
-                  onChange={handleChange}
-                  placeholder="Create a temporary password"
-                  required
-                />
-              </label>
+                <label className="field">
+                  <span>Password</span>
+                  <input
+                    type="password"
+                    name="password"
+                    value={formState.password}
+                    onChange={handleChange}
+                    placeholder="Create a temporary password"
+                    required
+                  />
+                </label>
 
-              <label className="field">
-                <span>Role</span>
-                <select
-                  name="role"
-                  value={formState.role}
-                  onChange={handleChange}
+                <label className="field">
+                  <span>Role</span>
+                  <select
+                    name="role"
+                    value={formState.role}
+                    onChange={handleChange}
+                  >
+                    {roles.map((role) => (
+                      <option key={role} value={role}>
+                        {role}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <p className="form-note">
+                  Accounts created here are assigned directly by the SK Chairman.
+                </p>
+
+                {formError ? <p className="form-error">{formError}</p> : null}
+                {formStatus ? <p className="form-status">{formStatus}</p> : null}
+
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={isSubmitting}
                 >
-                  {roles.map((role) => (
-                    <option key={role} value={role}>
-                      {role}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  Send Verification Code
+                </button>
+              </form>
+            ) : (
+              <form className="user-form" onSubmit={handleVerifyOtp}>
+                <div style={{ backgroundColor: 'rgba(21, 101, 192, 0.05)', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-primary)', textAlign: 'center', lineHeight: '1.5' }}>
+                    A verification code has been sent to<br />
+                    <strong>{pendingUser?.email}</strong>
+                  </p>
+                </div>
 
-              <p className="form-note">
-                Accounts created here are assigned directly by the SK Chairman.
-              </p>
+                <label className="field">
+                  <span>Enter Verification Code</span>
+                  <input
+                    type="text"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                    placeholder="123456"
+                    required
+                    style={{ textAlign: 'center', letterSpacing: '4px', fontSize: '1.2rem', fontWeight: 'bold' }}
+                    maxLength={6}
+                  />
+                </label>
 
-              {formError ? <p className="form-error">{formError}</p> : null}
-              {formStatus ? <p className="form-status">{formStatus}</p> : null}
+                {formError ? <p className="form-error">{formError}</p> : null}
+                {formStatus ? <p className="form-status">{formStatus}</p> : null}
 
-              <button
-                type="submit"
-                className="primary-button"
-                disabled={isSubmitting}
-              >
-                Create Account
-              </button>
-            </form>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
+                  <button
+                    type="submit"
+                    className="primary-button"
+                    disabled={isSubmitting}
+                  >
+                    Verify & Complete
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={handleResendOtp}
+                    disabled={isSubmitting}
+                  >
+                    Resend Code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelVerification}
+                    disabled={isSubmitting}
+                    style={{ 
+                      background: 'none', border: 'none', color: 'var(--text-secondary)', 
+                      fontSize: '0.85rem', cursor: 'pointer', textDecoration: 'underline', marginTop: '8px' 
+                    }}
+                  >
+                    Cancel Account Creation
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
 
           <div className="overview-card">
@@ -460,7 +666,7 @@ function UserManagementPage() {
                       </div>
                     </div>
 
-                    {/* Actions */}
+                      {/* Actions */}
                     <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                       <button
                         type="button"
@@ -481,6 +687,19 @@ function UserManagementPage() {
                           Edit Role
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        style={{ flex: '1 1 auto', fontSize: '0.85rem', padding: '8px 12px', textAlign: 'center', color: '#dc2626', borderColor: '#fee2e2', backgroundColor: '#fef2f2' }}
+                        onClick={() => {
+                          if (window.confirm(`Are you sure you want to permanently delete the account for ${user.full_name}?`)) {
+                            handleDeleteAccount(user)
+                          }
+                        }}
+                        disabled={updatingId === user.id}
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
                 ))}

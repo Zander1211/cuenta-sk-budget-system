@@ -194,6 +194,225 @@ function localUserLoginHandler(env) {
   }
 }
 
+function localOtpHandler(env) {
+  return {
+    name: 'local-otp-handler',
+    configureServer(server) {
+      const gmailUser = env.GMAIL_USER
+      const gmailAppPassword = env.GMAIL_APP_PASSWORD
+      const supabaseUrl = env.VITE_SUPABASE_URL
+      const supabaseServiceKey = env.SUPABASE_SERVICE_ROLE_KEY
+
+      console.log('[OTP] Gmail user:', gmailUser || 'NOT SET')
+      console.log('[OTP] Gmail password:', gmailAppPassword ? '****' + gmailAppPassword.slice(-4) : 'NOT SET')
+
+      server.middlewares.use(async (req, res, next) => {
+        // ── SEND OTP ───────────────────────────────────────────
+        if (req.url === '/api/send-otp' && req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => { body += chunk.toString() })
+          req.on('end', async () => {
+            res.setHeader('Content-Type', 'application/json')
+            try {
+              const { email } = JSON.parse(body)
+
+              if (!email) {
+                res.statusCode = 400
+                res.end(JSON.stringify({ error: 'Email is required' }))
+                return
+              }
+
+              const isGmail = /^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(email)
+              if (!isGmail) {
+                res.statusCode = 400
+                res.end(JSON.stringify({ error: 'Only Gmail addresses are allowed.' }))
+                return
+              }
+
+              if (!gmailUser || !gmailAppPassword) {
+                res.statusCode = 500
+                res.end(JSON.stringify({ error: 'Email service is not configured. Add GMAIL_USER and GMAIL_APP_PASSWORD to .env.local' }))
+                return
+              }
+
+              // Generate 6-digit OTP
+              const otp = String(Math.floor(100000 + Math.random() * 900000))
+
+              // Store in database
+              const supabase = createClient(supabaseUrl, supabaseServiceKey)
+              await supabase.from('verification_codes').delete().eq('email', email)
+              const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+              const { error: dbError } = await supabase.from('verification_codes').insert({
+                email,
+                code: otp,
+                expires_at: expiresAt,
+                verified: false,
+              })
+
+              if (dbError) {
+                console.error('[OTP] DB error:', dbError)
+                res.statusCode = 500
+                res.end(JSON.stringify({ error: 'Failed to store verification code: ' + dbError.message }))
+                return
+              }
+
+              // Send email via Gmail SMTP
+              const { default: nodemailer } = await import('nodemailer')
+              const transporter = nodemailer.createTransport({
+                service: 'gmail',
+                auth: { user: gmailUser, pass: gmailAppPassword },
+              })
+
+              const mailOptions = {
+                from: `"Cuenta System" <${gmailUser}>`,
+                to: email,
+                subject: 'Your Cuenta Verification Code',
+                html: `
+                  <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
+                    <div style="text-align: center; margin-bottom: 24px;">
+                      <h2 style="color: #0c2e30; margin: 0;">Cuenta</h2>
+                      <p style="color: #6b7280; font-size: 14px; margin: 4px 0 0;">SK Budget Monitoring System</p>
+                    </div>
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 24px; text-align: center;">
+                      <p style="color: #374151; font-size: 14px; margin: 0 0 16px;">Your verification code is:</p>
+                      <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #0c2e30; padding: 12px 0;">
+                        ${otp}
+                      </div>
+                      <p style="color: #6b7280; font-size: 12px; margin: 16px 0 0;">This code expires in 10 minutes.</p>
+                    </div>
+                    <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 24px;">
+                      If you did not request this code, please ignore this email.
+                    </p>
+                  </div>
+                `,
+              }
+
+              const info = await transporter.sendMail(mailOptions)
+              console.log('[OTP] Email sent successfully:', info.messageId)
+
+              res.statusCode = 200
+              res.end(JSON.stringify({ success: true, message: 'Verification code sent successfully.' }))
+            } catch (err) {
+              console.error('[OTP] Send error:', err)
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: 'Failed to send verification email: ' + err.message }))
+            }
+          })
+          return
+        }
+
+        // ── VERIFY OTP ─────────────────────────────────────────
+        if (req.url === '/api/verify-otp' && req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => { body += chunk.toString() })
+          req.on('end', async () => {
+            res.setHeader('Content-Type', 'application/json')
+            try {
+              const { email, code } = JSON.parse(body)
+
+              if (!email || !code) {
+                res.statusCode = 400
+                res.end(JSON.stringify({ error: 'Email and code are required.' }))
+                return
+              }
+
+              const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+              const { data, error: dbError } = await supabase
+                .from('verification_codes')
+                .select('*')
+                .eq('email', email)
+                .eq('code', code.trim())
+                .eq('verified', false)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single()
+
+              if (dbError || !data) {
+                res.statusCode = 400
+                res.end(JSON.stringify({ error: 'Invalid verification code. Please try again.' }))
+                return
+              }
+
+              if (new Date(data.expires_at) < new Date()) {
+                res.statusCode = 400
+                res.end(JSON.stringify({ error: 'Verification code has expired. Please request a new one.' }))
+                return
+              }
+
+              await supabase
+                .from('verification_codes')
+                .update({ verified: true })
+                .eq('id', data.id)
+
+              res.statusCode = 200
+              res.end(JSON.stringify({ success: true, message: 'Verification successful.' }))
+            } catch (err) {
+              console.error('[OTP] Verify error:', err)
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: 'Verification failed: ' + err.message }))
+            }
+          })
+          return
+        }
+
+        // ── DELETE USER ────────────────────────────────────────
+        if (req.url === '/api/delete-user' && req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => { body += chunk.toString() })
+          req.on('end', async () => {
+            res.setHeader('Content-Type', 'application/json')
+            try {
+              const { userId } = JSON.parse(body)
+
+              if (!userId) {
+                res.statusCode = 400
+                res.end(JSON.stringify({ error: 'User ID is required.' }))
+                return
+              }
+
+              const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+              // 1. Delete from created_accounts table first
+              const { error: dbError } = await supabase
+                .from('created_accounts')
+                .delete()
+                .eq('id', userId)
+
+              if (dbError) {
+                console.error('[Delete User] DB error:', dbError)
+                res.statusCode = 500
+                res.end(JSON.stringify({ error: 'Failed to remove user from directory: ' + dbError.message }))
+                return
+              }
+
+              // 2. Delete from auth.users
+              const { error: authError } = await supabase.auth.admin.deleteUser(userId)
+              
+              if (authError && !authError.message.includes('User not found')) {
+                console.error('[Delete User] Auth error:', authError)
+                res.statusCode = 500
+                res.end(JSON.stringify({ error: 'Failed to delete authentication record: ' + authError.message }))
+                return
+              }
+
+              res.statusCode = 200
+              res.end(JSON.stringify({ success: true, message: 'User deleted successfully.' }))
+            } catch (err) {
+              console.error('[Delete User] Error:', err)
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: 'Deletion failed: ' + err.message }))
+            }
+          })
+          return
+        }
+
+        next()
+      })
+    }
+  }
+}
+
 export default defineConfig(({ mode }) => {
   // eslint-disable-next-line no-undef
   const env = loadEnv(mode, process.cwd(), '')
@@ -205,6 +424,7 @@ export default defineConfig(({ mode }) => {
       localChatHandler(env),
       localRecaptchaMock(env),
       localUserLoginHandler(env),
+      localOtpHandler(env),
     ],
     server: {
       proxy: {
@@ -220,6 +440,9 @@ export default defineConfig(({ mode }) => {
               return req.url
             }
             if (req.url.startsWith('/api/user-login')) {
+              return req.url
+            }
+            if (req.url === '/api/send-otp' || req.url === '/api/verify-otp' || req.url === '/api/delete-user') {
               return req.url
             }
           }

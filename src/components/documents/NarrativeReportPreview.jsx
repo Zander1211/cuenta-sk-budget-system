@@ -3,6 +3,7 @@ import '../PrintPreview.css'
 import './AdditionalDocuments.css'
 import { Printer, X } from 'lucide-react'
 import logo from '../../assets/logo.png'
+import brgyLogo from '../../assets/brgy-logo.png'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -84,7 +85,8 @@ function NarrativeReportPreview({ data, onClose, onSave }) {
         {showCoverPage && (
           <div className="print-page nr-print-page">
           <div className="nr-title-page">
-            <div className="nr-logo-area" style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+            <div className="nr-logo-area" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', padding: '0 50px' }}>
+              <img src={brgyLogo} alt="Barangay Logo" style={{ width: '120px', height: '120px', objectFit: 'contain' }} />
               <img src={logo} alt="SK Logo" style={{ width: '120px', height: '120px', objectFit: 'contain' }} />
             </div>
 

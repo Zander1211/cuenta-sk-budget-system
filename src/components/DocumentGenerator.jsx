@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext'
 import { useDocuments } from '../context/DocumentContext'
 import { supabase } from '../supabase/supabaseClient'
 import PurchaseRequestPreview from './PurchaseRequestPreview'
-import PurchaseOrderPreview from './PurchaseOrderPreview'
 import DisbursementVoucherForm from './documents/DisbursementVoucherForm'
 import DisbursementVoucherPreview from './documents/DisbursementVoucherPreview'
 import PayrollForm from './documents/PayrollForm'
@@ -26,7 +25,6 @@ const currency = new Intl.NumberFormat('en-PH', {
 
 const DOC_TYPES = [
   { id: 'pr', label: 'Purchase Request' },
-  { id: 'po', label: 'Purchase Order' },
   { id: 'dv', label: 'Disbursement Voucher' },
   { id: 'payroll', label: 'Payroll' },
   { id: 'project', label: 'Project Design' },
@@ -35,7 +33,7 @@ const DOC_TYPES = [
 ]
 
 // Document types that use the request auto-fill dropdown
-const REQUEST_LINKED_DOCS = ['pr', 'po', 'project', 'payroll']
+const REQUEST_LINKED_DOCS = ['pr', 'project', 'payroll']
 
 const DEFAULTS = {
   barangay: 'UPPER GLAD 2',
@@ -113,15 +111,7 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
   const [approvedByName, setApprovedByName] = useState('')
   const [items, setItems] = useState([])
 
-  // PO-only fields
-  const [supplierName, setSupplierName] = useState('')
-  const [supplierAddress, setSupplierAddress] = useState('')
-  const [supplierTin, setSupplierTin] = useState('')
-  const [procurementMode, setProcurementMode] = useState('Over the Counter')
-  const [placeOfDelivery, setPlaceOfDelivery] = useState(`Barangay ${DEFAULTS.barangay}`)
-  const [dateOfDelivery, setDateOfDelivery] = useState('')
-  const [deliveryTime, setDeliveryTime] = useState('')
-  const [paymentTime, setPaymentTime] = useState('')
+
 
   const eligibleRequests = useMemo(
     () =>
@@ -194,7 +184,6 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
 
     setItems(mappedItems)
     setDocDate(request.eventDate || todayISO())
-    setDateOfDelivery(request.eventDate || todayISO())
     setRequestedByName(profileName || request.requestedBy || '')
   }
 
@@ -234,8 +223,6 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
     }
 
     const formattedDate = formatDateLocal(docDate)
-    const formattedDeliveryDate = formatDateLocal(dateOfDelivery)
-
     if (docType === 'pr') {
       const prData = {
         type: 'pr',
@@ -257,31 +244,6 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
         },
       }
       setPreview(prData)
-    } else {
-      const poData = {
-        type: 'po',
-        data: {
-          barangay,
-          municipality,
-          province,
-          poNumber: number,
-          date: formattedDate,
-          supplierName,
-          supplierAddress,
-          supplierTin,
-          procurementMode,
-          placeOfDelivery,
-          dateOfDelivery: formattedDeliveryDate,
-          deliveryTime,
-          paymentTime,
-          items: items.map((item) => ({
-            ...item,
-            unit: item.unit || item.unitOfIssue || 'pc',
-          })),
-          totalAmount,
-        },
-      }
-      setPreview(poData)
     }
   }
 
@@ -299,7 +261,6 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
     if (docType === 'dv' && previewData.data.dvNumber) name = `Disbursement Voucher ${previewData.data.dvNumber}`
     else if (docType === 'payroll' && previewData.data.payrollNumber) name = `Payroll ${previewData.data.payrollNumber}`
     else if (docType === 'pr' && previewData.data.prNumber) name = `Purchase Request ${previewData.data.prNumber}`
-    else if (docType === 'po' && previewData.data.poNumber) name = `Purchase Order ${previewData.data.poNumber}`
     else name = typeLabel
 
     await addDocument({
@@ -371,8 +332,6 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
     switch (preview.type) {
       case 'pr':
         return <PurchaseRequestPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
-      case 'po':
-        return <PurchaseOrderPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
       case 'dv':
         return <DisbursementVoucherPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
       case 'payroll':
@@ -388,7 +347,7 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
     }
   }
 
-  const isPrOrPo = docType === 'pr' || docType === 'po'
+  const isPrOrPo = docType === 'pr'
 
   return (
     <div className="doc-gen-section">
@@ -459,7 +418,7 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
               />
             </label>
             <label className="field">
-              <span>{docType === 'pr' ? 'P.R. Number' : 'P.O. Number'}</span>
+              <span>P.R. Number</span>
               <input
                 type="text"
                 value={prNumber}
@@ -479,112 +438,35 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
           </div>
 
           {/* PR-specific fields */}
-          {docType === 'pr' ? (
-            <div className="form-grid">
-              <label className="field">
-                <span>Requested By (Requisitioner)</span>
-                <input
-                  type="text"
-                  value={requestedByName}
-                  onChange={(e) => setRequestedByName(e.target.value)}
-                  placeholder={profileName || 'Your name'}
-                />
-              </label>
-              <label className="field">
-                <span>Approved By (SK Chairman)</span>
-                <input
-                  type="text"
-                  value={approvedByName}
-                  onChange={(e) => setApprovedByName(e.target.value)}
-                />
-              </label>
-            </div>
-          ) : (
-            <div className="form-grid">
-              <label className="field">
-                <span>Supplier Name</span>
-                <input
-                  type="text"
-                  value={supplierName}
-                  onChange={(e) => setSupplierName(e.target.value)}
-                  placeholder="e.g. RANCOR CONSUMER GOODS TRADING"
-                />
-              </label>
-              <label className="field">
-                <span>Supplier Address</span>
-                <input
-                  type="text"
-                  value={supplierAddress}
-                  onChange={(e) => setSupplierAddress(e.target.value)}
-                  placeholder="e.g. MIDSAYAP, COTABATO"
-                />
-              </label>
-              <label className="field">
-                <span>Supplier TIN</span>
-                <input
-                  type="text"
-                  value={supplierTin}
-                  onChange={(e) => setSupplierTin(e.target.value)}
-                  placeholder="e.g. 912-941-039-000"
-                />
-              </label>
-              <label className="field">
-                <span>Mode of Procurement</span>
-                <select
-                  value={procurementMode}
-                  onChange={(e) => setProcurementMode(e.target.value)}
-                >
-                  <option value="Over the Counter">Over the Counter</option>
-                  <option value="Negotiable">Negotiable</option>
-                  <option value="Bidding">Bidding</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>Place of Delivery</span>
-                <input
-                  type="text"
-                  value={placeOfDelivery}
-                  onChange={(e) => setPlaceOfDelivery(e.target.value)}
-                />
-              </label>
-              <label className="field">
-                <span>Date of Delivery</span>
-                <input
-                  type="date"
-                  value={dateOfDelivery}
-                  onChange={(e) => setDateOfDelivery(e.target.value)}
-                />
-              </label>
-              <label className="field">
-                <span>Delivery Time</span>
-                <input
-                  type="text"
-                  value={deliveryTime}
-                  onChange={(e) => setDeliveryTime(e.target.value)}
-                  placeholder="Optional"
-                />
-              </label>
-              <label className="field">
-                <span>Payment Time</span>
-                <input
-                  type="text"
-                  value={paymentTime}
-                  onChange={(e) => setPaymentTime(e.target.value)}
-                  placeholder="Optional"
-                />
-              </label>
-            </div>
-          )}
+          <div className="form-grid">
+            <label className="field">
+              <span>Requested By (Requisitioner)</span>
+              <input
+                type="text"
+                value={requestedByName}
+                onChange={(e) => setRequestedByName(e.target.value)}
+                placeholder={profileName || 'Your name'}
+              />
+            </label>
+            <label className="field">
+              <span>Approved By (SK Chairman)</span>
+              <input
+                type="text"
+                value={approvedByName}
+                onChange={(e) => setApprovedByName(e.target.value)}
+              />
+            </label>
+          </div>
 
           {/* Item breakdown editor */}
           <div className="overview-card doc-breakdown-editor">
             <p className="eyebrow">Item breakdown</p>
-            <h2>{docType === 'pr' ? 'Requisition items' : 'Order items'}</h2>
+            <h2>Requisition items</h2>
             <table className="data-table">
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>{docType === 'pr' ? 'Unit of Issue' : 'Unit'}</th>
+                  <th>Unit of Issue</th>
                   <th>Item Description</th>
                   <th>Qty</th>
                   <th>Unit Cost</th>
@@ -602,7 +484,7 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
                           type="text"
                           value={item.unitOfIssue || item.unit || ''}
                           onChange={(e) =>
-                            updateItem(index, docType === 'pr' ? 'unitOfIssue' : 'unit', e.target.value)
+                            updateItem(index, 'unitOfIssue', e.target.value)
                           }
                           style={{ width: '60px' }}
                         />

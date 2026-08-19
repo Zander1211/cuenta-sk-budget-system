@@ -1,7 +1,7 @@
 import React, { useRef } from 'react'
 import { X, Printer } from 'lucide-react'
 import logo from '../../assets/logo.png'
-
+import brgyLogo from '../../assets/brgy-logo.png'
 const currency = new Intl.NumberFormat('en-PH', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -183,7 +183,8 @@ function AnnualReportPreview({ data, onClose, onSave }) {
             
             {/* ABYIP HEADER */}
             <div className="abyip-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '20px' }}>
-              <img src={logo} alt="SK Logo" style={{ width: '100px', height: '100px', position: 'absolute', left: '50px', top: '0', objectFit: 'contain' }} />
+              <img src={brgyLogo} alt="Barangay Logo" style={{ width: '100px', height: '100px', position: 'absolute', left: '50px', top: '0', objectFit: 'contain' }} />
+              <img src={logo} alt="SK Logo" style={{ width: '100px', height: '100px', position: 'absolute', right: '50px', top: '0', objectFit: 'contain' }} />
               <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
                 <p style={{ margin: 0 }}>Republic of the Philippines</p>
                 <p style={{ margin: 0 }}>Province of {data.province || 'Cotabato'}</p>
@@ -438,7 +439,8 @@ function AnnualReportPreview({ data, onClose, onSave }) {
             {/* RESOLUTION SECTION - Starts on new page in print */}
             <div className="resolution-section">
               <div className="abyip-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '30px' }}>
-                <img src={logo} alt="SK Logo" style={{ width: '100px', height: '100px', position: 'absolute', left: '50px', top: '0', objectFit: 'contain' }} />
+                <img src={brgyLogo} alt="Barangay Logo" style={{ width: '100px', height: '100px', position: 'absolute', left: '50px', top: '0', objectFit: 'contain' }} />
+                <img src={logo} alt="SK Logo" style={{ width: '100px', height: '100px', position: 'absolute', right: '50px', top: '0', objectFit: 'contain' }} />
                 <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
                   <p style={{ margin: 0 }}>Republic of the Philippines</p>
                   <p style={{ margin: 0 }}>REGION XII</p>

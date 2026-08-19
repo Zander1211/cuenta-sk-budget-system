@@ -2,6 +2,7 @@ import { useState } from 'react'
 import '../PrintPreview.css'
 import './AdditionalDocuments.css'
 import logo from '../../assets/logo.png'
+import brgyLogo from '../../assets/brgy-logo-2.png'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -71,7 +72,8 @@ function TransmittalLetterPreview({ data, onClose, onSave }) {
         <div className="print-page">
           {/* Government Letterhead with logos */}
           <div className="gov-letterhead" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '30px' }}>
-            <img src={logo} alt="SK Logo" style={{ width: '100px', height: '100px', position: 'absolute', left: '50px', top: '0', objectFit: 'contain' }} />
+            <img src={brgyLogo} alt="Barangay Logo" style={{ width: '100px', height: '100px', position: 'absolute', left: '50px', top: '0', objectFit: 'contain' }} />
+            <img src={logo} alt="SK Logo" style={{ width: '100px', height: '100px', position: 'absolute', right: '50px', top: '0', objectFit: 'contain' }} />
             <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
               <p style={{ margin: 0 }}>Republic of the Philippines</p>
               <p style={{ margin: 0, fontWeight: 'bold' }}>REGION XII</p>

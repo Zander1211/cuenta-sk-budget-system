@@ -75,9 +75,11 @@ function DisbursementVoucherPreview({ data, onClose, onSave }) {
 
         <div className="print-page">
           {/* Letterhead */}
-          <div className="gov-letterhead">
-            <p className="gov-line">Republic of the Philippines</p>
-            <p className="gov-line-bold">BARANGAY UPPER GLAD II</p>
+          <div className="gov-letterhead" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '30px' }}>
+            <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
+              <p className="gov-line" style={{ margin: 0 }}>Republic of the Philippines</p>
+              <p className="gov-line-bold" style={{ margin: 0 }}>BARANGAY UPPER GLAD II</p>
+            </div>
           </div>
 
           {/* Title */}

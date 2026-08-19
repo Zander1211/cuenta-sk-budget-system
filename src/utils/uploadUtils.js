@@ -111,6 +111,115 @@ export function generateReceiptPath(record, file) {
 }
 
 /**
+ * Paths for a scanned receipt.
+ *
+ * The processed scan keeps the exact shape `generateReceiptPath` already
+ * produces, so it lands where every existing reader already looks and the
+ * display code needs no change to show the scan by default. The original
+ * photograph goes into an `originals/` subfolder of the same record, which
+ * keeps the two together for retention and cleanup without a second bucket.
+ *
+ * @param {Object} record
+ * @param {File} scanFile the processed scan
+ * @param {File} originalFile the untouched camera photograph
+ * @returns {{scanPath: string, originalPath: string}}
+ */
+export function generateReceiptScanPaths(record, scanFile, originalFile) {
+  const scanPath = generateReceiptPath(record, scanFile)
+  const directory = scanPath.slice(0, scanPath.lastIndexOf('/'))
+  const safeOriginal = originalFile.name.replace(/\s+/g, '-')
+  return {
+    scanPath,
+    originalPath: `${directory}/originals/${Date.now()}-${safeOriginal}`,
+  }
+}
+
+/**
+ * Inserts the receipt row for a scanned receipt.
+ *
+ * `file_path` is the processed scan, because that is the image Cuenta shows.
+ * The photograph is recorded separately at `original_path` so it stays
+ * available as the underlying evidence.
+ *
+ * `ocrMetadata` holds values a person confirmed in the review step. Fields
+ * that were blank or unreadable arrive here as null and are stored as null.
+ */
+export async function insertScannedReceiptRecord(supabase, {
+  record,
+  scanFile,
+  scanPath,
+  originalPath,
+  ocrMetadata,
+  scanSettings,
+  user,
+  userRole,
+}) {
+  let recordType = 'Expense'
+  if (['Project', 'Event', 'Payroll'].includes(record.type)) recordType = record.type
+  else if (record.project) recordType = 'Project'
+  else if (record.event) recordType = 'Event'
+  else if (record.category?.toLowerCase() === 'payroll') recordType = 'Payroll'
+
+  const { data, error } = await supabase
+    .from('receipt_records')
+    .insert({
+      record_type: recordType,
+      record_id: String(record.id),
+      file_path: scanPath,
+      original_path: originalPath || null,
+      file_name: scanFile.name,
+      file_type: scanFile.type,
+      is_scanned: true,
+      ocr_metadata: ocrMetadata || null,
+      scan_settings: scanSettings || null,
+      ocr_verified_at: new Date().toISOString(),
+      ocr_verified_by: user?.user_metadata?.full_name || user?.email || 'Unknown',
+      uploaded_by_id: user?.id || null,
+      uploaded_by_name: user?.user_metadata?.full_name || user?.email || 'Unknown',
+      uploaded_by_role: userRole || 'Unknown',
+    })
+    .select()
+
+  return { data, error }
+}
+
+/**
+ * Renders verified OCR metadata as readable lines for the expense remarks.
+ *
+ * Only fields the reviewer actually confirmed appear. A null stays out of the
+ * text entirely rather than being written as "unknown", so remarks never imply
+ * a reading that was not made.
+ */
+export function formatOcrMetadataNote(metadata) {
+  if (!metadata) return ''
+
+  const peso = value =>
+    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(value)
+
+  const lines = [
+    metadata.receiptNumber ? `Receipt no: ${metadata.receiptNumber}` : '',
+    metadata.receivedFrom ? `Received from: ${metadata.receivedFrom}` : '',
+    metadata.organization ? `Organization: ${metadata.organization}` : '',
+    metadata.date ? `Receipt date: ${metadata.date}` : '',
+    metadata.totalAmount !== null && metadata.totalAmount !== undefined
+      ? `Receipt total: ${peso(metadata.totalAmount)}`
+      : '',
+    metadata.cashAmount !== null && metadata.cashAmount !== undefined
+      ? `Cash: ${peso(metadata.cashAmount)}`
+      : '',
+    metadata.chequeAmount !== null && metadata.chequeAmount !== undefined
+      ? `Cheque: ${peso(metadata.chequeAmount)}`
+      : '',
+    metadata.bank ? `Bank: ${metadata.bank}` : '',
+    metadata.chequeNumber ? `Cheque no: ${metadata.chequeNumber}` : '',
+    metadata.receiver ? `Receiver: ${metadata.receiver}` : '',
+  ].filter(Boolean)
+
+  if (!lines.length) return ''
+  return `Verified from receipt scan:\n${lines.join('\n')}`
+}
+
+/**
  * Inserts a receipt record into the database, providing robust linking and metadata.
  * Requires the file path and user session data.
  */

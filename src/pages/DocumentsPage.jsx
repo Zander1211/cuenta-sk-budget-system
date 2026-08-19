@@ -6,7 +6,6 @@ import DocumentGenerator from '../components/DocumentGenerator'
 import { useAuth } from '../context/AuthContext'
 import { useDocuments } from '../context/DocumentContext'
 import PurchaseRequestPreview from '../components/PurchaseRequestPreview'
-import PurchaseOrderPreview from '../components/PurchaseOrderPreview'
 import DisbursementVoucherPreview from '../components/documents/DisbursementVoucherPreview'
 import PayrollPreview from '../components/documents/PayrollPreview'
 import ProjectDesignPreview from '../components/documents/ProjectDesignPreview'
@@ -71,7 +70,6 @@ function DocumentsPage() {
 
     switch (type) {
       case 'pr': return <PurchaseRequestPreview data={data} onClose={onClose} />
-      case 'po': return <PurchaseOrderPreview data={data} onClose={onClose} />
       case 'dv': return <DisbursementVoucherPreview data={data} onClose={onClose} />
       case 'payroll': return <PayrollPreview data={data} onClose={onClose} />
       case 'project': return <ProjectDesignPreview data={data} onClose={onClose} />
@@ -281,7 +279,6 @@ function DocumentsPage() {
             </div>
             <div className="modal-body" style={{ margin: '16px 0', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <button className="secondary-button" style={{ justifyContent: 'flex-start', padding: '12px' }} onClick={() => handleCreateSelect('pr')}><FileText size={18} style={{ color: 'var(--text-muted)' }}/> Purchase Request</button>
-              <button className="secondary-button" style={{ justifyContent: 'flex-start', padding: '12px' }} onClick={() => handleCreateSelect('po')}><FileText size={18} style={{ color: 'var(--text-muted)' }}/> Purchase Order</button>
               <button className="secondary-button" style={{ justifyContent: 'flex-start', padding: '12px' }} onClick={() => handleCreateSelect('dv')}><FileText size={18} style={{ color: 'var(--text-muted)' }}/> Disbursement Voucher</button>
               <button className="secondary-button" style={{ justifyContent: 'flex-start', padding: '12px' }} onClick={() => handleCreateSelect('payroll')}><FileText size={18} style={{ color: 'var(--text-muted)' }}/> Payroll</button>
               <button className="secondary-button" style={{ justifyContent: 'flex-start', padding: '12px' }} onClick={() => handleCreateSelect('project')}><FileText size={18} style={{ color: 'var(--text-muted)' }}/> Project Design</button>

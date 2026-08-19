@@ -36,6 +36,7 @@ import ChatWidget from './components/ChatWidget'
 import SmoothScroll, { ScrollToTop } from './components/SmoothScroll'
 import RouteErrorBoundary from './components/RouteErrorBoundary'
 import { NotificationProvider } from './context/NotificationContext'
+import PublicTransparencyPage from './pages/PublicTransparencyPage'
 
 // Analysis module (lazy-loaded so its charts/hooks don't weigh down other routes)
 const AnalysisOverviewPage = lazy(() => import('./pages/analysis/AnalysisOverviewPage'))
@@ -45,7 +46,7 @@ const MonthlySpendingPage = lazy(() => import('./pages/analysis/MonthlySpendingP
 const BudgetUtilizationPage = lazy(() => import('./pages/analysis/BudgetUtilizationPage'))
 
 function AppRoutes() {
-  const { isLoading } = useAuth()
+  const { isLoading, isAuthenticated } = useAuth()
 
   if (isLoading) {
     return <LoadingScreen />
@@ -57,7 +58,13 @@ function AppRoutes() {
       <ScrollToTop />
       <RouteErrorBoundary>
       <Routes>
-        <Route path="/" element={<LoginPage />} />
+        <Route path="/" element={<PublicTransparencyPage />} />
+        <Route path="/budget" element={<Navigate to="/#budget" replace />} />
+        <Route path="/projects" element={<Navigate to="/#projects" replace />} />
+        <Route path="/projects/:id" element={<Navigate to="/#projects" replace />} />
+        <Route path="/expenditures" element={<Navigate to="/#projects" replace />} />
+        <Route path="/about" element={<Navigate to="/#about" replace />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<MainDashboardPage />} />
           <Route path="budgets" element={<BudgetsPage />} />
@@ -131,7 +138,7 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </RouteErrorBoundary>
-      <ChatWidget />
+      {isAuthenticated && <ChatWidget />}
     </BrowserRouter>
     </SmoothScroll>
   )

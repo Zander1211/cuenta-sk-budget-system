@@ -139,7 +139,7 @@ function DashboardLayout() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/login" replace />
   }
 
   const visibleItems = navItems.filter((item) => item.roles.includes(role))
