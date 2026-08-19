@@ -6,7 +6,7 @@ import {
   detectDocumentEdges,
   detectSkewAngle,
   imageDataToBlob,
-  imageDataToDataURL,
+  imageDataToObjectURL,
   loadBitmap,
   perspectiveTransform,
   recommendFilter,
@@ -77,6 +77,7 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
   const [values, setValues] = useState(EMPTY_VALUES)
   const [ocrFlags, setOcrFlags] = useState([])
   const [ocrConfidence, setOcrConfidence] = useState(null)
+  const [rawText, setRawText] = useState('')
 
   const bitmapRef = useRef(null)
   const correctedRef = useRef(null)
@@ -85,6 +86,7 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
   const streamRef = useRef(null)
   const fileInputRef = useRef(null)
   const objectUrlsRef = useRef([])
+  const previewUrlRef = useRef(null)
 
   const trackUrl = useCallback(url => {
     objectUrlsRef.current.push(url)
@@ -110,6 +112,10 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
       filteredRef.current = null
       objectUrlsRef.current.forEach(url => URL.revokeObjectURL(url))
       objectUrlsRef.current = []
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current)
+        previewUrlRef.current = null
+      }
       // The OCR worker holds a wasm heap and a thread; release it with the UI.
       import('../../utils/ocr/receiptOCRService')
         .then(module => module.terminateOCR())
@@ -211,15 +217,31 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
     const corrected = base || correctedRef.current
     if (!corrected) return
 
+    /* Replaces the visible preview and releases the one it supersedes. The
+       previews are full-size JPEGs, so leaving them attached to the document
+       while the user tries each filter is a real cost on a phone. */
+    const showPreview = async imageData => {
+      const url = await imageDataToObjectURL(imageData)
+      const previous = previewUrlRef.current
+      previewUrlRef.current = url
+      setScanSrc(url)
+      if (previous) URL.revokeObjectURL(previous)
+    }
+
     try {
       const filtered = await applyFilter(corrected, filterId)
       filteredRef.current = filtered
-      setScanSrc(imageDataToDataURL(filtered, 'image/jpeg', 0.9) || '')
+      await showPreview(filtered)
       setEnhancementFailed(false)
     } catch (cause) {
       console.error('Filter failed; falling back to the corrected image.', cause)
       filteredRef.current = corrected
-      setScanSrc(imageDataToDataURL(corrected, 'image/jpeg', 0.9) || '')
+      try {
+        await showPreview(corrected)
+      } catch (previewCause) {
+        console.error('The corrected image could not be previewed either.', previewCause)
+        setScanSrc('')
+      }
       setEnhancementFailed(true)
     }
   }, [])
@@ -298,10 +320,21 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
       const { recognizeWithFallback } = await import('../../utils/ocr/receiptOCRService')
 
       const enhancedBlob = await imageDataToBlob(filtered, { type: 'image/png' })
-      const fallbackBlob =
-        corrected && corrected !== filtered
-          ? await imageDataToBlob(corrected, { type: 'image/png' })
-          : null
+
+      // The second pass is a grayscale rendition rather than the untouched
+      // corrected image. Tesseract reads flat high-contrast grey far better
+      // than a colour-preserving enhance, so when the display filter reads
+      // poorly this is the pass most likely to rescue it. The engine keeps
+      // whichever result scores higher, so this can only help.
+      let fallbackBlob = null
+      if (corrected) {
+        try {
+          const forOcr = await applyFilter(corrected, 'grayscale')
+          fallbackBlob = await imageDataToBlob(forOcr, { type: 'image/png' })
+        } catch (cause) {
+          console.warn('Could not build the grayscale OCR pass.', cause)
+        }
+      }
 
       const result = await recognizeWithFallback(
         { enhanced: enhancedBlob, fallback: fallbackBlob },
@@ -329,6 +362,10 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
       })
       setOcrFlags(parsed.lowConfidenceFields)
       setOcrConfidence(result.confidence)
+      // Kept so the reviewer can read what the engine actually saw. When the
+      // parser recognises nothing, empty fields alone give them no way to tell
+      // a bad scan from an unreadable receipt.
+      setRawText(result.text || '')
       setStep(STEPS.VERIFY)
     } catch (cause) {
       console.error('OCR failed', cause)
@@ -337,6 +374,7 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
       setValues(EMPTY_VALUES)
       setOcrFlags(['all'])
       setOcrConfidence(null)
+      setRawText('')
       setError('Text could not be read from this receipt. Enter the details manually, or save the scan without them.')
       setStep(STEPS.VERIFY)
     }
@@ -494,6 +532,7 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
               onChange={setValues}
               flags={ocrFlags}
               confidence={ocrConfidence}
+              rawText={rawText}
             />
           )}
         </div>

@@ -411,6 +411,44 @@
 	border-radius: 10px;
 	background: var(--scan-surface-2);
 }
+/* The placeholder must not reserve a tall empty block where the scan will go;
+   on a phone that reads as a broken image rather than a loading state. */
+.scan-verify-image .scan-review-placeholder {
+	aspect-ratio: 4 / 3;
+	max-height: 34dvh;
+}
+
+.scan-rawtext {
+	border: 1px solid var(--scan-line);
+	border-radius: 10px;
+	padding: 10px 13px;
+	background: var(--scan-surface-2);
+}
+.scan-rawtext summary {
+	cursor: pointer;
+	font-size: .85rem;
+	font-weight: 700;
+	color: var(--scan-ink-2);
+	min-height: 32px;
+	display: flex;
+	align-items: center;
+}
+.scan-rawtext pre {
+	margin: 10px 0 6px;
+	padding: 10px;
+	max-height: 220px;
+	overflow: auto;
+	background: var(--scan-surface);
+	border: 1px solid var(--scan-line);
+	border-radius: 8px;
+	font-size: .78rem;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	color: var(--scan-ink-2);
+}
+.scan-rawtext small { color: var(--scan-ink-3); font-size: .78rem; line-height: 1.45; }
+
 .scan-verify-caption {
 	margin: 8px 0 0;
 	font-size: .8rem;

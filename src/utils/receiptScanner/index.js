@@ -8,6 +8,8 @@ export {
   releaseBitmap,
   imageDataToBlob,
   imageDataToDataURL,
+  imageDataToObjectURL,
+  createDomCanvas,
   toImageData,
   MAX_PROCESS_DIMENSION,
 } from './imageUtils'

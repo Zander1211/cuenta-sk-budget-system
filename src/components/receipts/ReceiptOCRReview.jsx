@@ -28,10 +28,16 @@ const AMOUNT_FIELDS = [
   { key: 'chequeAmount', label: 'Cheque amount' },
 ]
 
-export default function ReceiptOCRReview({ scanSrc, values, onChange, flags, confidence }) {
+export default function ReceiptOCRReview({ scanSrc, values, onChange, flags, confidence, rawText }) {
   const flagged = new Set(flags || [])
   const lowConfidence = flagged.has('all')
   const totalsDisagree = flagged.has('totals-disagree')
+
+  // Nothing recognised at all is a different situation from a few blank
+  // fields, and it needs a different explanation.
+  const nothingParsed = !Object.entries(values).some(
+    ([key, value]) => key !== 'particularsText' && value !== '' && value !== null && value !== undefined,
+  )
 
   function setField(key, value) {
     onChange({ ...values, [key]: value })
@@ -70,10 +76,29 @@ export default function ReceiptOCRReview({ scanSrc, values, onChange, flags, con
           </p>
         )}
 
-        <p className="scan-notice">
-          <Info size={15} aria-hidden="true" />
-          Blank fields were not readable on the receipt. Leave them empty rather than guessing.
-        </p>
+        {nothingParsed ? (
+          <p className="scan-notice scan-notice--warning" role="status">
+            <AlertTriangle size={15} aria-hidden="true" />
+            No fields could be read from this scan. Type the values from the receipt yourself, or go
+            back and retake the photo in better light with the receipt flat and filling the frame.
+          </p>
+        ) : (
+          <p className="scan-notice">
+            <Info size={15} aria-hidden="true" />
+            Blank fields were not readable on the receipt. Leave them empty rather than guessing.
+          </p>
+        )}
+
+        {rawText?.trim() ? (
+          <details className="scan-rawtext">
+            <summary>Show the text the scanner read</summary>
+            <pre>{rawText}</pre>
+            <small>
+              This is the raw recognition output, shown so you can tell a poor scan from an
+              unreadable receipt. It is not saved.
+            </small>
+          </details>
+        ) : null}
 
         <div className="scan-field-grid">
           {TEXT_FIELDS.map(field => (

@@ -63,6 +63,21 @@ export function createCanvas(width, height) {
   if (typeof OffscreenCanvas === 'function') {
     return new OffscreenCanvas(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)))
   }
+  return createDomCanvas(width, height)
+}
+
+/**
+ * A real DOM canvas, for the operations OffscreenCanvas cannot do.
+ *
+ * `OffscreenCanvas` has no `toDataURL`; it only offers the async
+ * `convertToBlob`. Anything that needs a synchronous data URL has to go
+ * through here instead of `createCanvas`.
+ *
+ * @param {number} width
+ * @param {number} height
+ * @returns {HTMLCanvasElement}
+ */
+export function createDomCanvas(width, height) {
   const canvas = document.createElement('canvas')
   canvas.width = Math.max(1, Math.round(width))
   canvas.height = Math.max(1, Math.round(height))
@@ -117,13 +132,34 @@ export async function imageDataToBlob(imageData, { type = 'image/jpeg', quality 
   })
 }
 
-/** Renders ImageData to a data URL, for `<img>` previews. */
+/**
+ * Renders ImageData to an object URL for an `<img>` preview.
+ *
+ * Object URLs rather than data URLs: a 1800px scan encodes to well over a
+ * megabyte of base64, and holding several of those as JavaScript strings on a
+ * phone is wasteful. The caller owns the returned URL and must revoke it.
+ *
+ * @param {ImageData} imageData
+ * @param {{type?: string, quality?: number}} [options]
+ * @returns {Promise<string>}
+ */
+export async function imageDataToObjectURL(imageData, options = {}) {
+  const blob = await imageDataToBlob(imageData, { type: 'image/jpeg', quality: 0.9, ...options })
+  return URL.createObjectURL(blob)
+}
+
+/**
+ * Renders ImageData to a data URL.
+ *
+ * Uses a DOM canvas explicitly. `createCanvas` prefers OffscreenCanvas, which
+ * has no `toDataURL` at all, so routing this through it silently returned null
+ * on every modern browser.
+ */
 export function imageDataToDataURL(imageData, type = 'image/jpeg', quality = 0.9) {
-  const canvas = createCanvas(imageData.width, imageData.height)
+  const canvas = createDomCanvas(imageData.width, imageData.height)
   const ctx = canvas.getContext('2d')
   ctx.putImageData(imageData, 0, 0)
-  if (typeof canvas.toDataURL === 'function') return canvas.toDataURL(type, quality)
-  return null
+  return canvas.toDataURL(type, quality)
 }
 
 /**
