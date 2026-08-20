@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import React, { useRef, useState } from 'react'
 import { X, Printer } from 'lucide-react'
 import logo from '../../assets/logo.png'
 import brgyLogo from '../../assets/brgy-logo.png'

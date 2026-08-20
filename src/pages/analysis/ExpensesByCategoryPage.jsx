@@ -15,15 +15,16 @@ import {
 import { buildCategoryInsights } from '../../utils/insights'
 import {
   formatCurrency, formatPercentage, periodLabel, colorForCategory,
+  CHART_INK, CHART_COLORS, pesoTick,
   filterExpenses, expenseDate, parseDate, normalizeAmount,
 } from '../../utils/analytics'
 import { exportToCsv } from '../../utils/exportCsv'
 
 const BREADCRUMB = [{ label: 'Home', to: '/dashboard' }, { label: 'Analysis', to: '/dashboard/analysis' }, { label: 'Expenses by Category' }]
 
-function Sparkline({ points, color = '#12805C' }) {
+function Sparkline({ points, color = CHART_COLORS.primaryLine }) {
   if (!points || points.length < 2 || points.every((p) => p === 0)) {
-    return <span style={{ color: '#6B7280', fontSize: 13 }}>—</span>
+    return <span style={{ color: 'var(--ink-3)', fontSize: 13 }}>—</span>
   }
   const max = Math.max(...points, 1)
   const w = 64, h = 20
@@ -126,8 +127,8 @@ export default function ExpensesByCategoryPage() {
             >
               <ResponsiveContainer width="100%" height={Math.max(240, chartData.length * 44)}>
                 <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
-                  <XAxis type="number" tickFormatter={(v) => mode === 'percent' ? `${v}%` : `₱${(v / 1000).toLocaleString()}k`} tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
+                  <XAxis type="number" tickFormatter={(v) => mode === 'percent' ? `${v}%` : pesoTick(v)} tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />
                   <Tooltip formatter={(v, n, p) => mode === 'percent' ? formatPercentage(p.payload.percent, 1) : formatCurrency(p.payload.value)} cursor={{ fill: 'rgba(16,116,99,0.06)' }} />
                   <Bar dataKey={mode === 'percent' ? 'percent' : 'value'} radius={[0, 5, 5, 0]} maxBarSize={26}>
                     {chartData.map((c) => <Cell key={c.name} fill={c.fill} />)}

@@ -311,14 +311,14 @@ function ExpenseSummaryPage() {
               <div style={{
                 width: '100%',
                 height: '12px',
-                borderRadius: '6px',
+                borderRadius: 'var(--radius-bar)',
                 backgroundColor: 'var(--surface-hover, #e5e7eb)',
                 overflow: 'hidden',
               }}>
                 <div style={{
                   width: `${utilizationPercent}%`,
                   height: '100%',
-                  borderRadius: '6px',
+                  borderRadius: 'var(--radius-bar)',
                   backgroundColor: utilizationPercent > 80 ? '#ef4444' : utilizationPercent > 60 ? '#f59e0b' : '#22c55e',
                   transition: 'width 0.4s ease',
                 }} />
@@ -357,14 +357,14 @@ function ExpenseSummaryPage() {
                     <div style={{
                       width: '100%',
                       height: '8px',
-                      borderRadius: '4px',
+                      borderRadius: 'var(--radius-bar)',
                       backgroundColor: 'var(--surface-hover, #e5e7eb)',
                       overflow: 'hidden',
                     }}>
                       <div style={{
                         width: `${cat.percent}%`,
                         height: '100%',
-                        borderRadius: '4px',
+                        borderRadius: 'var(--radius-bar)',
                         backgroundColor: categoryColors[idx % categoryColors.length],
                         transition: 'width 0.3s ease',
                       }} />
@@ -394,14 +394,14 @@ function ExpenseSummaryPage() {
                     <div style={{
                       width: '100%',
                       height: '8px',
-                      borderRadius: '4px',
+                      borderRadius: 'var(--radius-bar)',
                       backgroundColor: 'var(--surface-hover, #e5e7eb)',
                       overflow: 'hidden',
                     }}>
                       <div style={{
                         width: `${proj.percent}%`,
                         height: '100%',
-                        borderRadius: '4px',
+                        borderRadius: 'var(--radius-bar)',
                         backgroundColor: categoryColors[(idx + 2) % categoryColors.length],
                         transition: 'width 0.3s ease',
                       }} />

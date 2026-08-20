@@ -148,7 +148,7 @@ function BudgetsPage() {
                   </select>
                 </label>
                 <label className="field" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <span style={{ fontWeight: 500, fontSize: '0.9rem', color: '#374151' }}>Year</span>
+                  <span style={{ fontWeight: 500, fontSize: '0.9rem', color: 'var(--ink)' }}>Year</span>
                   <div>
                     <YearSpinner year={year} onYearChange={setYear} />
                   </div>
@@ -178,7 +178,7 @@ function BudgetsPage() {
                 </label>
                 {sourceOption === 'Other' && (
                   <label className="field" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontWeight: 500, fontSize: '0.9rem', color: '#374151' }}>Specify Other Source</span>
+                    <span style={{ fontWeight: 500, fontSize: '0.9rem', color: 'var(--ink)' }}>Specify Other Source</span>
                     <input
                       type="text"
                       value={customSource}
@@ -259,10 +259,10 @@ function BudgetsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
             {displayedBudgets.length ? (
               displayedBudgets.map((budget) => (
-                <div key={budget.id} style={{ border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px', backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
+                <div key={budget.id} style={{ border: '1px solid var(--line)', borderRadius: 'var(--radius-surface)', padding: '24px', backgroundColor: 'var(--surface)', boxShadow: 'var(--shadow)', display: 'flex', flexDirection: 'column' }}>
                   
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: '#111827', lineHeight: '1.3' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--ink)', lineHeight: '1.3' }}>
                       {budget.periodLabel} {budget.year}
                     </h3>
                     <span className="status-pill status-approved" style={{ flexShrink: 0, marginLeft: '12px' }}>
@@ -272,28 +272,28 @@ function BudgetsPage() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                     <div>
-                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Budget Amount</p>
-                      <p style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#059669' }}>{currency.format(budget.amount)}</p>
+                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Budget Amount</p>
+                      <p style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: 'var(--positive)' }}>{currency.format(budget.amount)}</p>
                     </div>
                     {viewMode === 'monthly' && (
                       <div>
-                        <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Budget Source</p>
-                        <p style={{ margin: 0, fontSize: '0.95rem', color: '#374151' }}>{budget.source || 'Not Specified'}</p>
+                        <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Budget Source</p>
+                        <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{budget.source || 'Not Specified'}</p>
                       </div>
                     )}
                     <div>
-                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>{viewMode === 'monthly' ? 'Date Recorded' : 'Last Updated'}</p>
-                      <p style={{ margin: 0, fontSize: '0.95rem', color: '#374151' }}>{new Date(budget.createdAt).toLocaleDateString()}</p>
+                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>{viewMode === 'monthly' ? 'Date Recorded' : 'Last Updated'}</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{new Date(budget.createdAt).toLocaleDateString()}</p>
                     </div>
                     <div>
-                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Recorded By</p>
-                      <p style={{ margin: 0, fontSize: '0.95rem', color: '#374151' }}>SK Treasurer</p>
+                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Recorded By</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>SK Treasurer</p>
                     </div>
                   </div>
                 </div>
               ))
             ) : (
-              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: '#6b7280', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
+              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: 'var(--ink-3)', backgroundColor: 'var(--surface-2)', borderRadius: 'var(--radius-surface)' }}>
                 No recorded budget history found
               </div>
             )}

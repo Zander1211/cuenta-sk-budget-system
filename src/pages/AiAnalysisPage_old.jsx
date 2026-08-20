@@ -558,7 +558,7 @@ function AiAnalysisPage() {
                   <div
                     key={`${item.title}-${index}`}
                     className={`ai-insight-item ${item.severity}`}
-                    style={{ borderLeft: `4px solid var(--${item.severity === 'high' ? 'cherry' : item.severity === 'medium' ? 'sun' : 'ocean'})`, background: 'var(--surface-sunken)', padding: '1rem', borderRadius: '8px' }}
+                    style={{ borderLeft: `4px solid var(--${item.severity === 'high' ? 'cherry' : item.severity === 'medium' ? 'sun' : 'ocean'})`, background: 'var(--surface-sunken)', padding: '1rem', borderRadius: 'var(--radius-control)' }}
                   >
                     <div className="ai-insight-head" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                       <span className="ai-insight-title" style={{ fontWeight: '600' }}>{item.title}</span>

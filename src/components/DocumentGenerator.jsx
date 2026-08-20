@@ -369,7 +369,7 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
       {showRequestSelector ? (
         <div className="doc-gen-form" style={{ marginBottom: isPrOrPo ? 0 : '16px' }}>
           {docType === 'payroll' && eligibleRequests.length === 0 ? (
-            <div className="form-error" style={{ padding: '12px', backgroundColor: '#fee2e2', color: '#b91c1c', borderRadius: '4px', border: '1px solid #f87171' }}>
+            <div className="form-error" style={{ padding: '12px', backgroundColor: 'var(--negative-soft)', color: 'var(--negative)', borderRadius: 'var(--radius-bar)', border: '1px solid var(--negative)' }}>
               No approved payroll record found for this document.
             </div>
           ) : (

@@ -195,13 +195,24 @@
 
 .public-brand {
 	display: flex;
-	flex-direction: column;
+	align-items: center;
+	gap: 10px;
 	line-height: 1.15;
 	text-decoration: none;
 	color: var(--pub-ink);
 	white-space: nowrap;
 }
-.public-brand span {
+.public-brand-logo {
+	width: 48px;
+	height: 48px;
+	object-fit: contain;
+	flex: 0 0 auto;
+}
+.public-brand-copy {
+	display: flex;
+	flex-direction: column;
+}
+.public-brand strong {
 	font-family: var(--pub-font-display);
 	font-size: 1.2rem;
 	font-weight: 700;
@@ -919,6 +930,8 @@
 
 @media (max-width: 760px) {
 	.public-portal { --pub-header-h: 64px; }
+	.public-brand { gap: 8px; }
+	.public-brand-logo { width: 40px; height: 40px; }
 	.public-menu { display: inline-flex; }
 	.public-links {
 		display: none;

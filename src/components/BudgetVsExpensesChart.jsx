@@ -10,6 +10,7 @@ import {
   Legend,
 } from 'recharts'
 import { useBudget } from '../context/BudgetContext'
+import { CHART_COLORS, CHART_INK } from '../utils/analytics'
 
 const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -33,13 +34,13 @@ function CustomTooltip({ active, payload, label }) {
   return (
     <div style={{
       background: 'white',
-      border: '1px solid #e2e8f0',
-      borderRadius: '12px',
+      border: '1px solid var(--line)',
+      borderRadius: 'var(--radius-surface)',
       padding: '14px 18px',
-      boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+      boxShadow: 'var(--shadow-lift)',
       minWidth: '210px',
     }}>
-      <p style={{ fontWeight: 700, fontSize: '14px', color: '#1A2E35', marginBottom: '10px' }}>
+      <p style={{ fontWeight: 700, fontSize: '14px', color: 'var(--ink)', marginBottom: '10px' }}>
         {MONTHS_FULL[MONTHS_SHORT.indexOf(label)] || label}
       </p>
       {payload.map((entry) => (
@@ -47,11 +48,11 @@ function CustomTooltip({ active, payload, label }) {
           key={entry.name}
           style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', fontSize: '13px', marginBottom: '6px' }}
         >
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#6B7280' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--ink-3)' }}>
             <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: entry.color }} />
             {entry.name}
           </span>
-          <span style={{ fontWeight: 600, color: '#1A2E35' }}>{peso.format(entry.value)}</span>
+          <span style={{ fontWeight: 600, color: 'var(--ink)' }}>{peso.format(entry.value)}</span>
         </div>
       ))}
     </div>
@@ -94,12 +95,12 @@ export default function BudgetVsExpensesChart({ year }) {
         marginBottom: '20px',
       }}>
         <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#6B7280', fontWeight: 500 }}>
-            <span style={{ display: 'inline-block', width: 28, height: 3, borderRadius: 2, background: '#0E6B4D' }} />
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--ink-3)', fontWeight: 500 }}>
+            <span style={{ display: 'inline-block', width: 28, height: 3, borderRadius: 2, background: CHART_COLORS.primaryLine }} />
             Allocated Budget
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#6B7280', fontWeight: 500 }}>
-            <span style={{ display: 'inline-block', width: 28, height: 3, borderRadius: 2, background: '#34D399' }} />
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--ink-3)', fontWeight: 500 }}>
+            <span style={{ display: 'inline-block', width: 28, height: 3, borderRadius: 2, background: CHART_COLORS.actual }} />
             Actual Expenses
           </span>
         </div>
@@ -111,17 +112,17 @@ export default function BudgetVsExpensesChart({ year }) {
           data={chartData}
           margin={{ top: 8, right: 24, left: 16, bottom: 8 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART_INK.grid} vertical={false} />
           <XAxis
             dataKey="month"
-            tick={{ fontSize: 12, fill: '#6B7280', fontWeight: 500 }}
+            tick={{ fontSize: 12, fill: CHART_INK.tick, fontWeight: 500 }}
             axisLine={false}
             tickLine={false}
             padding={{ left: 10, right: 10 }}
           />
           <YAxis
             tickFormatter={(v) => `₱${v.toLocaleString('en-PH')}`}
-            tick={{ fontSize: 11, fill: '#6B7280' }}
+            tick={{ fontSize: 11, fill: CHART_INK.tick }}
             axisLine={false}
             tickLine={false}
             width={80}
@@ -130,23 +131,23 @@ export default function BudgetVsExpensesChart({ year }) {
           <Legend
             iconType="circle"
             iconSize={10}
-            wrapperStyle={{ fontSize: '13px', paddingTop: '16px', color: '#6B7280', fontWeight: 500 }}
+            wrapperStyle={{ fontSize: '13px', paddingTop: '16px', color: 'var(--ink-3)', fontWeight: 500 }}
           />
           <Line
             type="monotone"
             dataKey="Allocated Budget"
-            stroke="#0E6B4D"
+            stroke={CHART_COLORS.primaryLine}
             strokeWidth={2.5}
-            dot={{ r: 4, fill: '#0E6B4D', strokeWidth: 0 }}
-            activeDot={{ r: 6, fill: '#0E6B4D', stroke: 'white', strokeWidth: 2 }}
+            dot={{ r: 4, fill: CHART_COLORS.primaryLine, strokeWidth: 0 }}
+            activeDot={{ r: 6, fill: CHART_COLORS.primaryLine, stroke: CHART_INK.surface, strokeWidth: 2 }}
           />
           <Line
             type="monotone"
             dataKey="Actual Expenses"
-            stroke="#34D399"
+            stroke={CHART_COLORS.actual}
             strokeWidth={2.5}
-            dot={{ r: 4, fill: '#34D399', strokeWidth: 0 }}
-            activeDot={{ r: 6, fill: '#34D399', stroke: 'white', strokeWidth: 2 }}
+            dot={{ r: 4, fill: CHART_COLORS.actual, strokeWidth: 0 }}
+            activeDot={{ r: 6, fill: CHART_COLORS.actual, stroke: CHART_INK.surface, strokeWidth: 2 }}
           />
         </LineChart>
       </ResponsiveContainer>

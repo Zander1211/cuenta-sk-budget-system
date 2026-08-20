@@ -334,7 +334,7 @@ function AnnualReportPage() {
                   onChange={(e) => setExpectedResults(e.target.value)} 
                   placeholder="Enter expected results..."
                   rows={4}
-                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit', resize: 'vertical' }}
+                  style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius-control)', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit', resize: 'vertical' }}
                 />
               </label>
               <label className="field">
@@ -344,7 +344,7 @@ function AnnualReportPage() {
                   onChange={(e) => setPerformanceIndicators(e.target.value)} 
                   placeholder="Enter performance indicators..."
                   rows={4}
-                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit', resize: 'vertical' }}
+                  style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius-control)', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit', resize: 'vertical' }}
                 />
               </label>
             </div>
@@ -355,7 +355,7 @@ function AnnualReportPage() {
             <div className="overview-card">
               <h2>Project Objectives & Indicators</h2>
               {systemTotals.projects.map((proj) => (
-                <div key={proj.id} style={{ marginBottom: '24px', padding: '16px', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                <div key={proj.id} style={{ marginBottom: '24px', padding: '16px', border: '1px solid var(--border)', borderRadius: 'var(--radius-control)' }}>
                   <h3 style={{ marginBottom: '12px', fontSize: '1rem' }}>{proj.event || proj.project || 'Untitled Project'}</h3>
                   <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
                     <label className="field">
@@ -365,7 +365,7 @@ function AnnualReportPage() {
                         onChange={(e) => setProjectOverrides(prev => ({ ...prev, [proj.id]: { ...prev[proj.id], expectedResult: e.target.value } }))} 
                         placeholder={`e.g. To implement and complete ${proj.event || proj.project || 'Untitled Project'}`}
                         rows={2}
-                        style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit', resize: 'vertical' }}
+                        style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius-control)', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit', resize: 'vertical' }}
                       />
                     </label>
                     <label className="field">
@@ -375,7 +375,7 @@ function AnnualReportPage() {
                         onChange={(e) => setProjectOverrides(prev => ({ ...prev, [proj.id]: { ...prev[proj.id], indicator: e.target.value } }))} 
                         placeholder="e.g. Completed"
                         rows={2}
-                        style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit', resize: 'vertical' }}
+                        style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius-control)', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit', resize: 'vertical' }}
                       />
                     </label>
                   </div>

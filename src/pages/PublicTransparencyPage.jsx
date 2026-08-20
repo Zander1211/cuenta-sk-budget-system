@@ -17,6 +17,7 @@ import { getPublicTransparencyData } from '../services/publicTransparencyService
 import { AllocationComposition, SpendComparison } from '../components/transparency/AllocationCharts'
 import { useAllocationByCategory } from '../hooks/useAllocationByCategory'
 import { useScrollReveal } from '../hooks/useScrollReveal'
+import skLogo from '../assets/logo.png'
 import './PublicTransparencyPage.css'
 
 const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 })
@@ -40,8 +41,11 @@ function Header() {
     <header className="public-header">
       <nav className="public-nav" aria-label="Public navigation">
         <a className="public-brand" href="#home">
-          <span>CUENTA</span>
-          <small>SK Financial Transparency</small>
+          <img className="public-brand-logo" src={skLogo} alt="Sangguniang Kabataan logo" />
+          <span className="public-brand-copy">
+            <strong>CUENTA</strong>
+            <small>SK Financial Transparency</small>
+          </span>
         </a>
         <button
           type="button"

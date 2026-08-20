@@ -255,9 +255,9 @@ function BackupRestorePage() {
                           type="button"
                           className="secondary-button"
                           style={{
-                            color: '#dc2626',
-                            borderColor: '#fca5a5',
-                            backgroundColor: '#fef2f2',
+                            color: 'var(--negative)',
+                            borderColor: 'var(--negative-soft)',
+                            backgroundColor: 'var(--negative-soft)',
                             padding: '6px 12px',
                             fontSize: '0.85rem',
                           }}
@@ -340,9 +340,9 @@ function BackupRestorePage() {
             return (
             <div className="restore-preview">
               <div className="restore-preview-header">
-                <CheckCircle2 size={20} style={{ color: '#15803d', marginTop: '2px' }} />
+                <CheckCircle2 size={20} style={{ color: 'var(--positive)', marginTop: '2px' }} />
                 <div>
-                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1.05rem', color: '#15803d' }}>Ready to Restore</h3>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1.05rem', color: 'var(--positive)' }}>Ready to Restore</h3>
                   <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--ink-soft)' }}>
                     <strong>File:</strong> {selectedFile.name} ({formatBytes(selectedFile.size)})
                     {backupMeta && <> · <strong>Format:</strong> v{backupMeta.version}</>}
@@ -412,7 +412,7 @@ function BackupRestorePage() {
                   className="primary-button" 
                   onClick={handleRestore}
                   disabled={isLoading || isDeleting}
-                  style={{ background: '#b91c1c' }}
+                  style={{ background: 'var(--negative)' }}
                 >
                   {isLoading ? <Loader2 size={16} className="spin-animation" /> : null}
                   Confirm & Restore Data
@@ -467,9 +467,9 @@ function BackupRestorePage() {
                         type="button"
                         className="secondary-button"
                         style={{
-                          color: '#dc2626',
-                          borderColor: '#fca5a5',
-                          backgroundColor: '#fef2f2',
+                          color: 'var(--negative)',
+                          borderColor: 'var(--negative-soft)',
+                          backgroundColor: 'var(--negative-soft)',
                           padding: '6px 12px',
                           fontSize: '0.85rem',
                         }}
@@ -510,11 +510,11 @@ function BackupRestorePage() {
                   width: '40px',
                   height: '40px',
                   borderRadius: '50%',
-                  backgroundColor: '#fee2e2',
+                  backgroundColor: 'var(--negative-soft)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#dc2626',
+                  color: 'var(--negative)',
                   flexShrink: 0
                 }}
               >
@@ -543,19 +543,19 @@ function BackupRestorePage() {
                   </p>
                   <div
                     style={{
-                      backgroundColor: '#fffbeb',
-                      border: '1px solid #fef3c7',
+                      backgroundColor: 'var(--warn-soft)',
+                      border: '1px solid var(--warn-soft)',
                       borderLeft: '4px solid #f59e0b',
-                      borderRadius: '6px',
+                      borderRadius: 'var(--radius-bar)',
                       padding: '12px',
                       marginTop: '8px',
                       display: 'flex',
                       gap: '10px',
                       fontSize: '0.88rem',
-                      color: '#92400e'
+                      color: 'var(--warn)'
                     }}
                   >
-                    <AlertTriangle size={20} style={{ flexShrink: 0, marginTop: '2px', color: '#d97706' }} />
+                    <AlertTriangle size={20} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--warn)' }} />
                     <div>
                       <strong style={{ display: 'block', marginBottom: '2px' }}>Automatic System Rollback</strong>
                       <span>
@@ -588,7 +588,7 @@ function BackupRestorePage() {
               <button
                 type="button"
                 className="primary-button"
-                style={{ backgroundColor: '#dc2626', color: '#fff', borderColor: '#dc2626' }}
+                style={{ backgroundColor: 'var(--negative)', color: 'var(--accent-ink)', borderColor: 'var(--negative)' }}
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
               >

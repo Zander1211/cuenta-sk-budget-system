@@ -1,0 +1,1151 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   CUENTA — SHARED COMPONENT LAYER
+
+   The public transparency portal's components, lifted out of
+   `pages/PublicTransparencyPage.css` and de-scoped from `.public-portal`
+   so the staff system behind the login uses the same parts.
+
+   The portal file stays the reference implementation and is not touched:
+   it owns the citizen-facing page and its own dark mode. What lives here
+   is the same component drawn against the system tokens in `index.css`.
+
+   ── How this file is organised ────────────────────────────────────────
+   Each section defines a component ONCE, then aliases the internal class
+   names onto it. Aliasing rather than renaming means ~90 page files keep
+   their existing markup and still get the portal's parts — a rename pass
+   across that many files would be a far larger change with no visual gain.
+
+   ── The one rule for this file ────────────────────────────────────────
+   On CONTAINERS — cards, panels, tables, page regions — aliases set surface
+   properties only: background, border, radius, shadow, padding, colour,
+   type, transition. They never set display, grid-template, flex, gap, width,
+   height or position, because those belong to the page that owns the layout
+   and overriding them here would silently rearrange screens this file has
+   never seen.
+
+   Leaf CONTROLS — buttons, badges, swatches — do set their own display and
+   box, because for those the box IS the component.
+
+   Loaded last (see main.jsx) so the aliases win on equal specificity.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+
+/* ── PANEL ────────────────────────────────────────────────────────────────
+   Portal source: `.alloc-panel`, `.project-card`, `.hero-figure`.
+   One surface recipe. Everything that holds content is this.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.panel,
+.overview-card,
+.panel-card,
+.summary-card,
+.stat-card,
+.insight-card,
+.details-panel,
+.modal-content,
+.an-card,
+.an-chart-card,
+.an-ai-summary-card,
+.an-metric-card,
+.an-empty-state-card {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-surface);
+	box-shadow: var(--shadow);
+}
+
+.panel,
+.overview-card,
+.panel-card,
+.an-card,
+.an-chart-card,
+.an-ai-summary-card {
+	padding: clamp(20px, 2.6vw, 28px);
+}
+
+.summary-card,
+.stat-card,
+.insight-card,
+.an-metric-card {
+	padding: var(--space-6);
+}
+
+/* The portal lifts a card only where the whole card is a link to somewhere
+   (`.project-card`). Static containers stay put — lifting one implies it is
+   pressable when it is not. */
+.panel:hover,
+.overview-card:hover,
+.panel-card:hover,
+.summary-card:hover,
+.stat-card:hover,
+.insight-card:hover,
+.an-card:hover,
+.an-chart-card:hover {
+	box-shadow: var(--shadow-lift);
+	transform: none;
+}
+
+a.panel:hover,
+.project-card:hover {
+	transform: translateY(-2px);
+	box-shadow: var(--shadow-lift);
+	border-color: var(--line-strong);
+}
+
+
+/* ── SECTION HEAD ─────────────────────────────────────────────────────────
+   Portal source: `.pub-section-head`.
+   Title, then one line of context at a measure the eye can track. The 62ch
+   cap is the portal's and it is the reason its sections scan quickly.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.section-head {
+	max-width: 62ch;
+	margin-bottom: clamp(20px, 2.5vw, 28px);
+}
+
+.section-head h2,
+.panel-header h2,
+.overview-card > h2:first-child,
+.an-chart-title,
+.an-section-title {
+	font-family: var(--font-display);
+	font-size: var(--text-section-title);
+	font-weight: var(--weight-title);
+	line-height: 1.18;
+	letter-spacing: -0.02em;
+	color: var(--ink);
+}
+
+.section-head p,
+.panel-header p,
+.an-chart-desc,
+.an-page-desc {
+	margin: 10px 0 0;
+	color: var(--ink-2);
+	max-width: 62ch;
+}
+
+
+/* ── FIGURE ───────────────────────────────────────────────────────────────
+   Portal source: `.hero-figure dt` / `dd`.
+   The portal's signature: a small uppercase label in muted ink above a
+   large tabular number in the display face. Every metric tile in the system
+   is this shape, so a figure looks the same wherever it appears.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.figure-label,
+.summary-label,
+.stat-title,
+.details-label,
+.an-metric-label,
+.filter-label,
+.field > span {
+	font-size: var(--text-label);
+	font-weight: var(--weight-label);
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--ink-3);
+}
+
+.figure-value,
+.summary-value,
+.stat-value,
+.an-metric-value,
+.an-donut-center .val {
+	font-family: var(--font-display);
+	font-weight: var(--weight-title);
+	line-height: 1.1;
+	letter-spacing: -0.02em;
+	color: var(--ink);
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+}
+
+.figure-note,
+.summary-meta,
+.stat-meta {
+	color: var(--ink-2);
+	font-size: var(--text-small);
+}
+
+/* An unreported figure must not look like a number — portal `.is-unreported`.
+   Same slot, plainly different typography, so it never reads as a peso value
+   at a glance. */
+.is-unreported {
+	font-family: var(--font-body);
+	font-size: 0.8rem;
+	font-weight: 600;
+	font-style: italic;
+	color: var(--ink-3);
+	letter-spacing: 0;
+}
+
+
+/* ── BUTTON ───────────────────────────────────────────────────────────────
+   Portal source: `.pub-btn` / `.pub-btn--primary`.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.btn,
+.primary-button,
+.secondary-button,
+.ghost-button,
+.an-btn,
+.pub-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 48px;
+	padding: 0 22px;
+	border-radius: var(--radius-control);
+	border: 1px solid var(--line-strong);
+	background: var(--surface);
+	color: var(--ink);
+	font-family: var(--font-body);
+	font-size: 0.95rem;
+	font-weight: 700;
+	text-decoration: none;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: transform .15s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease, color .18s ease;
+}
+
+.btn:hover:not(:disabled),
+.secondary-button:hover:not(:disabled),
+.ghost-button:hover:not(:disabled),
+.an-btn:hover:not(:disabled),
+.pub-btn:hover:not(:disabled) {
+	border-color: var(--accent);
+	color: var(--accent);
+	background: var(--accent-soft);
+}
+
+.btn:active:not(:disabled),
+.primary-button:active:not(:disabled),
+.secondary-button:active:not(:disabled),
+.ghost-button:active:not(:disabled),
+.an-btn:active:not(:disabled) {
+	transform: translateY(1px);
+}
+
+.btn--primary,
+.primary-button,
+.an-btn-primary,
+.pub-btn--primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-ink);
+	box-shadow: 0 4px 14px rgba(14, 107, 77, 0.28);
+}
+
+.btn--primary:hover:not(:disabled),
+.primary-button:hover:not(:disabled),
+.an-btn-primary:hover:not(:disabled),
+.pub-btn--primary:hover:not(:disabled) {
+	background: #0B583F;
+	border-color: #0B583F;
+	color: var(--accent-ink);
+	box-shadow: var(--shadow-lift);
+}
+
+.btn:disabled,
+.primary-button:disabled,
+.secondary-button:disabled,
+.ghost-button:disabled,
+.an-btn:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+	box-shadow: none;
+	transform: none;
+}
+
+/* Compact variant for table rows and toolbars, where a 48px control would
+   set the row height. */
+.btn--sm,
+.text-button {
+	min-height: 36px;
+	padding: 0 12px;
+	font-size: 0.875rem;
+	font-weight: 600;
+	border-radius: var(--radius-control);
+}
+
+
+/* ── STATUS ───────────────────────────────────────────────────────────────
+   Portal source: `.project-status`.
+   Note the portal uses the 10px control radius here, not a pill, and always
+   pairs the tint with a border in the same family — so the badge survives
+   being printed in grey and never depends on colour alone.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.badge,
+.status-pill,
+.status-badge,
+.status-chip,
+.summary-chip,
+.trend-badge,
+.insight-badge,
+.project-status,
+.ai-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 10px;
+	border-radius: var(--radius-control);
+	border: 1px solid var(--line);
+	background: var(--surface-2);
+	color: var(--ink-2);
+	font-family: var(--font-body);
+	font-size: 0.74rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	white-space: nowrap;
+	text-transform: none;
+}
+
+.badge svg,
+.status-pill svg,
+.project-status svg { width: 12px; height: 12px; flex: none; }
+
+.badge--positive,
+.status-approved,
+.status-completed,
+.status-released,
+.summary-chip.positive,
+.trend-badge.positive,
+.project-status {
+	background: var(--positive-soft);
+	color: var(--positive);
+	border-color: rgba(11, 107, 63, 0.26);
+}
+
+.badge--warn,
+.status-pending,
+.status-ongoing,
+.summary-chip.warning,
+.insight-badge.warning {
+	background: var(--warn-soft);
+	color: var(--warn);
+	border-color: rgba(154, 91, 18, 0.26);
+}
+
+.badge--negative,
+.status-rejected {
+	background: var(--negative-soft);
+	color: var(--negative);
+	border-color: rgba(163, 44, 28, 0.26);
+}
+
+.badge--neutral,
+.status-cancelled,
+.status-neutral,
+.summary-chip.neutral,
+.trend-badge.neutral {
+	background: var(--surface-2);
+	color: var(--ink-2);
+	border-color: var(--line-strong);
+}
+
+
+/* ── TABLE ────────────────────────────────────────────────────────────────
+   Portal source: `.pub-table`.
+   Figures right-align and carry tabular numerals, so a column of pesos can
+   be compared down the page instead of read one row at a time.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.table,
+.data-table,
+.user-table,
+.audit-table,
+.an-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.9rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.table caption,
+.an-table-caption {
+	text-align: left;
+	color: var(--ink-3);
+	font-size: 0.84rem;
+	padding-bottom: 10px;
+}
+
+.table th,
+.table td,
+.data-table th,
+.data-table td,
+.user-table th,
+.user-table td,
+.audit-table th,
+.audit-table td,
+.an-table th,
+.an-table td {
+	text-align: left;
+	padding: 12px 16px;
+	border-bottom: 1px solid var(--line);
+}
+
+.table th,
+.data-table th,
+.user-table th,
+.audit-table th,
+.an-table th {
+	font-size: var(--text-label);
+	font-weight: var(--weight-label);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--ink-2);
+	background: var(--surface-2);
+	white-space: nowrap;
+}
+
+.table tfoot td,
+.data-table tfoot td,
+.an-table tfoot td {
+	font-weight: 700;
+	border-bottom: 0;
+	border-top: 2px solid var(--line-strong);
+}
+
+/* Figures right-align wherever they are marked as figures. */
+.table th.num, .table td.num,
+.data-table th.num, .data-table td.num,
+.an-table .align-right,
+.amount-col,
+.text-right {
+	text-align: right;
+	white-space: nowrap;
+}
+
+.table-wrap,
+.pub-table-wrap,
+.an-table-wrap,
+.table-responsive {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+
+/* ── METER ────────────────────────────────────────────────────────────────
+   Portal source: `.util-track` / `.util-fill` / `.util--over`.
+   A 4px track with a hairline, an accent fill, and a warn fill once the
+   value goes over — the over state is announced in text beside it too.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.meter,
+.util-track,
+.allocation-bar,
+.ai-bar {
+	height: 8px;
+	border-radius: var(--radius-bar);
+	background: var(--surface-2);
+	border: 1px solid var(--line);
+	overflow: hidden;
+}
+
+.meter-fill,
+.util-fill,
+.allocation-fill,
+.ai-bar-fill {
+	height: 100%;
+	background: var(--accent);
+	border-radius: inherit;
+	transform-origin: left center;
+	box-shadow: none;
+}
+
+.meter--over .meter-fill,
+.util--over .util-fill,
+.is-over .meter-fill,
+.is-over .allocation-fill {
+	background: var(--warn);
+}
+
+.meter-head,
+.util-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 10px;
+	font-size: 0.82rem;
+	color: var(--ink-2);
+}
+
+.meter-head b,
+.util-head b { font-size: 0.95rem; color: var(--ink); }
+
+
+/* ── RANKED ROW ───────────────────────────────────────────────────────────
+   Portal source: `.alloc-row` — swatch, name (with sub-label), figures.
+   The breakdown lists across the system are all this shape.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.rank-list { list-style: none; margin: 0; padding: 0; }
+
+.rank-row {
+	display: grid;
+	grid-template-columns: 14px minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 10px;
+	border-radius: var(--radius-control);
+	transition: background .16s ease;
+}
+
+.rank-row:hover,
+.rank-row[data-active='true'] { background: var(--surface-2); }
+
+.rank-swatch,
+.an-cat-dot,
+.category-dot,
+.an-legend-dot {
+	width: 14px;
+	height: 14px;
+	border-radius: var(--radius-bar);
+	border: 1px solid rgba(0, 0, 0, .12);
+	flex: none;
+}
+
+.rank-name { min-width: 0; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.rank-name small { display: block; font-weight: 400; color: var(--ink-3); font-size: 0.82rem; }
+
+.rank-figures { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rank-figures strong { display: block; font-weight: 700; }
+.rank-figures span { color: var(--ink-3); font-size: 0.84rem; }
+
+
+/* ── NOTE ─────────────────────────────────────────────────────────────────
+   Portal source: `.spend-coverage`, `.util-pending`, `.progress-update`.
+   A quiet block that explains a caveat without shouting. The rule variant
+   carries a 3px accent edge for anything quoted or highlighted.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.note,
+.form-note,
+.role-note,
+.profile-hint {
+	margin: 0;
+	padding: 11px 13px;
+	border-radius: var(--radius-control);
+	background: var(--surface-2);
+	border: 1px solid var(--line);
+	color: var(--ink-2);
+	font-size: 0.86rem;
+	line-height: 1.55;
+}
+
+.note--pending,
+.sync-banner {
+	background: var(--warn-soft);
+	border: 1px dashed rgba(154, 91, 18, 0.35);
+	color: var(--warn);
+}
+
+.note--rule,
+.progress-update {
+	padding: 12px 14px;
+	border: 0;
+	border-left: 3px solid var(--accent);
+	background: var(--accent-soft);
+	border-radius: 0 var(--radius-control) var(--radius-control) 0;
+	color: var(--ink-2);
+	font-size: 0.88rem;
+	line-height: 1.55;
+}
+
+.note--rule b, .progress-update b { color: var(--ink); }
+
+
+/* ── LEDGER ───────────────────────────────────────────────────────────────
+   Portal source: `.about-ledger` — a titled strip over a list of labelled
+   rows. Used for detail panels and read-only summaries.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.ledger {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-surface);
+	overflow: hidden;
+}
+
+.ledger > h3,
+.ledger-head {
+	margin: 0;
+	font-size: var(--text-label);
+	font-weight: var(--weight-label);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--ink-2);
+	padding: 14px 20px;
+	background: var(--surface-2);
+	border-bottom: 1px solid var(--line);
+}
+
+.ledger ul { list-style: none; margin: 0; padding: 8px 20px 16px; }
+
+.ledger li {
+	display: grid;
+	grid-template-columns: 20px minmax(0, 1fr);
+	gap: 12px;
+	align-items: start;
+	padding: 11px 0;
+	font-size: 0.93rem;
+	color: var(--ink-2);
+}
+
+.ledger li svg { width: 18px; height: 18px; margin-top: 3px; color: var(--accent); }
+.ledger li b { color: var(--ink); font-weight: 700; }
+
+
+/* ── DISCLOSURE ───────────────────────────────────────────────────────────
+   Portal source: `.pub-disclosure`. A chart always has a table behind it.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.disclosure,
+.pub-disclosure {
+	margin-top: 20px;
+	border-top: 1px solid var(--line);
+	padding-top: 16px;
+}
+
+.disclosure > summary,
+.pub-disclosure summary {
+	cursor: pointer;
+	font-weight: 700;
+	color: var(--accent);
+	font-size: 0.9rem;
+	list-style: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: var(--tap);
+}
+
+.disclosure > summary::-webkit-details-marker { display: none; }
+
+.disclosure > summary::before {
+	content: '';
+	width: 8px;
+	height: 8px;
+	border-right: 2px solid currentColor;
+	border-bottom: 2px solid currentColor;
+	transform: rotate(-45deg);
+	transition: transform .18s ease;
+}
+
+.disclosure[open] > summary::before { transform: rotate(45deg); }
+
+
+/* ── TOOLTIP ──────────────────────────────────────────────────────────────
+   Portal source: `.pub-tooltip`.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.tooltip,
+.pub-tooltip {
+	background: var(--surface);
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius-control);
+	padding: 12px 14px;
+	box-shadow: var(--shadow-lift);
+	font-size: 0.85rem;
+	color: var(--ink);
+	max-width: 260px;
+}
+
+.tooltip b, .pub-tooltip b {
+	display: block;
+	margin-bottom: 8px;
+	font-family: var(--font-display);
+}
+
+
+/* ── EMPTY / ERROR ────────────────────────────────────────────────────────
+   Portal source: `.pub-empty` / `.pub-error`.
+   An empty region reads as deliberately empty, never as broken.
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* `.empty-state` and `.ai-empty` are deliberately NOT in this group: they
+   are used on bare <p> inside modals and on <td colSpan> inside tables,
+   where a 620px centred card would be nonsense. They keep the quiet inline
+   treatment below. The panel form is for a whole region that has no rows. */
+.empty,
+.pub-empty,
+.an-empty-state-card {
+	max-width: 620px;
+	margin-inline: auto;
+	padding: clamp(28px, 4vw, 44px) 32px;
+	text-align: center;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-surface);
+	color: var(--ink-2);
+}
+
+.empty svg,
+.an-empty-state-card svg { width: 30px; height: 30px; color: var(--accent); }
+
+.empty h3,
+.an-empty-state-card h3 {
+	margin: 14px 0 8px;
+	font-family: var(--font-display);
+	font-size: 1.1rem;
+	color: var(--ink);
+}
+
+/* Inline "nothing here" text — a row in a table, a line in a modal. */
+.empty-state,
+.ai-empty {
+	margin: 0;
+	color: var(--ink-3);
+	font-size: var(--text-small);
+	line-height: 1.55;
+	text-align: center;
+}
+
+
+/* ── SKELETON ─────────────────────────────────────────────────────────────
+   Portal source: `.pub-skeleton`.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.skeleton,
+.an-skel,
+.an-skel-table {
+	border-radius: var(--radius-surface);
+	background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 50%, var(--surface-2) 75%);
+	background-size: 240% 100%;
+	animation: systemShimmer 1.4s linear infinite;
+	border: 1px solid var(--line);
+}
+
+@keyframes systemShimmer { to { background-position: -240% 0; } }
+
+
+/* ── FIELD ────────────────────────────────────────────────────────────────
+   Controls take the portal's control radius and a real 44px target.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.field input,
+.field textarea,
+.field select,
+.an-select,
+.panel-select,
+.filter-year,
+.status-select,
+.status-filter {
+	min-height: var(--tap);
+	padding: 11px 14px;
+	border-radius: var(--radius-control);
+	border: 1px solid var(--line-strong);
+	background: var(--surface);
+	color: var(--ink);
+	font-family: var(--font-body);
+	font-size: var(--text-body);
+	transition: box-shadow .18s ease, border-color .18s ease;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus,
+.an-select:focus,
+.panel-select:focus {
+	outline: none;
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.field textarea { resize: vertical; }
+
+
+/* ── RESPONSIVE ───────────────────────────────────────────────────────────
+   Portal source: its 760px breakpoint. A ranked row drops its third column
+   and the figures move under the name rather than being squeezed.
+   ─────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+
+	.rank-row { grid-template-columns: 14px minmax(0, 1fr); }
+	.rank-figures { grid-column: 2; text-align: left; }
+
+	.btn,
+	.primary-button,
+	.secondary-button { min-height: var(--tap); }
+
+	.table th,
+	.table td,
+	.data-table th,
+	.data-table td { padding: 11px 12px; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DEPTH — glass and gradients
+
+   Two rules govern this whole section, and they are what keep it from
+   costing legibility on a system that is mostly money:
+
+   1. GLASS goes on chrome that floats OVER content — the drawer, sticky
+      bars, dropdowns, modals, the bottom nav. It never goes on a card or
+      table that holds figures. Translucency behind a peso column means the
+      contrast under it changes as the user scrolls, which is precisely the
+      case the style's own accessibility warning is about.
+
+   2. GRADIENTS stay inside the palette. Every stop is a colour the tokens
+      already hold, so a gradient cannot introduce a hue the charts and
+      legends do not know about. They also stay off anything that encodes
+      data — a gradient-filled bar reads as a value that changes along its
+      length.
+
+   Opaque surfaces get depth from a light source instead: `--sheen`, a
+   one-pixel highlight along the top edge.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+
+/* ── Ground ───────────────────────────────────────────────────────────────
+   Glass needs something behind it or it is just a grey box. Two very low
+   tints and a vertical fall give the blur something to pick up.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.dashboard {
+	background: var(--grad-ground);
+}
+
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────
+   Opaque, not glass. It sits beside the content rather than over it, and a
+   translucent rail on a light page washes to grey. Depth comes from the
+   brand gradient plus a top sheen.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.dashboard-sidebar {
+	background: var(--grad-brand);
+	box-shadow: var(--shadow), var(--sheen-dark);
+}
+
+.sidebar-tab.is-active {
+	background: var(--grad-accent);
+	box-shadow: 0 2px 10px rgba(2, 53, 60, .28), var(--sheen-dark);
+}
+
+
+/* ── Floating chrome — real glass ─────────────────────────────────────────
+   Everything here overlays content, so it earns the blur.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.dashboard-mobile-header,
+.notification-dropdown,
+.global-search-modal,
+.chat-widget-panel,
+.mobile-bottom-nav {
+	background: var(--glass);
+	backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+	-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+	border-color: var(--glass-edge);
+	box-shadow: var(--glass-shadow), var(--sheen);
+
+	/* Compositing the glass over the ground lightens whatever sits behind
+	   it, which drops the muted inks below 4.5:1 — measured, --ink-3 lands
+	   at 4.47:1 on the composited surface, and both muted steps fail if the
+	   panel passes over anything dark. Promote them one step inside glass
+	   only. Worst measured case is now 4.87:1. */
+	--ink-3: #40605F;
+	--ink-2: #2E4E4D;
+}
+
+/* A modal holds forms and figures, so it takes the strong mix — enough
+   translucency to read as layered, not enough to disturb what is on it. */
+.modal-content {
+	background: var(--glass-strong);
+	backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+	-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+	border-color: var(--glass-edge);
+	box-shadow: var(--shadow-lift), var(--sheen);
+}
+
+.modal-overlay,
+.sidebar-scrim,
+.global-search-overlay {
+	background: rgba(2, 53, 60, 0.40);
+	backdrop-filter: blur(10px) saturate(120%);
+	-webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+
+/* The mobile drawer floats over the page, so unlike the docked rail it does
+   take glass — over its own brand gradient, not over the page. */
+@media (max-width: 720px) {
+	.dashboard-sidebar,
+	.dashboard-sidebar.is-collapsed {
+		background: var(--grad-brand);
+		box-shadow: 0 18px 44px rgba(2, 53, 60, 0.45), var(--sheen-dark);
+	}
+}
+
+
+/* ── Small chrome ─────────────────────────────────────────────────────────
+   Toolbar controls pick up a light gradient and a sheen so they read as
+   raised against the ground rather than drawn on it.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.search-field,
+.icon-button,
+.user-chip,
+.mobile-icon-button,
+.page-tabs,
+.filter-toggle,
+.an-toggle {
+	background: var(--grad-surface);
+	box-shadow: var(--sheen);
+}
+
+.page-tabs,
+.filter-toggle,
+.an-toggle {
+	background: var(--grad-header);
+}
+
+
+/* ── Panels ───────────────────────────────────────────────────────────────
+   Opaque. The only depth added is the top-edge sheen, which is what makes a
+   card read as a raised plane without putting anything between the reader
+   and the number on it.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.panel,
+.overview-card,
+.panel-card,
+.summary-card,
+.stat-card,
+.insight-card,
+.details-panel,
+.ledger,
+.an-card,
+.an-chart-card,
+.an-ai-summary-card,
+.an-metric-card {
+	background: var(--grad-surface);
+	box-shadow: var(--shadow), var(--sheen);
+}
+
+.panel:hover,
+.overview-card:hover,
+.panel-card:hover,
+.summary-card:hover,
+.stat-card:hover,
+.insight-card:hover,
+.an-card:hover,
+.an-chart-card:hover {
+	box-shadow: var(--shadow-lift), var(--sheen);
+}
+
+/* Table headers get the same raised treatment as other chrome. */
+.table th,
+.data-table th,
+.user-table th,
+.audit-table th,
+.an-table th {
+	background: var(--grad-header);
+	box-shadow: var(--sheen);
+}
+
+
+/* ── Primary action ───────────────────────────────────────────────────────
+   The one filled control on a page takes the accent gradient, so the action
+   the page wants is the only gradient in the reading area.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.btn--primary,
+.primary-button,
+.an-btn-primary,
+.pub-btn--primary {
+	background: var(--grad-accent);
+	box-shadow: 0 4px 14px rgba(14, 107, 77, 0.30), var(--sheen-dark);
+}
+
+.btn--primary:hover:not(:disabled),
+.primary-button:hover:not(:disabled),
+.an-btn-primary:hover:not(:disabled) {
+	background: linear-gradient(135deg, #0E7554 0%, #0B583F 58%, #094832 100%);
+	box-shadow: var(--shadow-lift), var(--sheen-dark);
+}
+
+
+/* ── What deliberately stays flat ─────────────────────────────────────────
+   Anything whose fill encodes a value. A gradient along a bar reads as a
+   quantity changing across its length, and a chart legend swatch has to be
+   the exact colour of the series it names.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.meter-fill,
+.util-fill,
+.allocation-fill,
+.ai-bar-fill,
+.rank-swatch,
+.an-cat-dot,
+.category-dot,
+.an-legend-dot,
+.badge,
+.status-pill,
+.status-badge,
+.status-chip,
+.summary-chip,
+.trend-badge,
+.insight-badge {
+	background-image: none;
+	box-shadow: none;
+}
+
+
+/* ── Fallbacks ────────────────────────────────────────────────────────────
+   Without backdrop-filter, a translucent panel is just unreadable text on
+   whatever happens to be underneath. Go opaque instead.
+   ─────────────────────────────────────────────────────────────────────── */
+
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+
+	.dashboard-mobile-header,
+	.notification-dropdown,
+	.global-search-modal,
+	.chat-widget-panel,
+	.mobile-bottom-nav,
+	.modal-content {
+		background: var(--surface);
+	}
+
+	.modal-overlay,
+	.sidebar-scrim,
+	.global-search-overlay { background: rgba(2, 53, 60, 0.62); }
+}
+
+/* Some people turn transparency off at the OS level, usually because it
+   makes interfaces harder to read. Honour that. */
+@media (prefers-reduced-transparency: reduce) {
+
+	.dashboard-mobile-header,
+	.notification-dropdown,
+	.global-search-modal,
+	.chat-widget-panel,
+	.mobile-bottom-nav,
+	.modal-content {
+		background: var(--surface);
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+
+	.modal-overlay,
+	.sidebar-scrim,
+	.global-search-overlay {
+		background: rgba(2, 53, 60, 0.62);
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+
+	.dashboard { background: var(--bg); }
+}
+
+/* The search modal's inner body painted an opaque surface over the glass,
+   which cancelled it. Let the shell's own background show through. */
+.global-search-modal .gs-body,
+.global-search-modal .gs-header { background: transparent; }
+
+
+/* ── Table section band ───────────────────────────────────────────────────
+   A full-width caption row inside a table head, naming the section the
+   columns beneath it belong to ("BUDGET BREAKDOWN", "ADDITIONAL EXPENSES").
+
+   This needs its own class because setting it inline does not work. The
+   `th` rule above paints `background: var(--grad-header)` — a shorthand,
+   so it sets a light gradient IMAGE. An inline `background-color` sits
+   BEHIND that image and never shows, which left these bands rendering as
+   a light gradient carrying white text: invisible. Using the shorthand
+   here clears the image, and the sheen goes with it.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.table th.table-band,
+.data-table th.table-band,
+.an-table th.table-band {
+	background: var(--brand);
+	color: var(--ink-on-dark);
+	box-shadow: none;
+	text-align: center;
+	padding: 10px 12px;
+	font-size: var(--text-label);
+	font-weight: var(--weight-label);
+	letter-spacing: 0.06em;
+	white-space: normal;
+	border-bottom: 0;
+}
+
+
+/* ── Destructive action ───────────────────────────────────────────────────
+   Same visual weight as the primary button, opposite meaning.
+
+   This needs a class for the same reason the band above does. The confirm
+   buttons on the approvals modals carried an inline
+   `background-color: var(--negative)`, but `.primary-button` paints
+   `background: var(--grad-accent)` — a green IMAGE that sits in front of
+   any inline colour. "Confirm Reject" and "Confirm Cancel" were therefore
+   rendering in the affirmative accent: a destructive action wearing the
+   colour of approval.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.btn--danger,
+.primary-button.is-danger,
+.an-btn-primary.is-danger {
+	background: var(--negative);
+	border-color: var(--negative);
+	color: #FFFFFF;
+	box-shadow: 0 4px 14px rgba(163, 44, 28, 0.30), var(--sheen-dark);
+}
+
+.btn--danger:hover:not(:disabled),
+.primary-button.is-danger:hover:not(:disabled),
+.an-btn-primary.is-danger:hover:not(:disabled) {
+	background: #8A2517;
+	border-color: #8A2517;
+	box-shadow: var(--shadow-lift), var(--sheen-dark);
+}
+
+
+/* ── Ledger table proportions ─────────────────────────────────────────────
+   The six-column ledger shape — date, description, category, amount, status,
+   actions — sized every column to its content, which bunched the row against
+   the left edge and dumped all the leftover width into a gap trailing the
+   action buttons. These proportions spend the full width on purpose: the
+   description column absorbs the slack because it is the only free text in
+   the row, and every other column gets close to what its content needs.
+
+   Widths are declared on `thead th` alone. Under `table-layout: fixed` the
+   first row alone determines the columns, so this is sufficient — and it
+   keeps the rules off the body, where the expandable `.details-row` cell
+   spans all six columns and would otherwise pick up a 12% width.
+
+   Fixed layout is what makes these percentages exact rather than advisory.
+   It starts at 900px: below that the columns get too narrow to honour, and
+   at 600px the table switches to the stacked card view anyway.
+   ─────────────────────────────────────────────────────────────────────── */
+
+@media (min-width: 900px) {
+	.data-table--ledger { table-layout: fixed; }
+
+	/* Direct children only. The expandable details row hosts nested
+	   .data-table breakdowns, and a descendant selector would push these
+	   six-column widths onto their four columns. */
+	.data-table--ledger > thead > tr > th:nth-child(1) { width: 12%; }  /* date        */
+	.data-table--ledger > thead > tr > th:nth-child(2) { width: 28%; }  /* description */
+	.data-table--ledger > thead > tr > th:nth-child(3) { width: 16%; }  /* category    */
+	.data-table--ledger > thead > tr > th:nth-child(4) { width: 12%; }  /* amount      */
+	.data-table--ledger > thead > tr > th:nth-child(5) { width: 12%; }  /* status      */
+	.data-table--ledger > thead > tr > th:nth-child(6) { width: 20%; }  /* actions     */
+
+	/* The buttons sit against the right edge, so the row ends where the
+	   table ends instead of trailing the gap this rule exists to close. */
+	.data-table--ledger > thead > tr > th:nth-child(6) { text-align: right; }
+	.data-table--ledger > tbody > tr > td .table-actions,
+	.data-table--ledger > tbody > tr > td.table-actions { justify-content: flex-end; }
+
+	/* Free text is the one thing allowed to wrap — it has the width for it.
+	   `anywhere` so an unbroken string cannot push the column open again. */
+	.data-table--ledger > tbody > tr > td:nth-child(2) { overflow-wrap: anywhere; }
+}

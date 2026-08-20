@@ -12,7 +12,8 @@ import {
   MetricCard, ChartCard, StatusBadge, EmptyState, DataTable,
 } from '../../components/analysis/AnalysisUI'
 import { buildVarianceInsights } from '../../utils/insights'
-import { formatCurrency, formatPercentage, CHART_COLORS } from '../../utils/analytics'
+import { formatCurrency, formatPercentage, CHART_COLORS, CHART_INK, pesoTick } from '../../utils/analytics'
+
 import { exportToCsv } from '../../utils/exportCsv'
 import { exportBudgetVsActualPdf } from '../../utils/exportPdf'
 
@@ -21,7 +22,7 @@ const BREADCRUMB = [{ label: 'Home', to: '/dashboard' }, { label: 'Analysis', to
 function Money({ active, payload, label }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="an-card" style={{ padding: 12, gap: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}>
+    <div className="an-card" style={{ padding: 12, gap: 6, boxShadow: 'var(--shadow-lift)' }}>
       <strong style={{ fontSize: 13 }}>{label}</strong>
       {payload.map((p) => (
         <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 12 }}>
@@ -81,7 +82,7 @@ export default function BudgetVsActualPage() {
     { key: 'label', header: 'Month' },
     { key: 'budget', header: 'Budget', align: 'right', render: (r) => formatCurrency(r.budget) },
     { key: 'spending', header: 'Spending', align: 'right', render: (r) => formatCurrency(r.spending) },
-    { key: 'variance', header: 'Variance', align: 'right', render: (r) => <span style={{ color: r.variance < 0 ? '#DC6B4F' : '#237c57', fontWeight: 600 }}>{formatCurrency(r.variance)}</span> },
+    { key: 'variance', header: 'Variance', align: 'right', render: (r) => <span style={{ color: r.variance < 0 ? 'var(--negative)' : 'var(--positive)', fontWeight: 600 }}>{formatCurrency(r.variance)}</span> },
     { key: 'percentUsed', header: 'Used', align: 'right', render: (r) => formatPercentage(r.percentUsed, 0) },
     { key: 'status', header: 'Status', align: 'center', render: (r) => <StatusBadge status={r.status} /> },
   ]
@@ -111,10 +112,10 @@ export default function BudgetVsActualPage() {
               <div ref={chartRef}>
               <ResponsiveContainer width="100%" height={340}>
                 <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e8eff0" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
-                  <YAxis tickFormatter={(v) => `₱${(v / 1000).toLocaleString()}k`} tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} width={64} />
-                  <Tooltip content={<Money />} cursor={{ fill: 'rgba(16,116,99,0.06)' }} />
+                  <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
+                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={pesoTick} tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} width={64} />
+                  <Tooltip content={<Money />} cursor={{ fill: CHART_INK.cursor }} />
                   <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 13, paddingTop: 12 }} />
                   <Bar dataKey="Allocated Budget" fill={CHART_COLORS.budget} radius={[4, 4, 0, 0]} maxBarSize={34} />
                   <Bar dataKey="Approved Spending" fill={CHART_COLORS.actual} radius={[4, 4, 0, 0]} maxBarSize={34} />

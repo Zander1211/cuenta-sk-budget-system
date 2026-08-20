@@ -12,6 +12,7 @@ import {
 import { buildUtilizationInsights } from '../../utils/insights'
 import {
   formatCurrency, formatPercentage, periodLabel, safeDivide, utilizationStatus,
+  CHART_COLORS,
 } from '../../utils/analytics'
 import { exportToCsv } from '../../utils/exportCsv'
 
@@ -95,8 +96,8 @@ export default function BudgetUtilizationPage() {
                 <ResponsiveContainer width="100%" height={240}>
                   <PieChart>
                     <Pie data={donutData} dataKey="value" innerRadius="64%" outerRadius="90%" paddingAngle={2} startAngle={90} endAngle={-270}>
-                      <Cell fill={over ? '#DC6B4F' : '#0E9F6E'} />
-                      <Cell fill="#dceceb" />
+                      <Cell fill={over ? CHART_COLORS.danger : CHART_COLORS.primaryLine} />
+                      <Cell fill={CHART_COLORS.remaining} />
                     </Pie>
                     <Tooltip formatter={(v) => formatCurrency(v)} />
                   </PieChart>
@@ -108,11 +109,11 @@ export default function BudgetUtilizationPage() {
               </div>
               <div className="an-legend">
                 <div className="an-legend-item">
-                  <span className="an-legend-left"><span className="an-legend-dot" style={{ background: over ? '#DC6B4F' : '#0E9F6E' }} />Utilized</span>
+                  <span className="an-legend-left"><span className="an-legend-dot" style={{ background: over ? CHART_COLORS.danger : CHART_COLORS.primaryLine }} />Utilized</span>
                   <span className="an-legend-val">{formatCurrency(util.utilizedBudget)}</span>
                 </div>
                 <div className="an-legend-item">
-                  <span className="an-legend-left"><span className="an-legend-dot" style={{ background: '#dceceb' }} />Remaining</span>
+                  <span className="an-legend-left"><span className="an-legend-dot" style={{ background: CHART_COLORS.remaining }} />Remaining</span>
                   <span className="an-legend-val">{formatCurrency(Math.max(0, util.remainingBudget))}</span>
                 </div>
               </div>

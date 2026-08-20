@@ -345,9 +345,9 @@ function MainDashboardPage() {
 
       <section className="summary-grid">
         {!hasBudgetData && pendingCount === 0 && missingDocsCount === 0 && totalExpenses === 0 ? (
-          <div className="empty-state" style={{ gridColumn: '1 / -1', padding: '48px', textAlign: 'center', background: '#fff', borderRadius: '12px', border: '1px dashed #d1d5db' }}>
-            <h3 style={{ color: '#4b5563', marginBottom: '8px' }}>No data available</h3>
-            <p style={{ color: '#6b7280' }}>There are no budget allocations, pending requests, or expenses recorded for {periodLabel}.</p>
+          <div className="empty-state" style={{ gridColumn: '1 / -1', padding: '48px', textAlign: 'center', background: 'var(--surface)', borderRadius: 'var(--radius-surface)', border: '1px dashed #d1d5db' }}>
+            <h3 style={{ color: 'var(--ink-2)', marginBottom: '8px' }}>No data available</h3>
+            <p style={{ color: 'var(--ink-3)' }}>There are no budget allocations, pending requests, or expenses recorded for {periodLabel}.</p>
           </div>
         ) : null}
         {summaryCards.map((card) => {

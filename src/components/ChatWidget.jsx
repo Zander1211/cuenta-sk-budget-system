@@ -112,6 +112,13 @@ class ChatErrorBoundary extends React.Component {
   }
 }
 
+/*
+ * How many past turns are replayed to the model. Cue's figures all arrive in
+ * systemContext, not in the transcript, so a long history buys nothing and
+ * costs accuracy by pushing the data block out of the model's attention.
+ */
+const MAX_CHAT_HISTORY = 12
+
 export default function ChatWidget() {
   const { user } = useAuth()
 
@@ -243,7 +250,14 @@ function ChatWidgetInner() {
       }
     })
 
-    // Group expenses by month and year
+    // Group expenses by month and year.
+    //
+    // type / projectStatus / isAdditional used to be dropped here, which is
+    // why Cue answered "No approved projects are recorded in the system" while
+    // the Projects & Events page listed four. An approved request becomes an
+    // expense row, so these ARE the projects and events — but without `type`
+    // nothing in the payload was identifiable as a project or an event, and
+    // without `projectStatus` nothing could be reported as Ongoing/Completed.
     const expensesList = (expenses || []).map(e => {
       const dateVal = e.date || e.eventDate || e.approvedAt || e.createdAt
       const d = dateVal ? new Date(dateVal) : null
@@ -252,9 +266,14 @@ function ChatWidgetInner() {
       return {
         id: e.id,
         project: e.project || e.event || 'Expense',
+        type: e.type || 'Project',
         amount: Number(e.amount) || 0,
         category: e.category || 'Other',
         status: e.status || 'Approved',
+        projectStatus: e.projectStatus || null,
+        isAdditional: !!e.isAdditional,
+        archived: !!e.archivedAt,
+        venue: e.venue || '',
         month: mNum ? MONTH_NAMES[mNum - 1] : null,
         monthNumber: mNum,
         year: yNum,
@@ -272,6 +291,7 @@ function ChatWidgetInner() {
       return {
         id: r.id,
         event: r.event || r.project || 'Request',
+        type: r.type || 'Project',
         amount: Number(r.amount) || 0,
         status: r.status || 'Pending',
         category: r.category || 'Other',
@@ -357,6 +377,7 @@ function ChatWidgetInner() {
       'annual', 'monthly', 'quarterly', 'q1', 'q2', 'q3', 'q4',
       'category', 'breakdown', 'comparison', 'compare', 'vs', 'versus',
       'archive', 'archived', 'status', 'missing receipt',
+      'implement', 'implemented', 'implementation', 'utilized', 'utilization',
       'user management', 'user role', 'chairman', 'treasurer', 'secretary',
       'dilg', 'procurement', 'bidding'
     ]
@@ -417,7 +438,10 @@ function ChatWidgetInner() {
     }
 
     // 4. Extract Record Type Intent
-    const isExpenseQuery = text.includes('expense') || text.includes('spent') || text.includes('spending') || text.includes('disbursement')
+    /* "Implemented / utilized / used budget" asks how much was put into
+       action, which is the expense total — answering it with the allocated
+       budget is the wrong figure whenever the two differ. */
+    const isExpenseQuery = text.includes('expense') || text.includes('spent') || text.includes('spending') || text.includes('disbursement') || /\b(implement\w*|utili[sz]\w*|used|executed|disbursed)\b/.test(text)
     const isRemainingQuery = text.includes('remaining') || text.includes('balance') || text.includes('left')
     const isSuggestionQuery = text.includes('suggest') || text.includes('recommend') || text.includes('where should') || text.includes('where to spend') || text.includes('how to spend') || text.includes('how should i use') || text.includes('how to allocate') || text.includes('allocate') || text.includes('project suggestion')
 
@@ -436,6 +460,23 @@ function ChatWidgetInner() {
 
     if (isPatternQuery) {
       return buildSpendingPatternAnalysis(systemCtx, allExpenses, targetYear, targetMonth)
+    }
+
+    /* "What is the newest project in August" names a RECORD; it is not asking
+       for a total. Without this the question fell through to the month rules
+       below and came back with August's allocated budget — the answer to a
+       different question, and the same answer for every project question
+       asked about the same month.
+
+       Both cues are required. The record noun alone would hijack "what is the
+       project budget for August", which really does want a total, so a
+       listing cue ("newest", "which", "list", "how many"...) must appear too.
+       Expense and remaining questions keep their own rules below. */
+    const mentionsRecordNoun = /\b(projects?|events?|activit(?:y|ies)|programs?)\b/.test(text)
+    const hasListingCue = /\b(newest|latest|most recent|recent|list|which|name|how many|what are|show)\b/.test(text)
+
+    if (mentionsRecordNoun && hasListingCue && !isExpenseQuery && !isRemainingQuery) {
+      return buildProjectListing(allExpenses, allRequests, targetMonth, targetYear, currentYear, text)
     }
 
     // -------------------------------------------------------------
@@ -568,6 +609,94 @@ function ChatWidgetInner() {
    * where there is too little data to support a claim the claim is omitted
    * rather than softened.
    */
+  /*
+   * Answers questions that name projects or events rather than asking for a
+   * total: "what is the newest project in August", "which events ran in Q3",
+   * "how many projects this year".
+   *
+   * Approved projects and events live in allExpenses — that is what an
+   * approved request becomes. allRequests still holds the pending ones, so a
+   * "newest" question can say something useful for a period where nothing has
+   * been approved yet instead of just reporting nothing.
+   */
+  function buildProjectListing(allExpenses, allRequests, targetMonth, targetYear, currentYear, text) {
+    const effectiveYear = targetYear || currentYear
+    const period = targetMonth ? `${targetMonth} ${effectiveYear}` : `${effectiveYear}`
+
+    const inPeriod = (r) =>
+      Number(r.year) === effectiveYear &&
+      (!targetMonth || String(r.month || '').toLowerCase() === targetMonth.toLowerCase())
+
+    // Newest first. Records with no usable date sort last rather than
+    // silently taking the top spot in a "newest" answer.
+    const byNewest = (a, b) => {
+      const ta = a.date ? new Date(a.date).getTime() : NaN
+      const tb = b.date ? new Date(b.date).getTime() : NaN
+      if (Number.isNaN(ta) && Number.isNaN(tb)) return 0
+      if (Number.isNaN(ta)) return 1
+      if (Number.isNaN(tb)) return -1
+      return tb - ta
+    }
+
+    const approved = (allExpenses || []).filter(e => !e.isAdditional && inPeriod(e)).sort(byNewest)
+    const pending = (allRequests || []).filter(
+      r => inPeriod(r) && String(r.status || '').toLowerCase() === 'pending'
+    )
+
+    const money = (n) => `₱${Number(n || 0).toLocaleString('en-PH')}`
+
+    const describe = (e) => {
+      const when = e.date && !Number.isNaN(new Date(e.date).getTime())
+        ? new Date(e.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+        : 'date not recorded'
+      return `"${e.project}" — ${money(e.amount)} | ${e.category || 'Uncategorized'} | ${e.status || 'Approved'} | ${when}`
+    }
+
+    const plural = (n, one, many) => (n === 1 ? one : many)
+
+    if (approved.length === 0) {
+      if (pending.length > 0) {
+        const lines = pending.map(r => `- "${r.event}" — ${money(r.amount)} (${r.status})`).join('\n')
+        return [
+          `No approved projects or events are recorded for ${period}.`,
+          '',
+          `There ${plural(pending.length, 'is', 'are')} ${pending.length} pending ${plural(pending.length, 'request', 'requests')} for that period:`,
+          lines,
+        ].join('\n')
+      }
+      return `No projects or events are recorded for ${period}.`
+    }
+
+    const listAll = approved.map(e => `- ${describe(e)}`).join('\n')
+
+    if (/\b(how many|count)\b/.test(text)) {
+      return [
+        `${approved.length} ${plural(approved.length, 'project or event is', 'projects and events are')} recorded for ${period}.`,
+        '',
+        listAll,
+      ].join('\n')
+    }
+
+    if (/\b(newest|latest|most recent|recent)\b/.test(text)) {
+      const newest = approved[0]
+      const others = approved.slice(1)
+      if (others.length === 0) {
+        return `The most recent project recorded for ${period} is ${describe(newest)}.`
+      }
+      return [
+        `The most recent project recorded for ${period} is ${describe(newest)}.`,
+        '',
+        `${others.length} ${plural(others.length, 'other is', 'others are')} recorded for that period:`,
+        others.map(e => `- ${describe(e)}`).join('\n'),
+      ].join('\n')
+    }
+
+    return [
+      `Projects and events recorded for ${period} (${approved.length} total):`,
+      listAll,
+    ].join('\n')
+  }
+
   function buildSpendingPatternAnalysis(systemCtx, allExpenses, targetYear, targetMonth) {
     const peso = value => `₱${Number(value || 0).toLocaleString('en-PH')}`
 
@@ -834,9 +963,12 @@ function ChatWidgetInner() {
 
     try {
       // Call Groq AI via Supabase Edge Function
+      // Only the recent turns are replayed. Every figure Cue can quote already
+      // travels in systemContext, so older turns add no information — they just
+      // crowd the data out of the model's context and make late answers drift.
       const { data, error } = await supabase.functions.invoke('chatbot', {
         body: {
-          messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
+          messages: updatedMessages.slice(-MAX_CHAT_HISTORY).map(m => ({ role: m.role, content: m.content })),
           systemContext: systemCtx,
         },
       })
@@ -858,13 +990,18 @@ function ChatWidgetInner() {
         // reply is already plain text, use as-is
       }
 
-      if (!replyText) {
+      // An empty reply means the model returned nothing usable; fall back, but
+      // flag it, because the rule engine answers in a different voice and an
+      // unlabelled switch reads as the assistant contradicting itself.
+      const usedFallback = !replyText
+      if (usedFallback) {
         replyText = processFinancialQuery(userText, systemCtx)
       }
 
       const assistantMsg = {
         role: 'assistant',
         content: replyText,
+        offline: usedFallback,
         timestamp: new Date().toISOString(),
       }
 
@@ -879,6 +1016,7 @@ function ChatWidgetInner() {
       const assistantFallbackMsg = {
         role: 'assistant',
         content: fallbackMsg,
+        offline: true,
         timestamp: new Date().toISOString(),
       }
 
@@ -904,7 +1042,7 @@ function ChatWidgetInner() {
         className="chat-widget-fab fixed right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-[9999] transition-all duration-300 cursor-pointer border-none"
         style={{
           background: 'linear-gradient(135deg, #0C2E30 0%, #12805C 50%, #12b89a 100%)',
-          boxShadow: '0 12px 24px rgba(18, 128, 92, 0.3), inset 0 2px 4px rgba(255,255,255,0.2)',
+          boxShadow: 'var(--shadow-lift)',
         }}
         aria-label={isOpen ? 'Close chat' : 'Open chat'}
       >
@@ -919,7 +1057,7 @@ function ChatWidgetInner() {
               top: '-4px',
               right: '-4px',
               fontSize: '10px',
-              background: '#ef4444',
+              background: 'var(--negative)',
               animation: 'cue-pulse 2s infinite ease-in-out',
             }}
           >
@@ -942,9 +1080,9 @@ function ChatWidgetInner() {
               right: '24px',
               width: 'min(400px, 92vw)',
               height: 'min(520px, 75vh)',
-              background: '#ffffff',
-              borderRadius: '18px',
-              boxShadow: '0 20px 60px rgba(15, 31, 54, 0.22), 0 0 0 1px rgba(15, 31, 54, 0.08)',
+              background: 'var(--surface)',
+              borderRadius: 'var(--radius-surface)',
+              boxShadow: 'var(--shadow-lift)',
             }}
           >
             {/* Header */}
@@ -984,7 +1122,7 @@ function ChatWidgetInner() {
               data-lenis-prevent
               className="flex-1 overflow-y-auto px-4 py-3"
               style={{
-                background: '#f8fafc',
+                background: 'var(--surface-2)',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '12px',
@@ -1016,18 +1154,29 @@ function ChatWidgetInner() {
                       wordBreak: 'break-word',
                       ...(msg.role === 'user'
                         ? {
-                            background: '#12805C',
-                            color: '#ffffff',
+                            background: 'var(--accent)',
+                            color: 'var(--accent-ink)',
                           }
                         : {
-                            background: '#ffffff',
-                            color: '#1e293b',
-                            border: '1px solid #e2e8f0',
-                            boxShadow: '0 1px 3px rgba(15, 31, 54, 0.04)',
+                            background: 'var(--surface)',
+                            color: 'var(--ink)',
+                            border: '1px solid var(--line)',
+                            boxShadow: 'var(--shadow)',
                           }),
                     }}
                   >
                     {msg.content}
+                    {msg.offline && (
+                      <div style={{
+                        marginTop: '8px',
+                        paddingTop: '6px',
+                        borderTop: '1px solid var(--line)',
+                        fontSize: '0.72rem',
+                        color: 'var(--ink-3)',
+                      }}>
+                        Answered offline from your recorded figures — the AI service was unreachable.
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1044,11 +1193,11 @@ function ChatWidgetInner() {
                   <div
                     className="flex gap-1 items-center"
                     style={{
-                      background: '#ffffff',
-                      border: '1px solid #e2e8f0',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--line)',
                       borderRadius: '4px 16px 16px 16px',
                       padding: '12px 14px',
-                      boxShadow: '0 1px 3px rgba(15, 31, 54, 0.04)',
+                      boxShadow: 'var(--shadow)',
                     }}
                   >
                     {[0, 150, 300].map(delay => (
@@ -1057,7 +1206,7 @@ function ChatWidgetInner() {
                         style={{
                           width: '6px',
                           height: '6px',
-                          background: '#94a3b8',
+                          background: 'var(--ink-3)',
                           borderRadius: '50%',
                           animation: 'cue-bounce 1.4s infinite both',
                           animationDelay: `${delay}ms`,
@@ -1079,12 +1228,12 @@ function ChatWidgetInner() {
                       style={{
                         fontSize: '0.8rem',
                         padding: '7px 12px',
-                        background: '#ffffff',
-                        border: '1px solid #cbd5e1',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--line-strong)',
                         borderRadius: '999px',
-                        color: '#334155',
+                        color: 'var(--ink-2)',
                         textAlign: 'left',
-                        boxShadow: '0 1px 2px rgba(15, 31, 54, 0.04)',
+                        boxShadow: 'var(--shadow)',
                       }}
                       onMouseEnter={e => {
                         e.currentTarget.style.background = '#EEF9F4'
@@ -1112,7 +1261,7 @@ function ChatWidgetInner() {
               style={{
                 borderTop: '1px solid #e2e8f0',
                 padding: '10px 12px',
-                background: '#ffffff',
+                background: 'var(--surface)',
               }}
             >
               <textarea
@@ -1135,12 +1284,12 @@ function ChatWidgetInner() {
                   flex: 1,
                   resize: 'none',
                   fontSize: '0.9rem',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '14px',
+                  border: '1px solid var(--line-strong)',
+                  borderRadius: 'var(--radius-surface)',
                   padding: '10px 14px',
                   outline: 'none',
-                  background: '#f8fafc',
-                  color: '#1e293b',
+                  background: 'var(--surface-2)',
+                  color: 'var(--ink)',
                   maxHeight: '96px',
                   transition: 'border-color 0.2s, box-shadow 0.2s',
                   fontFamily: 'inherit',

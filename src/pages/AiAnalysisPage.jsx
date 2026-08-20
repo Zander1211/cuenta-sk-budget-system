@@ -667,34 +667,34 @@ function AiAnalysisPage() {
               <span className="ai-chip ai-chip-accent">Powered by AI</span>
             </div>
             {noData ? (
-              <div className="ai-empty" style={{ padding: '24px', color: '#64748b' }}>
+              <div className="ai-empty" style={{ padding: '24px', color: 'var(--ink-3)' }}>
                 No financial records available for risk analysis during the selected month and year.
               </div>
             ) : (
               <>
-                <div className="ai-risk-guide" style={{ marginTop: '16px', padding: 'clamp(12px, 3vw, 16px)', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
-                  <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: 0 }}>Risk Level Guide</h3>
+                <div className="ai-risk-guide" style={{ marginTop: '16px', padding: 'clamp(12px, 3vw, 16px)', background: 'var(--surface-2)', borderRadius: 'var(--radius-control)', border: '1px solid var(--line)', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+                  <h3 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--ink-2)', margin: 0 }}>Risk Level Guide</h3>
                   <div className="ai-risk-guide-grid">
-                    <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '4px solid #ef4444', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                    <div style={{ padding: '12px', background: 'white', borderRadius: 'var(--radius-bar)', borderLeft: '4px solid #ef4444', boxShadow: 'var(--shadow)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                        <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#ef4444' }}></span>
-                        <strong style={{ fontSize: '13px', color: '#b91c1c' }}>High Risk</strong>
+                        <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: 'var(--negative)' }}></span>
+                        <strong style={{ fontSize: '13px', color: 'var(--negative)' }}>High Risk</strong>
                       </div>
-                      <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event has a high likelihood of exceeding its allocated budget or experiencing significant financial issues.</p>
+                      <p style={{ fontSize: '12px', color: 'var(--ink-2)', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event has a high likelihood of exceeding its allocated budget or experiencing significant financial issues.</p>
                     </div>
-                    <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '4px solid #f59e0b', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                    <div style={{ padding: '12px', background: 'white', borderRadius: 'var(--radius-bar)', borderLeft: '4px solid #f59e0b', boxShadow: 'var(--shadow)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                        <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#f59e0b' }}></span>
-                        <strong style={{ fontSize: '13px', color: '#b45309' }}>Medium Risk</strong>
+                        <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: 'var(--warn)' }}></span>
+                        <strong style={{ fontSize: '13px', color: 'var(--warn)' }}>Medium Risk</strong>
                       </div>
-                      <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event is currently within an acceptable budget range but requires close monitoring.</p>
+                      <p style={{ fontSize: '12px', color: 'var(--ink-2)', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event is currently within an acceptable budget range but requires close monitoring.</p>
                     </div>
-                    <div style={{ padding: '12px', background: 'white', borderRadius: '6px', borderLeft: '4px solid #10b981', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                    <div style={{ padding: '12px', background: 'white', borderRadius: 'var(--radius-bar)', borderLeft: '4px solid #10b981', boxShadow: 'var(--shadow)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                        <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#10b981' }}></span>
-                        <strong style={{ fontSize: '13px', color: '#047857' }}>Low Risk</strong>
+                        <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: 'var(--accent)' }}></span>
+                        <strong style={{ fontSize: '13px', color: 'var(--positive)' }}>Low Risk</strong>
                       </div>
-                      <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event is being managed efficiently and is well within its allocated budget.</p>
+                      <p style={{ fontSize: '12px', color: 'var(--ink-2)', margin: 0, lineHeight: '1.4' }}>Indicates that the project or event is being managed efficiently and is well within its allocated budget.</p>
                     </div>
                   </div>
                 </div>
@@ -748,7 +748,7 @@ function AiAnalysisPage() {
                   <div
                     key={`${item.title}-${index}`}
                     className={`ai-insight-item ${item.severity}`}
-                    style={{ borderLeft: `4px solid var(--${item.severity === 'high' ? 'cherry' : item.severity === 'medium' ? 'sun' : 'ocean'})`, background: 'var(--surface-sunken)', padding: 'clamp(12px, 3vw, 1rem)', borderRadius: '8px', minWidth: 0 }}
+                    style={{ borderLeft: `4px solid var(--${item.severity === 'high' ? 'cherry' : item.severity === 'medium' ? 'sun' : 'ocean'})`, background: 'var(--surface-sunken)', padding: 'clamp(12px, 3vw, 1rem)', borderRadius: 'var(--radius-control)', minWidth: 0 }}
                   >
                     <div className="ai-insight-head" style={{ marginBottom: '0.5rem' }}>
                       <span className="ai-insight-title" style={{ fontWeight: '600' }}>{item.title}</span>
@@ -772,7 +772,7 @@ function AiAnalysisPage() {
           <div className="stat-card ai-mini-card">
             <span className="ai-mini-title">Overspending Risk</span>
             {noData ? (
-              <span className="ai-mini-value" style={{ fontSize: '13px', fontWeight: 500, color: '#64748b' }}>No overspending analysis available for the selected month and year.</span>
+              <span className="ai-mini-value" style={{ fontSize: '13px', fontWeight: 500, color: 'var(--ink-3)' }}>No overspending analysis available for the selected month and year.</span>
             ) : (
               <>
                 <span className="ai-mini-value">
@@ -791,7 +791,7 @@ function AiAnalysisPage() {
           <div className="stat-card ai-mini-card">
             <span className="ai-mini-title">Missing Receipts</span>
             {noData ? (
-              <span className="ai-mini-value" style={{ fontSize: '13px', fontWeight: 500, color: '#64748b' }}>N/A</span>
+              <span className="ai-mini-value" style={{ fontSize: '13px', fontWeight: 500, color: 'var(--ink-3)' }}>N/A</span>
             ) : (
               <>
                 <span className="ai-mini-value">{missingDocsCount}</span>
@@ -802,7 +802,7 @@ function AiAnalysisPage() {
           <div className="stat-card ai-mini-card">
             <span className="ai-mini-title">Spending Trend</span>
             {noData ? (
-              <span className="ai-mini-value" style={{ fontSize: '13px', fontWeight: 500, color: '#64748b' }}>N/A</span>
+              <span className="ai-mini-value" style={{ fontSize: '13px', fontWeight: 500, color: 'var(--ink-3)' }}>N/A</span>
             ) : (
               <>
                 <span className="ai-mini-value">{spendingTrend.label}</span>

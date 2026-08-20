@@ -227,9 +227,9 @@ function PayrollPage() {
                 <div key={i} style={{ 
                   backgroundColor: 'var(--background-color, #ffffff)', 
                   padding: '20px', 
-                  borderRadius: '12px', 
+                  borderRadius: 'var(--radius-surface)', 
                   border: '1px solid var(--border-color)', 
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                  boxShadow: 'var(--shadow)',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '8px'
@@ -385,7 +385,7 @@ function PayrollPage() {
                         <td data-label="Total Budget">{currency.format(approvedBudget)}</td>
                         <td data-label="Utilization">
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div style={{ flex: 1, height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ flex: 1, height: '6px', background: 'var(--border-color)', borderRadius: 'var(--radius-bar)', overflow: 'hidden' }}>
                               <div style={{ height: '100%', background: utilization > 100 ? 'var(--danger-color)' : 'var(--primary-color)', width: `${Math.min(utilization, 100)}%` }} />
                             </div>
                             <span style={{ fontSize: '0.75rem' }}>{utilization}%</span>
@@ -445,7 +445,7 @@ function PayrollPage() {
             <div className="modal-body">
               {scanStatus === 'camera' ? (
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ background: '#000', borderRadius: '12px', overflow: 'hidden', marginBottom: '16px' }}>
+                  <div style={{ background: '#000', borderRadius: 'var(--radius-surface)', overflow: 'hidden', marginBottom: '16px' }}>
                     <video ref={videoRef} autoPlay playsInline style={{ width: '100%', maxHeight: '60vh', display: 'block' }}></video>
                   </div>
                   <button type="button" className="primary-button" onClick={capturePhoto} style={{ width: '100%', padding: '16px', fontSize: '1.1rem' }}>
@@ -471,7 +471,7 @@ function PayrollPage() {
                 </div>
               ) : scanStatus === 'review' ? (
                 <div className="details-panel" style={{ marginTop: '16px' }}>
-                  <p style={{ color: '#15803d', fontWeight: 'bold', margin: '0 0 12px' }}>✓ Data Extracted Successfully</p>
+                  <p style={{ color: 'var(--positive)', fontWeight: 'bold', margin: '0 0 12px' }}>✓ Data Extracted Successfully</p>
                   <div className="form-grid">
                     <div className="field-group"><label>Store / Vendor Name</label><input type="text" value={ocrData.vendor} onChange={e => setOcrData({...ocrData, vendor: e.target.value})} /></div>
                     <div className="field-group"><label>Receipt Number</label><input type="text" value={ocrData.receiptNumber} onChange={e => setOcrData({...ocrData, receiptNumber: e.target.value})} /></div>

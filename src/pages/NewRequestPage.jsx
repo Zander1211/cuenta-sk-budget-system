@@ -297,7 +297,7 @@ function NewRequestPage() {
             className="icon-button"
             onClick={() => navigate('/dashboard/request')}
             aria-label="Back to Requests"
-            style={{ marginRight: '16px', background: 'var(--bone)', padding: '8px', borderRadius: '8px', border: '1px solid var(--border)' }}
+            style={{ marginRight: '16px', background: 'var(--bone)', padding: '8px', borderRadius: 'var(--radius-control)', border: '1px solid var(--border)' }}
           >
             <ArrowLeft size={20} />
           </button>
@@ -313,7 +313,7 @@ function NewRequestPage() {
         <div className="overview-card">
           <form className="overview-form" onSubmit={handleSubmit}>
             {editId && rejectionReason && (
-              <div style={{ backgroundColor: '#fee2e2', color: '#991b1b', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #fca5a5' }}>
+              <div style={{ backgroundColor: 'var(--negative-soft)', color: 'var(--negative)', padding: '12px 16px', borderRadius: 'var(--radius-control)', marginBottom: '16px', border: '1px solid #fca5a5' }}>
                 <strong style={{ display: 'block', marginBottom: '4px' }}>Editing Rejected Request</strong>
                 <span>Reason for rejection: {rejectionReason}</span>
               </div>
@@ -503,13 +503,13 @@ function NewRequestPage() {
             )}
 
             {showNoBudgetWarning && (
-              <div className="form-error" style={{ padding: '12px', backgroundColor: '#fee2e2', color: '#b91c1c', borderRadius: '4px', marginBottom: '16px', border: '1px solid #f87171', marginTop: '16px' }}>
+              <div className="form-error" style={{ padding: '12px', backgroundColor: 'var(--negative-soft)', color: 'var(--negative)', borderRadius: 'var(--radius-bar)', marginBottom: '16px', border: '1px solid var(--negative)', marginTop: '16px' }}>
                 No Monthly Budget has been allocated for {monthName}. Please add the Monthly Budget for this month before creating a budget request.
               </div>
             )}
             
             {showInsufficientBudgetWarning && (
-              <div className="form-error" style={{ padding: '12px', backgroundColor: '#fee2e2', color: '#b91c1c', borderRadius: '4px', marginBottom: '16px', border: '1px solid #f87171', marginTop: '16px' }}>
+              <div className="form-error" style={{ padding: '12px', backgroundColor: 'var(--negative-soft)', color: 'var(--negative)', borderRadius: 'var(--radius-bar)', marginBottom: '16px', border: '1px solid var(--negative)', marginTop: '16px' }}>
                 Insufficient Monthly Budget. The requested amount exceeds the remaining available budget for the selected month. Please reduce the requested amount or increase the Monthly Budget before submitting this request.
               </div>
             )}

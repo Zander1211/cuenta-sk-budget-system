@@ -13,9 +13,7 @@ export default function BudgetBreakdownTable({ request, breakdownItems, currency
     if (!title) return null;
     return (
       <tr>
-        <th colSpan={colSpan} style={{ backgroundColor: '#111827', color: 'white', padding: '8px 12px', textAlign: 'center' }}>
-          <span style={{ fontWeight: 600, letterSpacing: '0.05em' }}>{title}</span>
-        </th>
+        <th className="table-band" colSpan={colSpan}>{title}</th>
       </tr>
     );
   };

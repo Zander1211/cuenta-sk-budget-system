@@ -4,6 +4,7 @@ import RoleGate from '../components/RoleGate'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
 import CurrencyInput from '../components/CurrencyInput'
+import BudgetBreakdownTable from '../components/BudgetBreakdownTable'
 import { useNotifications } from '../context/NotificationContext'
 import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
 
@@ -198,6 +199,7 @@ function ProjectsEventsPage() {
     const additionalExpenses = expenses.filter(e => e.isAdditional && e.parentProjectId === item.id && !e.archivedAt)
     const additionalSum = additionalExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
     
+    const breakdownItems = Array.isArray(item.breakdown) ? item.breakdown : []
     const approvedBudget = Number(item.amount || 0)
     const totalExpenses = approvedBudget + additionalSum
     const remainingBalance = approvedBudget - totalExpenses
@@ -224,9 +226,9 @@ function ProjectsEventsPage() {
                 <div key={i} style={{ 
                   backgroundColor: 'var(--background-color, #ffffff)', 
                   padding: '20px', 
-                  borderRadius: '12px', 
+                  borderRadius: 'var(--radius-surface)', 
                   border: '1px solid var(--border-color)', 
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                  boxShadow: 'var(--shadow)',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '8px'
@@ -248,6 +250,16 @@ function ProjectsEventsPage() {
                   </p>
                 </div>
               ))}
+            </div>
+
+            <div className="details-breakdown" style={{ marginBottom: '24px' }}>
+              <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '12px' }}>Requisition Breakdown</p>
+              <BudgetBreakdownTable
+                request={item}
+                breakdownItems={breakdownItems}
+                currency={currency}
+                totalAmount={approvedBudget}
+              />
             </div>
 
             <div className="details-breakdown">
@@ -355,7 +367,7 @@ function ProjectsEventsPage() {
                         <td data-label="Total Budget">{currency.format(approvedBudget)}</td>
                         <td data-label="Utilization">
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div style={{ flex: 1, height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ flex: 1, height: '6px', background: 'var(--border-color)', borderRadius: 'var(--radius-bar)', overflow: 'hidden' }}>
                               <div style={{ height: '100%', background: utilization > 100 ? 'var(--danger-color)' : 'var(--primary-color)', width: `${Math.min(utilization, 100)}%` }} />
                             </div>
                             <span style={{ fontSize: '0.75rem' }}>{utilization}%</span>
@@ -415,7 +427,7 @@ function ProjectsEventsPage() {
             <div className="modal-body">
               {scanStatus === 'camera' ? (
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ background: '#000', borderRadius: '12px', overflow: 'hidden', marginBottom: '16px' }}>
+                  <div style={{ background: '#000', borderRadius: 'var(--radius-surface)', overflow: 'hidden', marginBottom: '16px' }}>
                     <video ref={videoRef} autoPlay playsInline style={{ width: '100%', maxHeight: '60vh', display: 'block' }}></video>
                   </div>
                   <button type="button" className="primary-button" onClick={capturePhoto} style={{ width: '100%', padding: '16px', fontSize: '1.1rem' }}>
@@ -441,7 +453,7 @@ function ProjectsEventsPage() {
                 </div>
               ) : scanStatus === 'review' ? (
                 <div className="details-panel" style={{ marginTop: '16px' }}>
-                  <p style={{ color: '#15803d', fontWeight: 'bold', margin: '0 0 12px' }}>✓ Data Extracted Successfully</p>
+                  <p style={{ color: 'var(--positive)', fontWeight: 'bold', margin: '0 0 12px' }}>✓ Data Extracted Successfully</p>
                   <div className="form-grid">
                     <div className="field-group"><label>Store / Vendor Name</label><input type="text" value={ocrData.vendor} onChange={e => setOcrData({...ocrData, vendor: e.target.value})} /></div>
                     <div className="field-group"><label>Receipt Number</label><input type="text" value={ocrData.receiptNumber} onChange={e => setOcrData({...ocrData, receiptNumber: e.target.value})} /></div>

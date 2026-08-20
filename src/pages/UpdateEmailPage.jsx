@@ -191,7 +191,7 @@ function UpdateEmailPage() {
               </label>
 
               {emailError ? <p className="form-error">{emailError}</p> : null}
-              {emailStatus ? <p className="form-status" style={{ color: '#10b981' }}>{emailStatus}</p> : null}
+              {emailStatus ? <p className="form-status" style={{ color: 'var(--accent)' }}>{emailStatus}</p> : null}
 
               <div className="content-actions">
                 <button

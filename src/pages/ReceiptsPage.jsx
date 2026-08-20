@@ -570,7 +570,7 @@ function ReceiptsPage() {
                 </select>
               ) : null}
 
-              <span style={{ fontSize: '0.82rem', color: 'var(--ink-soft)', fontWeight: 600, padding: '4px 8px', background: 'rgba(15,31,54,0.04)', borderRadius: '8px' }}>
+              <span style={{ fontSize: '0.82rem', color: 'var(--ink-soft)', fontWeight: 600, padding: '4px 8px', background: 'rgba(15,31,54,0.04)', borderRadius: 'var(--radius-control)' }}>
                 {filteredExpenses.length} record{filteredExpenses.length === 1 ? '' : 's'}
               </span>
             </div>
@@ -810,7 +810,7 @@ function ReceiptsPage() {
                 )
               })
             ) : (
-              <div className="empty-state" style={{ textAlign: 'center', padding: '36px 16px', background: '#fff', borderRadius: '12px' }}>
+              <div className="empty-state" style={{ textAlign: 'center', padding: '36px 16px', background: 'var(--surface)', borderRadius: 'var(--radius-surface)' }}>
                 {searchQuery || filterStatus !== 'all' || filterCategory !== 'all'
                   ? 'No records match the active filter criteria.'
                   : 'No approved Projects, Events, or Payroll records are available yet.'}
@@ -839,7 +839,7 @@ function ReceiptsPage() {
                   <div style={{ display: 'flex', gap: '10px', fontSize: '0.85rem', color: 'var(--ink-soft)' }}>
                     <span>Category: <strong>{viewerExpense.category || 'General'}</strong></span>
                     <span>•</span>
-                    <span>Budget: <strong style={{ color: '#15803d' }}>₱{Number(viewerExpense.amount || 0).toLocaleString()}</strong></span>
+                    <span>Budget: <strong style={{ color: 'var(--positive)' }}>₱{Number(viewerExpense.amount || 0).toLocaleString()}</strong></span>
                   </div>
                 </div>
                 <button

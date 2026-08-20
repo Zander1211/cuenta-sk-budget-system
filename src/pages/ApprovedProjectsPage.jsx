@@ -82,17 +82,17 @@ function ApprovedProjectsPage() {
       <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
         <div className="details-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
           <div>
-            <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#6b7280', margin: '0 0 4px' }}>Description</p>
+            <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--ink-3)', margin: '0 0 4px' }}>Description</p>
             <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>{project.description || '—'}</p>
           </div>
           <div>
-            <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#6b7280', margin: '0 0 4px' }}>Total Cost (Breakdown)</p>
+            <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--ink-3)', margin: '0 0 4px' }}>Total Cost (Breakdown)</p>
             <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>
               {breakdownItems.length ? currency.format(breakdownTotal) : '—'}
             </p>
           </div>
           <div>
-            <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#6b7280', margin: '0 0 4px' }}>Event Date</p>
+            <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--ink-3)', margin: '0 0 4px' }}>Event Date</p>
             <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>
               {project.eventDate
                 ? new Date(project.eventDate).toLocaleDateString()
@@ -100,18 +100,18 @@ function ApprovedProjectsPage() {
             </p>
           </div>
           <div>
-            <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#6b7280', margin: '0 0 4px' }}>Requested By</p>
+            <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--ink-3)', margin: '0 0 4px' }}>Requested By</p>
             <p className="details-value" style={{ margin: 0, fontSize: '0.95rem' }}>{project.requestedBy || '—'}</p>
           </div>
         </div>
 
         <div className="details-breakdown" style={{ marginBottom: '24px' }}>
-          <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#6b7280', marginBottom: '12px' }}>Budget Breakdown</p>
+          <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--ink-3)', marginBottom: '12px' }}>Budget Breakdown</p>
           <BudgetBreakdownTable request={project} breakdownItems={breakdownItems} currency={currency} totalAmount={totalAmount} />
         </div>
 
         <div className="details-receipt-section">
-          <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#6b7280', marginBottom: '8px' }}>Uploaded Documents and Receipts</p>
+          <p className="details-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--ink-3)', marginBottom: '8px' }}>Uploaded Documents and Receipts</p>
           <div className="details-receipt-actions">
             {hasReceipt ? (
               receiptLinks[project.id] ? (
@@ -120,7 +120,7 @@ function ApprovedProjectsPage() {
                   href={receiptLinks[project.id]}
                   target="_blank"
                   rel="noreferrer"
-                  style={{ display: 'inline-block', padding: '8px 16px', backgroundColor: '#f3f4f6', borderRadius: '6px', color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}
+                  style={{ display: 'inline-block', padding: '8px 16px', backgroundColor: 'var(--surface-2)', borderRadius: 'var(--radius-bar)', color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}
                 >
                   View Receipt/Document
                 </a>
@@ -128,7 +128,7 @@ function ApprovedProjectsPage() {
                 <span className="status-pill status-approved">Document Uploaded</span>
               )
             ) : (
-              <p className="details-value" style={{ margin: 0, fontStyle: 'italic', color: '#9ca3af' }}>No documents uploaded.</p>
+              <p className="details-value" style={{ margin: 0, fontStyle: 'italic', color: 'var(--ink-3)' }}>No documents uploaded.</p>
             )}
           </div>
         </div>
@@ -156,10 +156,10 @@ function ApprovedProjectsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
             {approvedProjects.length ? (
               approvedProjects.map((project) => (
-                <div key={project.id} style={{ border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px', backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
+                <div key={project.id} style={{ border: '1px solid var(--line)', borderRadius: 'var(--radius-surface)', padding: '20px', backgroundColor: 'var(--surface)', boxShadow: 'var(--shadow)', display: 'flex', flexDirection: 'column' }}>
                   
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#111827', lineHeight: '1.3' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: 'var(--ink)', lineHeight: '1.3' }}>
                       {project.project || project.event || 'Untitled'}
                     </h3>
                     <span className={`status-pill status-${(project.projectStatus || 'Ongoing').toLowerCase()}`} style={{ flexShrink: 0, marginLeft: '12px' }}>
@@ -169,16 +169,16 @@ function ApprovedProjectsPage() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                     <div>
-                      <p style={{ margin: '0 0 2px', fontSize: '0.8rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>Category</p>
-                      <p style={{ margin: 0, fontSize: '0.95rem', color: '#374151' }}>{project.category}</p>
+                      <p style={{ margin: '0 0 2px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase' }}>Category</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{project.category}</p>
                     </div>
                     <div>
-                      <p style={{ margin: '0 0 2px', fontSize: '0.8rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>Approved Budget</p>
-                      <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 500, color: '#059669' }}>{currency.format(project.amount || 0)}</p>
+                      <p style={{ margin: '0 0 2px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase' }}>Approved Budget</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 500, color: 'var(--positive)' }}>{currency.format(project.amount || 0)}</p>
                     </div>
                     <div>
-                      <p style={{ margin: '0 0 2px', fontSize: '0.8rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>Date Approved</p>
-                      <p style={{ margin: 0, fontSize: '0.95rem', color: '#374151' }}>
+                      <p style={{ margin: '0 0 2px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase' }}>Date Approved</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>
                         {project.approvedAt ? new Date(project.approvedAt).toLocaleDateString() : '—'}
                       </p>
                     </div>
@@ -197,7 +197,7 @@ function ApprovedProjectsPage() {
                 </div>
               ))
             ) : (
-              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: '#6b7280', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
+              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: 'var(--ink-3)', backgroundColor: 'var(--surface-2)', borderRadius: 'var(--radius-surface)' }}>
                 No approved projects yet.
               </div>
             )}

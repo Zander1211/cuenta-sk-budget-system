@@ -395,11 +395,11 @@ function ExpensesPage() {
     return (
       <tr className="details-row">
         <td colSpan={columnCount} style={{ padding: 0 }}>
-          <div className="details-panel" style={{ padding: '32px 24px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+          <div className="details-panel" style={{ padding: '32px 24px', background: 'var(--surface-2)', borderBottom: '1px solid var(--line)' }}>
             
             {/* Basic Information Section */}
             <div style={{ marginBottom: '32px' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#111827', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Basic Information</h3>
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--ink)', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Basic Information</h3>
               <div className="details-grid" style={{ 
                 display: 'grid', 
                 gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
@@ -415,15 +415,15 @@ function ExpensesPage() {
                   <div key={i} style={{ 
                     backgroundColor: 'var(--background-color, #ffffff)', 
                     padding: '20px 24px', 
-                    borderRadius: '12px', 
-                    border: '1px solid var(--border-color, #e5e7eb)', 
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                    borderRadius: 'var(--radius-surface)', 
+                    border: '1px solid var(--line)', 
+                    boxShadow: 'var(--shadow)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '12px'
                   }}>
-                    <p className="details-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: '#6b7280', margin: 0, letterSpacing: '0.5px' }}>{stat.label}</p>
-                    <p className="details-value" style={{ fontSize: '1.05rem', margin: 0, color: '#111827', lineHeight: '1.4' }}>{stat.value}</p>
+                    <p className="details-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink-3)', margin: 0, letterSpacing: '0.5px' }}>{stat.label}</p>
+                    <p className="details-value" style={{ fontSize: '1.05rem', margin: 0, color: 'var(--ink)', lineHeight: '1.4' }}>{stat.value}</p>
                   </div>
                 ))}
                 
@@ -431,14 +431,14 @@ function ExpensesPage() {
                 <div style={{ 
                   backgroundColor: 'var(--background-color, #ffffff)', 
                   padding: '20px 24px', 
-                  borderRadius: '12px', 
-                  border: '1px solid var(--border-color, #e5e7eb)', 
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  borderRadius: 'var(--radius-surface)', 
+                  border: '1px solid var(--line)', 
+                  boxShadow: 'var(--shadow)',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '12px'
                 }}>
-                  <p className="details-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: '#6b7280', margin: 0, letterSpacing: '0.5px' }}>Receipt Status</p>
+                  <p className="details-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink-3)', margin: 0, letterSpacing: '0.5px' }}>Receipt Status</p>
                   <div>
                     <span style={{ 
                       display: 'inline-flex', 
@@ -459,7 +459,7 @@ function ExpensesPage() {
 
             {/* Financial Information Section */}
             <div style={{ marginBottom: '32px' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#111827', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Financial Information</h3>
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--ink)', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Financial Information</h3>
               <div className="details-grid" style={{ 
                 display: 'grid', 
                 gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
@@ -473,14 +473,14 @@ function ExpensesPage() {
                   <div key={i} style={{ 
                     backgroundColor: 'var(--background-color, #ffffff)', 
                     padding: '20px 24px', 
-                    borderRadius: '12px', 
-                    border: '1px solid var(--border-color, #e5e7eb)', 
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                    borderRadius: 'var(--radius-surface)', 
+                    border: '1px solid var(--line)', 
+                    boxShadow: 'var(--shadow)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '12px'
                   }}>
-                    <p className="details-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: '#6b7280', margin: 0, letterSpacing: '0.5px' }}>{stat.label}</p>
+                    <p className="details-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink-3)', margin: 0, letterSpacing: '0.5px' }}>{stat.label}</p>
                     <p className="details-value" style={{ fontSize: '1.25rem', fontWeight: stat.highlight ? 600 : 400, margin: 0, color: stat.highlight ? '#059669' : '#111827' }}>{stat.value}</p>
                   </div>
                 ))}
@@ -495,9 +495,7 @@ function ExpensesPage() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th colSpan="6" style={{ backgroundColor: '#111827', color: 'white', padding: '8px 12px', textAlign: 'center' }}>
-                      <span style={{ fontWeight: 600, letterSpacing: '0.05em' }}>ADDITIONAL EXPENSES</span>
-                    </th>
+                    <th className="table-band" colSpan="6">ADDITIONAL EXPENSES</th>
                   </tr>
                   <tr>
                     <th style={{ textTransform: 'uppercase' }}>DATE</th>
@@ -521,11 +519,11 @@ function ExpensesPage() {
                       <td data-label="Amount">{currency.format(Number(addEx.amount) || 0)}</td>
                       <td data-label="Receipt">
                         {hasAddReceipt ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 600, backgroundColor: '#dcfce7', color: '#15803d' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 600, backgroundColor: 'var(--positive-soft)', color: 'var(--positive)' }}>
                             ✅ Uploaded ({addReceiptCount})
                           </span>
                         ) : (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 600, backgroundColor: '#fee2e2', color: '#dc2626' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 600, backgroundColor: 'var(--negative-soft)', color: 'var(--negative)' }}>
                             ❌ Missing
                           </span>
                         )}
@@ -534,7 +532,7 @@ function ExpensesPage() {
                     )
                   }) : (
                     <tr>
-                      <td colSpan="6" style={{ textAlign: 'center', fontStyle: 'italic', color: '#6b7280' }}>
+                      <td colSpan="6" style={{ textAlign: 'center', fontStyle: 'italic', color: 'var(--ink-3)' }}>
                         No additional expenses recorded.
                       </td>
                     </tr>
@@ -552,13 +550,13 @@ function ExpensesPage() {
                   </tr>
                   <tr>
                     <td>Original Requisition Total</td>
-                    <td style={{ textAlign: 'right', color: '#4b5563' }}>- {currency.format(breakdownTotal)}</td>
+                    <td style={{ textAlign: 'right', color: 'var(--ink-2)' }}>- {currency.format(breakdownTotal)}</td>
                   </tr>
                   <tr>
                     <td>Additional Expenses Total</td>
-                    <td style={{ textAlign: 'right', color: '#4b5563' }}>- {currency.format(additionalTotal)}</td>
+                    <td style={{ textAlign: 'right', color: 'var(--ink-2)' }}>- {currency.format(additionalTotal)}</td>
                   </tr>
-                  <tr style={{ backgroundColor: '#f9fafb' }}>
+                  <tr style={{ backgroundColor: 'var(--surface-2)' }}>
                     <td style={{ fontWeight: 700, fontSize: '1.1em' }}>Remaining Balance</td>
                     <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '1.1em', color: (totalAmount - breakdownTotal - additionalTotal) < 0 ? '#ef4444' : '#10b981' }}>
                       {currency.format(totalAmount - breakdownTotal - additionalTotal)}
@@ -753,20 +751,20 @@ function ExpensesPage() {
           <div className="overview-card" style={{ padding: '24px' }}>
             <div className="card-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
               <div>
-                <p className="eyebrow" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>Transaction History</p>
-                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: '#111827' }}>Latest expenses</h2>
+                <p className="eyebrow" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase' }}>Transaction History</p>
+                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: 'var(--ink)' }}>Latest expenses</h2>
               </div>
-              <span className="items-found-badge" style={{ padding: '4px 12px', backgroundColor: '#e5e7eb', borderRadius: '999px', fontSize: '0.85rem', fontWeight: 500, color: '#374151' }}>
+              <span className="items-found-badge" style={{ padding: '4px 12px', backgroundColor: 'var(--surface-2)', borderRadius: '999px', fontSize: '0.85rem', fontWeight: 500, color: 'var(--ink)' }}>
                 {activeExpenses.length} items found
               </span>
             </div>
-            <table className="data-table">
+            <table className="data-table data-table--ledger">
               <thead>
                 <tr>
                   <th>Date</th>
                   <th>Description</th>
                   <th>Category</th>
-                  <th>Amount</th>
+                  <th className="num">Amount</th>
                   <th>Receipt</th>
                   <th>Actions</th>
                 </tr>
@@ -785,20 +783,20 @@ function ExpensesPage() {
                                 ).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                               : '—'}
                           </td>
-                          <td data-label="Description" style={{ color: '#111827' }}>
+                          <td data-label="Description" style={{ color: 'var(--ink)' }}>
                             {expense.description || expense.project || expense.event || '—'}
                           </td>
-                          <td data-label="Category" style={{ color: '#4b5563' }}>{expense.category || '—'}</td>
-                          <td data-label="Amount" style={{ fontWeight: 600, color: '#059669', whiteSpace: 'nowrap' }}>
+                          <td data-label="Category" style={{ color: 'var(--ink-2)' }}>{expense.category || '—'}</td>
+                          <td className="num" data-label="Amount" style={{ fontWeight: 600, color: 'var(--positive)' }}>
                             {currency.format(Number(expense.amount) || 0)}
                           </td>
                           <td data-label="Receipt">
                             {hasReceipt ? (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, backgroundColor: '#dcfce7', color: '#15803d', whiteSpace: 'nowrap' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, backgroundColor: 'var(--positive-soft)', color: 'var(--positive)', whiteSpace: 'nowrap' }}>
                                 ✅ Uploaded
                               </span>
                             ) : (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, backgroundColor: '#fee2e2', color: '#dc2626', whiteSpace: 'nowrap' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, backgroundColor: 'var(--negative-soft)', color: 'var(--negative)', whiteSpace: 'nowrap' }}>
                                 ❌ Missing
                               </span>
                             )}
@@ -840,15 +838,15 @@ function ExpensesPage() {
           </div>
         ) : (
           <div className="overview-card" style={{ padding: '24px' }}>
-            <p className="eyebrow" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>Archive</p>
-            <h2 style={{ margin: '0 0 24px', fontSize: '1.5rem', fontWeight: 700, color: '#111827' }}>Archived expenses</h2>
-            <table className="data-table">
+            <p className="eyebrow" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase' }}>Archive</p>
+            <h2 style={{ margin: '0 0 24px', fontSize: '1.5rem', fontWeight: 700, color: 'var(--ink)' }}>Archived expenses</h2>
+            <table className="data-table data-table--ledger">
               <thead>
                 <tr>
                   <th>Date</th>
                   <th>Description</th>
                   <th>Category</th>
-                  <th>Amount</th>
+                  <th className="num">Amount</th>
                   <th>Archived</th>
                   <th>Actions</th>
                 </tr>
@@ -858,23 +856,23 @@ function ExpensesPage() {
                   archivedExpenses.map((expense) => (
                     <Fragment key={expense.id}>
                       <tr>
-                        <td data-label="Date" style={{ whiteSpace: 'nowrap', color: '#4b5563' }}>
+                        <td data-label="Date" style={{ whiteSpace: 'nowrap', color: 'var(--ink-2)' }}>
                           {expense.date || expense.approvedAt
                             ? new Date(
                                 expense.date || expense.approvedAt
                               ).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                             : '—'}
                         </td>
-                        <td data-label="Description" style={{ color: '#111827' }}>
+                        <td data-label="Description" style={{ color: 'var(--ink)' }}>
                           {expense.description || expense.project || expense.event || 'Untitled'}
                         </td>
-                        <td data-label="Category" style={{ color: '#4b5563' }}>
+                        <td data-label="Category" style={{ color: 'var(--ink-2)' }}>
                           {expense.category || 'Uncategorized'}
                         </td>
-                        <td data-label="Amount" style={{ fontWeight: 600, color: '#059669', whiteSpace: 'nowrap' }}>
+                        <td className="num" data-label="Amount" style={{ fontWeight: 600, color: 'var(--positive)' }}>
                           {currency.format(Number(expense.amount) || 0)}
                         </td>
-                        <td data-label="Archived" style={{ whiteSpace: 'nowrap', color: '#9ca3af' }}>
+                        <td data-label="Archived" style={{ whiteSpace: 'nowrap', color: 'var(--ink-3)' }}>
                           {expense.archivedAt
                             ? new Date(expense.archivedAt).toLocaleDateString()
                             : '—'}
@@ -1010,7 +1008,7 @@ function ExpensesPage() {
                   const largestCategory = Object.entries(mData.categories).sort(([, a], [, b]) => b - a)[0]
 
                   return (
-                    <div key={m} className="overview-card" style={{ padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid var(--border-soft)' }}>
+                    <div key={m} className="overview-card" style={{ padding: '20px', boxShadow: 'var(--shadow)', border: '1px solid var(--border-soft)' }}>
                       {/* Monthly Breakdown Card Header / Summary */}
                       <div className="flex flex-col md:flex-row gap-5 justify-between md:items-start">
                         <div className="flex-1 w-full">
@@ -1096,14 +1094,14 @@ function ExpensesPage() {
                                     const pct = mData.total > 0 ? ((amount / mData.total) * 100).toFixed(2) : 0
                                     return (
                                       <div key={cat} className="overview-card" style={{ padding: '16px', border: '1px solid var(--border-soft)', boxShadow: 'none' }}>
-                                        <div className="flex justify-between items-start mb-4">
-                                          <div>
+                                        <div className="flex justify-between items-start gap-4 mb-4">
+                                          <div className="min-w-0">
                                             <div style={{ fontWeight: 600, color: 'var(--ink-dark)', fontSize: '1.05rem' }}>{cat}</div>
                                             <div style={{ fontSize: '0.9rem', color: 'var(--ink-soft)', marginTop: '4px' }}>
                                               {catItems.length} {catItems.length === 1 ? 'transaction' : 'transactions'}
                                             </div>
                                           </div>
-                                          <div className="text-right">
+                                          <div className="text-right shrink-0">
                                             <div style={{ fontWeight: 700, color: 'var(--ink-dark)', fontSize: '1.05rem' }}>{currency.format(amount)}</div>
                                             <div style={{ fontSize: '0.9rem', color: 'var(--ink-soft)', marginTop: '4px' }}>{pct}%</div>
                                           </div>
@@ -1132,26 +1130,26 @@ function ExpensesPage() {
                                     const expensesTotal = getBreakdownTotal(e.breakdown) + addTotal;
                                     const remaining = approvedBudget - expensesTotal;
                                     return (
-                                      <div key={e.id} className="p-4 border border-[var(--border-soft)] rounded-xl bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                        <div className="flex-1">
-                                          <div className="font-semibold text-[var(--ink-dark)]">{e.event || e.project || 'Untitled'}</div>
-                                          <div className="text-sm text-[var(--ink-soft)] mt-1">
+                                      <div key={e.id} className="p-4 border border-[var(--line)] rounded-xl bg-[var(--surface)] flex flex-col gap-3">
+                                        <div className="min-w-0">
+                                          <div className="font-semibold text-[var(--ink)] break-words">{e.event || e.project || 'Untitled'}</div>
+                                          <div className="text-sm text-[var(--ink-2)] mt-1">
                                             {e.isAdditional ? 'Additional Expense' : (e.date || e.approvedAt ? new Date(e.date || e.approvedAt).toLocaleDateString() : '')}
                                           </div>
                                         </div>
-                                        
-                                        <div className="grid grid-cols-2 sm:flex sm:gap-6 text-sm bg-gray-50 sm:bg-transparent p-3 sm:p-0 rounded-lg sm:rounded-none">
-                                          <div>
-                                            <div className="text-[var(--ink-soft)] text-xs uppercase tracking-wider mb-1 sm:hidden">Budget</div>
-                                            <div className="font-semibold text-right sm:text-left">{currency.format(approvedBudget)}</div>
+
+                                        <div className="grid grid-cols-3 gap-3 pt-3 border-t border-[var(--line)] text-sm">
+                                          <div className="min-w-0">
+                                            <div className="text-[var(--ink-3)] text-xs uppercase tracking-wider mb-1">Budget</div>
+                                            <div className="font-semibold tabular-nums">{currency.format(approvedBudget)}</div>
                                           </div>
-                                          <div>
-                                            <div className="text-[var(--ink-soft)] text-xs uppercase tracking-wider mb-1 sm:hidden">Expenses</div>
-                                            <div className="text-right sm:text-left">{currency.format(expensesTotal)}</div>
+                                          <div className="min-w-0">
+                                            <div className="text-[var(--ink-3)] text-xs uppercase tracking-wider mb-1">Expenses</div>
+                                            <div className="tabular-nums">{currency.format(expensesTotal)}</div>
                                           </div>
-                                          <div className="col-span-2 mt-3 pt-3 border-t border-gray-200 sm:mt-0 sm:pt-0 sm:border-t-0 text-right sm:text-left flex justify-between sm:block">
-                                            <div className="text-[var(--ink-soft)] text-xs uppercase tracking-wider mb-1 sm:hidden">Remaining</div>
-                                            <div className={`font-semibold ${remaining < 0 ? 'text-[#e53e3e]' : 'text-[var(--brand)]'}`}>
+                                          <div className="min-w-0">
+                                            <div className="text-[var(--ink-3)] text-xs uppercase tracking-wider mb-1">Remaining</div>
+                                            <div className={`font-semibold tabular-nums ${remaining < 0 ? 'text-[var(--negative)]' : 'text-[var(--brand)]'}`}>
                                               {currency.format(remaining)}
                                             </div>
                                           </div>

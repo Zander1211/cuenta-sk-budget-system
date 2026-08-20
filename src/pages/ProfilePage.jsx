@@ -190,23 +190,23 @@ function ProfilePage() {
       <section className="dashboard-content" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', alignItems: 'start' }}>
         
         {/* Account Info Card */}
-        <div className="overview-card profile-card" style={{ padding: '32px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e5e7eb' }}>
+        <div className="overview-card profile-card" style={{ padding: '32px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', backgroundColor: 'var(--surface)', borderRadius: 'var(--radius-surface)', boxShadow: 'var(--shadow)', border: '1px solid var(--line)' }}>
           <div className="profile-avatar" style={{ marginBottom: '16px' }}>
             {avatarUrl ? (
               <img src={avatarUrl} alt={`${displayName} profile`} style={{ width: '120px', height: '120px', borderRadius: '50%', objectFit: 'cover', border: '4px solid #f3f4f6' }} />
             ) : (
-              <span className="profile-avatar-fallback" style={{ width: '120px', height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', backgroundColor: '#e5e7eb', borderRadius: '50%', color: '#6b7280' }}>{initials}</span>
+              <span className="profile-avatar-fallback" style={{ width: '120px', height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', backgroundColor: 'var(--surface-2)', borderRadius: '50%', color: 'var(--ink-3)' }}>{initials}</span>
             )}
           </div>
           <div style={{ marginBottom: '24px' }}>
-            <h2 className="profile-name" style={{ margin: '0 0 8px', fontSize: '1.5rem', fontWeight: 700, color: '#111827' }}>{displayName}</h2>
+            <h2 className="profile-name" style={{ margin: '0 0 8px', fontSize: '1.5rem', fontWeight: 700, color: 'var(--ink)' }}>{displayName}</h2>
             {formalTitle ? (
-              <p className="profile-title" style={{ margin: '0 0 4px', fontSize: '1rem', fontWeight: 500, color: '#4b5563' }}>{formalTitle}</p>
+              <p className="profile-title" style={{ margin: '0 0 4px', fontSize: '1rem', fontWeight: 500, color: 'var(--ink-2)' }}>{formalTitle}</p>
             ) : null}
             {trimmedNickname && resolvedFullName ? (
-              <p className="profile-meta" style={{ margin: '0 0 4px', fontSize: '0.9rem', color: '#6b7280' }}>{resolvedFullName}</p>
+              <p className="profile-meta" style={{ margin: '0 0 4px', fontSize: '0.9rem', color: 'var(--ink-3)' }}>{resolvedFullName}</p>
             ) : null}
-            {email ? <p className="profile-meta" style={{ margin: 0, fontSize: '0.9rem', color: '#6b7280' }}>{email}</p> : null}
+            {email ? <p className="profile-meta" style={{ margin: 0, fontSize: '0.9rem', color: 'var(--ink-3)' }}>{email}</p> : null}
           </div>
           
           <div className="profile-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
@@ -214,7 +214,7 @@ function ProfilePage() {
               className={`secondary-button profile-upload ${
                 isUploading ? 'is-disabled' : ''
               }`}
-              style={{ cursor: 'pointer', display: 'inline-block', padding: '8px 16px', borderRadius: '6px' }}
+              style={{ cursor: 'pointer', display: 'inline-block', padding: '8px 16px', borderRadius: 'var(--radius-bar)' }}
             >
               {isUploading ? 'Uploading...' : 'Change Photo'}
               <input
@@ -225,7 +225,7 @@ function ProfilePage() {
                 style={{ display: 'none' }}
               />
             </label>
-            <p className="profile-hint" style={{ margin: 0, fontSize: '0.8rem', color: '#9ca3af' }}>JPG, PNG or WebP max 5MB</p>
+            <p className="profile-hint" style={{ margin: 0, fontSize: '0.8rem', color: 'var(--ink-3)' }}>JPG, PNG or WebP max 5MB</p>
           </div>
           {avatarError ? <p className="form-error" style={{ marginTop: '12px' }}>{avatarError}</p> : null}
           {avatarStatus ? <p className="form-status" style={{ marginTop: '12px' }}>{avatarStatus}</p> : null}
@@ -233,11 +233,11 @@ function ProfilePage() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Personal Records Card */}
-          <div className="overview-card" style={{ padding: '24px', backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e5e7eb' }}>
+          <div className="overview-card" style={{ padding: '24px', backgroundColor: 'var(--surface)', borderRadius: 'var(--radius-surface)', boxShadow: 'var(--shadow)', border: '1px solid var(--line)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
               <div>
-                <p className="eyebrow" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>Personal Records</p>
-                <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: '#111827' }}>Biodata</h2>
+                <p className="eyebrow" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase' }}>Personal Records</p>
+                <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--ink)' }}>Biodata</h2>
               </div>
               {biodataComplete !== null ? (
                 <span className={`an-chip ${biodataComplete ? 'positive' : 'warning'}`} style={{ padding: '4px 12px', borderRadius: '999px', fontSize: '0.8rem', fontWeight: 600, backgroundColor: biodataComplete ? '#dcfce7' : '#fef3c7', color: biodataComplete ? '#15803d' : '#92400e' }}>
@@ -247,38 +247,38 @@ function ProfilePage() {
             </div>
             
             {biodata.status === 'loading' ? (
-              <p className="profile-hint" style={{ color: '#6b7280' }}>Loading biodata…</p>
+              <p className="profile-hint" style={{ color: 'var(--ink-3)' }}>Loading biodata…</p>
             ) : biodata.status === 'error' ? (
-              <p className="profile-hint" style={{ color: '#ef4444' }}>Unable to load biodata right now.</p>
+              <p className="profile-hint" style={{ color: 'var(--negative)' }}>Unable to load biodata right now.</p>
             ) : biodata.data ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px', marginBottom: '24px' }}>
                 <div>
-                  <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Birthdate</p>
-                  <p style={{ margin: 0, fontSize: '0.95rem', color: '#111827' }}>{formatBirthdate(biodata.data.birthdate)}</p>
+                  <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Birthdate</p>
+                  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{formatBirthdate(biodata.data.birthdate)}</p>
                 </div>
                 <div>
-                  <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Sex</p>
-                  <p style={{ margin: 0, fontSize: '0.95rem', color: '#111827' }}>{biodata.data.sex || '—'}</p>
+                  <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Sex</p>
+                  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{biodata.data.sex || '—'}</p>
                 </div>
                 <div>
-                  <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Civil Status</p>
-                  <p style={{ margin: 0, fontSize: '0.95rem', color: '#111827' }}>{biodata.data.civil_status || '—'}</p>
+                  <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Civil Status</p>
+                  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{biodata.data.civil_status || '—'}</p>
                 </div>
                 <div>
-                  <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Citizenship</p>
-                  <p style={{ margin: 0, fontSize: '0.95rem', color: '#111827' }}>{biodata.data.citizenship || '—'}</p>
+                  <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Citizenship</p>
+                  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{biodata.data.citizenship || '—'}</p>
                 </div>
                 <div>
-                  <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Mobile Number</p>
-                  <p style={{ margin: 0, fontSize: '0.95rem', color: '#111827' }}>{biodata.data.mobile_number || '—'}</p>
+                  <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Mobile Number</p>
+                  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{biodata.data.mobile_number || '—'}</p>
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280' }}>Complete Address</p>
-                  <p style={{ margin: 0, fontSize: '0.95rem', color: '#111827' }}>{biodata.data.complete_address || '—'}</p>
+                  <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Complete Address</p>
+                  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{biodata.data.complete_address || '—'}</p>
                 </div>
               </div>
             ) : (
-              <p className="profile-hint" style={{ color: '#6b7280', marginBottom: '24px' }}>
+              <p className="profile-hint" style={{ color: 'var(--ink-3)', marginBottom: '24px' }}>
                 You haven&apos;t filled out your biodata yet.
               </p>
             )}
@@ -294,10 +294,10 @@ function ProfilePage() {
 
 
           {/* Edit Profile / Account Settings Card */}
-          <div className="overview-card" style={{ padding: '24px', backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e5e7eb' }}>
+          <div className="overview-card" style={{ padding: '24px', backgroundColor: 'var(--surface)', borderRadius: 'var(--radius-surface)', boxShadow: 'var(--shadow)', border: '1px solid var(--line)' }}>
             <div style={{ marginBottom: '16px' }}>
-              <p className="eyebrow" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>Edit Profile</p>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: '#111827' }}>Account Settings</h2>
+              <p className="eyebrow" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase' }}>Edit Profile</p>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--ink)' }}>Account Settings</h2>
             </div>
             <div className="profile-edit-options" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <button

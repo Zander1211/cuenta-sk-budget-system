@@ -57,7 +57,7 @@ export default function ArchivedRequestModal({ request, onClose }) {
             </div>
         </div>
 
-        <div style={{ marginBottom: '24px', backgroundColor: '#f9fafb', padding: '16px', borderRadius: '8px', display: 'flex', gap: '32px' }}>
+        <div style={{ marginBottom: '24px', backgroundColor: 'var(--surface-2)', padding: '16px', borderRadius: 'var(--radius-control)', display: 'flex', gap: '32px' }}>
           <div>
             <span className="eyebrow">Archived Date</span>
             <div style={{ fontWeight: 500 }}>{new Date(request.archivedAt).toLocaleDateString()}</div>

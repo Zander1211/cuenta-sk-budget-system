@@ -321,7 +321,7 @@ function DashboardLayout() {
               <button
                 type="button"
                 className="primary-button"
-                style={{ backgroundColor: '#ef4444', color: 'white', borderColor: '#ef4444' }}
+                style={{ backgroundColor: 'var(--negative)', color: 'white', borderColor: 'var(--negative)' }}
                 onClick={handleLogout}
               >
                 Log Out

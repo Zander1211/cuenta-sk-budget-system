@@ -139,25 +139,25 @@ function ApprovalsPage() {
           gap: '16px',
           marginBottom: '24px'
         }}>
-          <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
             <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pending Requests</p>
-            <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: '#d97706' }}>{pendingCount}</h3>
+            <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--warn)' }}>{pendingCount}</h3>
           </div>
-          <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
             <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Approved Requests</p>
             <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--accent)' }}>{approvedCount}</h3>
           </div>
-          <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
             <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Rejected Requests</p>
-            <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: '#e53e3e' }}>{rejectedCount}</h3>
+            <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--negative)' }}>{rejectedCount}</h3>
           </div>
-          <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
             <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Requested Amount</p>
             <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>{currency.format(totalRequestedAmount)}</h3>
           </div>
         </div>
 
-        <div className="overview-card" style={{ backgroundColor: 'var(--surface)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+        <div className="overview-card" style={{ backgroundColor: 'var(--surface)', borderRadius: 'var(--radius-surface)', overflow: 'hidden', border: '1px solid var(--border)' }}>
           
           {/* Header & Filters */}
           <div style={{ padding: '24px', borderBottom: '1px solid var(--border)' }}>
@@ -172,7 +172,7 @@ function ApprovalsPage() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   style={{
-                    width: '100%', padding: '10px 12px 10px 40px', borderRadius: '8px',
+                    width: '100%', padding: '10px 12px 10px 40px', borderRadius: 'var(--radius-control)',
                     border: '1px solid var(--border)', fontSize: '0.95rem'
                   }}
                 />
@@ -183,8 +183,8 @@ function ApprovalsPage() {
                   value={typeFilter}
                   onChange={(e) => setTypeFilter(e.target.value)}
                   style={{
-                    width: '100%', padding: '10px 12px 10px 40px', borderRadius: '8px',
-                    border: '1px solid var(--border)', fontSize: '0.95rem', backgroundColor: '#fff'
+                    width: '100%', padding: '10px 12px 10px 40px', borderRadius: 'var(--radius-control)',
+                    border: '1px solid var(--border)', fontSize: '0.95rem', backgroundColor: 'var(--surface)'
                   }}
                 >
                   {requestTypes.map(t => <option key={t} value={t}>{t === 'All' ? 'All Types' : t}</option>)}
@@ -196,8 +196,8 @@ function ApprovalsPage() {
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
                   style={{
-                    width: '100%', padding: '10px 12px 10px 40px', borderRadius: '8px',
-                    border: '1px solid var(--border)', fontSize: '0.95rem', backgroundColor: '#fff'
+                    width: '100%', padding: '10px 12px 10px 40px', borderRadius: 'var(--radius-control)',
+                    border: '1px solid var(--border)', fontSize: '0.95rem', backgroundColor: 'var(--surface)'
                   }}
                 >
                   {statusOptions.map(t => <option key={t} value={t}>{t === 'All' ? 'All Statuses' : t}</option>)}
@@ -209,8 +209,8 @@ function ApprovalsPage() {
                   value={monthFilter}
                   onChange={(e) => setMonthFilter(e.target.value)}
                   style={{
-                    width: '100%', padding: '10px 12px 10px 40px', borderRadius: '8px',
-                    border: '1px solid var(--border)', fontSize: '0.95rem', backgroundColor: '#fff'
+                    width: '100%', padding: '10px 12px 10px 40px', borderRadius: 'var(--radius-control)',
+                    border: '1px solid var(--border)', fontSize: '0.95rem', backgroundColor: 'var(--surface)'
                   }}
                 >
                   {monthLabels.map((m, i) => <option key={m} value={i === 0 ? 'All' : i}>{m}</option>)}
@@ -314,7 +314,7 @@ function ApprovalsPage() {
             
             <div className="modal-body">
               {/* Request Information Grid */}
-              <div style={{ backgroundColor: 'var(--background-color, #ffffff)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border)', marginBottom: '24px' }}>
+              <div style={{ backgroundColor: 'var(--background-color, #ffffff)', padding: '24px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', marginBottom: '24px' }}>
                 <h3 style={{ fontSize: '1rem', marginBottom: '16px', color: 'var(--text-primary)' }}>Request Information</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -355,22 +355,22 @@ function ApprovalsPage() {
                 )}
                 
                 {activeViewDetailsReq.status === 'Rejected' && activeViewDetailsReq.rejectionReason && (
-                   <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '6px', padding: '16px', backgroundColor: '#fff5f5', borderRadius: '8px', border: '1px solid #fed7d7' }}>
-                    <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: '#c53030', letterSpacing: '0.5px', fontWeight: 600 }}>Rejection Reason</p>
-                    <p style={{ margin: 0, fontSize: '1rem', color: '#c53030' }}>{activeViewDetailsReq.rejectionReason}</p>
+                   <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '6px', padding: '16px', backgroundColor: 'var(--negative-soft)', borderRadius: 'var(--radius-control)', border: '1px solid var(--negative-soft)' }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--negative)', letterSpacing: '0.5px', fontWeight: 600 }}>Rejection Reason</p>
+                    <p style={{ margin: 0, fontSize: '1rem', color: 'var(--negative)' }}>{activeViewDetailsReq.rejectionReason}</p>
                   </div>
                 )}
                 
                 {activeViewDetailsReq.status === 'Cancelled' && activeViewDetailsReq.cancellationReason && (
-                   <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '6px', padding: '16px', backgroundColor: '#fff5f5', borderRadius: '8px', border: '1px solid #fed7d7' }}>
-                    <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: '#c53030', letterSpacing: '0.5px', fontWeight: 600 }}>Cancellation Reason</p>
-                    <p style={{ margin: 0, fontSize: '1rem', color: '#c53030' }}>{activeViewDetailsReq.cancellationReason}</p>
+                   <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '6px', padding: '16px', backgroundColor: 'var(--negative-soft)', borderRadius: 'var(--radius-control)', border: '1px solid var(--negative-soft)' }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--negative)', letterSpacing: '0.5px', fontWeight: 600 }}>Cancellation Reason</p>
+                    <p style={{ margin: 0, fontSize: '1rem', color: 'var(--negative)' }}>{activeViewDetailsReq.cancellationReason}</p>
                   </div>
                 )}
               </div>
 
               {/* Financial Details Grid */}
-              <div style={{ backgroundColor: 'var(--background-color, #ffffff)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border)', marginBottom: '24px' }}>
+              <div style={{ backgroundColor: 'var(--background-color, #ffffff)', padding: '24px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', marginBottom: '24px' }}>
                 <h3 style={{ fontSize: '1rem', marginBottom: '16px', color: 'var(--text-primary)' }}>Financial Details</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -395,7 +395,7 @@ function ApprovalsPage() {
               </div>
 
               {/* Budget Breakdown Table */}
-              <div style={{ backgroundColor: 'var(--background-color, #ffffff)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border)', overflowX: 'auto' }}>
+              <div style={{ backgroundColor: 'var(--background-color, #ffffff)', padding: '24px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', overflowX: 'auto' }}>
                  <h3 style={{ fontSize: '1rem', marginBottom: '16px', color: 'var(--text-primary)' }}>Budget Breakdown</h3>
                  <BudgetBreakdownTable 
                     request={activeViewDetailsReq} 
@@ -412,7 +412,7 @@ function ApprovalsPage() {
               
               {(!activeViewDetailsReq.status || activeViewDetailsReq.status === 'Pending') && !activeViewDetailsReq.archivedAt && (
                 <>
-                  <button type="button" className="secondary-button" style={{ color: '#e53e3e', borderColor: '#e53e3e' }} onClick={() => setRejectingId(activeViewDetailsReq.id)}>
+                  <button type="button" className="secondary-button" style={{ color: 'var(--negative)', borderColor: 'var(--negative)' }} onClick={() => setRejectingId(activeViewDetailsReq.id)}>
                     <X size={16} /> Reject
                   </button>
                   <button type="button" className="primary-button" onClick={() => setApproveConfirmId(activeViewDetailsReq.id)}>
@@ -422,7 +422,7 @@ function ApprovalsPage() {
               )}
               
               {activeViewDetailsReq.status === 'Approved' && !activeViewDetailsReq.archivedAt && (
-                 <button type="button" className="secondary-button" style={{ color: '#e53e3e', borderColor: '#e53e3e' }} onClick={() => setCancellingId(activeViewDetailsReq.id)}>
+                 <button type="button" className="secondary-button" style={{ color: 'var(--negative)', borderColor: 'var(--negative)' }} onClick={() => setCancellingId(activeViewDetailsReq.id)}>
                     Cancel Approval
                  </button>
               )}
@@ -486,7 +486,7 @@ function ApprovalsPage() {
                   value={rejectNote}
                   onChange={(e) => setRejectNote(e.target.value)}
                   placeholder="Explain why this request was rejected"
-                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit' }}
+                  style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius-control)', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit' }}
                 />
               </label>
             </div>
@@ -494,7 +494,7 @@ function ApprovalsPage() {
               <button type="button" className="secondary-button" onClick={() => setRejectingId(null)}>
                 Cancel
               </button>
-              <button type="button" className="primary-button" style={{ backgroundColor: '#e53e3e', color: 'white', borderColor: '#e53e3e' }} onClick={handleRejectSubmit}>
+              <button type="button" className="primary-button is-danger" onClick={handleRejectSubmit}>
                 Confirm Reject
               </button>
             </div>
@@ -518,7 +518,7 @@ function ApprovalsPage() {
                   value={cancelNote}
                   onChange={(e) => setCancelNote(e.target.value)}
                   placeholder="Explain why this approval is being cancelled"
-                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit' }}
+                  style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius-control)', border: '1px solid var(--border)', fontSize: '0.95rem', fontFamily: 'inherit' }}
                 />
               </label>
             </div>
@@ -526,7 +526,7 @@ function ApprovalsPage() {
               <button type="button" className="secondary-button" onClick={() => setCancellingId(null)}>
                 Keep Approval
               </button>
-              <button type="button" className="primary-button" style={{ backgroundColor: '#e53e3e', color: 'white', borderColor: '#e53e3e' }} onClick={handleCancelSubmit}>
+              <button type="button" className="primary-button is-danger" onClick={handleCancelSubmit}>
                 Confirm Cancel
               </button>
             </div>

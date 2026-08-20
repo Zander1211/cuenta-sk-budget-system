@@ -5,90 +5,99 @@
    Scoped under .an-* to avoid clashing with existing index.css.
    ============================================================ */
 
+/* ── Tokens ───────────────────────────────────────────────────────────────
+   The Analysis module used to carry its own palette (slate ink, tailwind
+   status colours, a three-stop gradient). Behind the login it sat right
+   next to cards drawn from the system set, and the two never quite lined
+   up. Every name below now resolves into the one set in index.css, so this
+   module inherits the same ink, the same accent and the same radii.
+   ─────────────────────────────────────────────────────────────────────── */
+
 :root {
-  /* Sidebar & Dark Surfaces */
-  --cuenta-sidebar: #0C2E30;
-  --cuenta-sidebar-deep: #0A2628;
-  --cuenta-sidebar-hover: #123F42;
-  --cuenta-dark-surface: #0C2E30;
+  /* Dark surfaces */
+  --cuenta-sidebar: var(--brand);
+  --cuenta-sidebar-deep: var(--brand);
+  --cuenta-sidebar-hover: var(--brand-2);
+  --cuenta-dark-surface: var(--brand);
 
-  /* Primary Emerald-Teal Accents */
-  --cuenta-teal-dark: #0E6B4D;
-  --cuenta-teal: #12805C;
-  --cuenta-green-dark: #0E7A54;
-  --cuenta-green: #0E9F6E;
-  --cuenta-green-medium: #10A472;
-  --cuenta-green-light: #34D399;
-  --cuenta-aqua: #12b89a;
+  /* Accent — one, flat */
+  --cuenta-teal-dark: var(--accent);
+  --cuenta-teal: var(--accent);
+  --cuenta-green-dark: var(--accent);
+  --cuenta-green: var(--accent);
+  --cuenta-green-medium: var(--c3);
+  --cuenta-green-light: var(--c4);
+  --cuenta-aqua: var(--c4);
 
-  /* Light Accent Surfaces */
-  --cuenta-aqua-soft: #dbf7f4;
-  --cuenta-green-soft: #e5f5ec;
-  --cuenta-mint-soft: #eef9f4;
-  --cuenta-icon-surface: #e1f4f1;
-  --cuenta-mint: var(--cuenta-mint-soft);
+  /* Light accent surfaces */
+  --cuenta-aqua-soft: var(--accent-soft);
+  --cuenta-green-soft: var(--accent-soft);
+  --cuenta-mint-soft: var(--accent-soft);
+  --cuenta-icon-surface: var(--accent-soft);
+  --cuenta-mint: var(--accent-soft);
 
-  /* Application Surfaces */
-  --cuenta-background: #F8FAF9;
-  --cuenta-background-light: #FFFFFF;
-  --cuenta-card: #FFFFFF;
-  --cuenta-card-muted: #F8FAFC;
+  /* Application surfaces */
+  --cuenta-background: var(--bg);
+  --cuenta-background-light: var(--surface);
+  --cuenta-card: var(--surface);
+  --cuenta-card-muted: var(--surface-2);
 
-  /* Borders & Dividers */
-  --cuenta-border: #e2e8f0;
-  --cuenta-border-light: #edf2f7;
-  --cuenta-divider: #f1f5f9;
+  /* Borders & dividers */
+  --cuenta-border: var(--line);
+  --cuenta-border-light: var(--line);
+  --cuenta-divider: var(--line);
 
   /* Typography */
-  --cuenta-text: #1e293b;
-  --cuenta-text-primary: #1e293b;
-  --cuenta-text-heading: #0f172a;
-  --cuenta-text-secondary: #475569;
-  --cuenta-muted: #64748b;
-  --cuenta-text-muted: #64748b;
-  --cuenta-text-on-dark: #f8fafc;
+  --cuenta-text: var(--ink);
+  --cuenta-text-primary: var(--ink);
+  --cuenta-text-heading: var(--ink);
+  --cuenta-text-secondary: var(--ink-2);
+  --cuenta-muted: var(--ink-3);
+  --cuenta-text-muted: var(--ink-3);
+  --cuenta-text-on-dark: var(--ink-on-dark);
 
-  /* Semantic Colors */
-  --cuenta-success: #0E9F6E;
-  --cuenta-success-soft: #ecfdf5;
-  --cuenta-warning: #f59e0b;
-  --cuenta-warning-soft: #fffbeb;
-  --cuenta-danger: #ef4444;
-  --cuenta-danger-soft: #fef2f2;
-  --cuenta-info: #0284c7;
-  --cuenta-info-soft: #f0f9ff;
+  /* Semantic */
+  --cuenta-success: var(--positive);
+  --cuenta-success-soft: var(--positive-soft);
+  --cuenta-warning: var(--warn);
+  --cuenta-warning-soft: var(--warn-soft);
+  --cuenta-danger: var(--negative);
+  --cuenta-danger-soft: var(--negative-soft);
+  --cuenta-info: var(--info);
+  --cuenta-info-soft: var(--info-soft);
 
-  /* Shadows & Radii */
-  --cuenta-card-radius: 16px;
-  --cuenta-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
-  --cuenta-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 4px 12px 0 rgba(0, 0, 0, 0.02);
-  --cuenta-shadow-hover: 0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  /* Shadows & radii */
+  --cuenta-card-radius: var(--radius-surface);
+  --cuenta-shadow-sm: var(--shadow);
+  --cuenta-shadow: var(--shadow);
+  --cuenta-shadow-hover: var(--shadow-lift);
 
-  /* Primary Gradient */
-  --cuenta-gradient-primary: linear-gradient(135deg, #0E6B4D 0%, #0E9F6E 60%, #12b89a 100%);
-  --cuenta-gradient-subtle: linear-gradient(135deg, #f0fdf4 0%, #f7fee7 100%);
-  --cuenta-gradient-header: linear-gradient(135deg, #f8fafc 0%, #f0fdf4 100%);
+  /* Flat — the system has no gradients */
+  --cuenta-gradient-primary: var(--accent);
+  --cuenta-gradient-subtle: var(--surface-2);
+  --cuenta-gradient-header: var(--surface-2);
 
-  /* Status Badges */
-  --cuenta-badge-positive-bg: #ecfdf5;
-  --cuenta-badge-positive-text: #047857;
-  --cuenta-badge-positive-border: #a7f3d0;
+  /* Status badges — tint plus a border in the same family, so the badge
+     still reads when the tint is too pale or the page is printed grey. */
+  --cuenta-badge-positive-bg: var(--positive-soft);
+  --cuenta-badge-positive-text: var(--positive);
+  --cuenta-badge-positive-border: rgba(11, 107, 63, 0.25);
 
-  --cuenta-badge-warning-bg: #fffbeb;
-  --cuenta-badge-warning-text: #b45309;
-  --cuenta-badge-warning-border: #fde68a;
+  --cuenta-badge-warning-bg: var(--warn-soft);
+  --cuenta-badge-warning-text: var(--warn);
+  --cuenta-badge-warning-border: rgba(154, 91, 18, 0.25);
 
-  --cuenta-badge-danger-bg: #fef2f2;
-  --cuenta-badge-danger-text: #b91c1c;
-  --cuenta-badge-danger-border: #fecaca;
+  --cuenta-badge-danger-bg: var(--negative-soft);
+  --cuenta-badge-danger-text: var(--negative);
+  --cuenta-badge-danger-border: rgba(163, 44, 28, 0.25);
 
-  --cuenta-badge-info-bg: #f0f9ff;
-  --cuenta-badge-info-text: #0369a1;
-  --cuenta-badge-info-border: #bae6fd;
+  --cuenta-badge-info-bg: var(--info-soft);
+  --cuenta-badge-info-text: var(--info);
+  --cuenta-badge-info-border: rgba(20, 86, 107, 0.25);
 
-  --cuenta-badge-neutral-bg: #f1f5f9;
-  --cuenta-badge-neutral-text: #475569;
-  --cuenta-badge-neutral-border: #cbd5e1;
+  --cuenta-badge-neutral-bg: var(--surface-2);
+  --cuenta-badge-neutral-text: var(--ink-2);
+  --cuenta-badge-neutral-border: var(--line);
 }
 
 /* ---------- Page Layout ---------- */
@@ -149,8 +158,9 @@
 }
 .an-page-title {
   margin: 0;
-  font-size: clamp(1.75rem, 2.8vw, 2.25rem);
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-size: var(--text-page-title);
+  font-weight: var(--weight-title);
   color: var(--cuenta-text-heading);
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -196,7 +206,7 @@
 
 .an-select {
   border: 1px solid var(--cuenta-border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   padding: 8px 14px;
   background: #ffffff;
   color: var(--cuenta-text);
@@ -216,17 +226,21 @@
   display: inline-flex;
   background: var(--cuenta-card-muted);
   border: 1px solid var(--cuenta-border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   padding: 3px;
   gap: 4px;
   min-height: 42px;
   box-sizing: border-box;
 }
+
+/* Nested radius: the inner pill has to be the container's radius MINUS the
+   container's padding. At the same 10px as its parent, the active pill's
+   corners ran outside the container's curve and read as points. */
 .an-toggle button {
   border: none;
   background: transparent;
   padding: 6px 16px;
-  border-radius: 7px;
+  border-radius: calc(var(--radius-control) - 3px);
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--cuenta-muted);
@@ -237,9 +251,9 @@
   color: var(--cuenta-text-primary);
 }
 .an-toggle button.is-active {
-  background: var(--cuenta-teal);
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(14, 107, 77, 0.25);
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: none;
 }
 
 /* ---------- Buttons ---------- */
@@ -250,7 +264,7 @@
   font-family: inherit;
   font-size: 0.9rem;
   font-weight: 600;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   padding: 9px 16px;
   cursor: pointer;
   min-height: 42px;
@@ -281,7 +295,7 @@
 .an-btn-outline {
   background: #ffffff;
   color: var(--cuenta-teal);
-  border-color: #cbd5e1;
+  border-color: var(--line-strong);
 }
 .an-btn-outline:hover:not(:disabled) {
   background: var(--cuenta-mint-soft);
@@ -378,7 +392,7 @@
 .an-metric-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--cuenta-shadow-hover);
-  border-color: #cbd5e1;
+  border-color: var(--line-strong);
 }
 .an-metric-top {
   display: flex;
@@ -389,7 +403,7 @@
 .an-metric-icon {
   width: 42px;
   height: 42px;
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   display: grid;
   place-items: center;
   background: var(--cuenta-mint-soft);
@@ -547,7 +561,7 @@
 .an-ai-summary-badge {
   width: 44px;
   height: 44px;
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   display: grid;
   place-items: center;
   background: var(--cuenta-gradient-primary);
@@ -578,9 +592,9 @@
   line-height: 1.65;
   color: var(--cuenta-text-primary);
   font-weight: 450;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-surface);
   padding: 16px 20px;
 }
 .an-ai-counts-row {
@@ -594,7 +608,7 @@
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -636,7 +650,7 @@
 .an-section-icon {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   display: grid;
   place-items: center;
   background: var(--cuenta-mint-soft);
@@ -679,7 +693,7 @@
 }
 .an-chart-card:hover {
   box-shadow: var(--cuenta-shadow-hover);
-  border-color: #cbd5e1;
+  border-color: var(--line-strong);
 }
 .an-chart-head {
   display: flex;
@@ -689,9 +703,10 @@
 }
 .an-chart-title {
   margin: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--cuenta-text-heading);
+  font-family: var(--font-display);
+  font-size: var(--text-subsection-title);
+  font-weight: var(--weight-title);
+  color: var(--ink);
 }
 .an-chart-desc {
   margin: 3px 0 0;
@@ -739,7 +754,7 @@
 .an-highlight-item {
   background: #ffffff;
   border: 1px solid var(--cuenta-border);
-  border-radius: 14px;
+  border-radius: var(--radius-surface);
   padding: 18px 20px;
   display: flex;
   flex-direction: column;
@@ -752,7 +767,7 @@
 .an-highlight-item:hover {
   transform: translateY(-2px);
   box-shadow: var(--cuenta-shadow);
-  border-color: #cbd5e1;
+  border-color: var(--line-strong);
 }
 .an-highlight-top {
   display: flex;
@@ -763,11 +778,11 @@
 .an-highlight-icon {
   width: 34px;
   height: 34px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   display: grid;
   place-items: center;
   font-size: 1.1rem;
-  background: #f1f5f9;
+  background: var(--surface-2);
   flex-shrink: 0;
 }
 .an-highlight-label {
@@ -804,7 +819,7 @@
   flex-direction: column;
   gap: 12px;
   padding: 22px;
-  border-radius: 14px;
+  border-radius: var(--radius-surface);
   border: 1px solid transparent;
   border-left-width: 5px;
   background: #ffffff;
@@ -817,19 +832,19 @@
   box-shadow: var(--cuenta-shadow-hover);
 }
 .an-risk-card.high {
-  background: #fffafa;
-  border-color: #fee2e2;
-  border-left-color: #ef4444;
+  background: var(--negative-soft);
+  border-color: var(--negative-soft);
+  border-left-color: var(--negative);
 }
 .an-risk-card.medium {
-  background: #fffdf7;
-  border-color: #fef3c7;
-  border-left-color: #f59e0b;
+  background: var(--warn-soft);
+  border-color: var(--warn-soft);
+  border-left-color: var(--warn);
 }
 .an-risk-card.low {
-  background: #f7fdfa;
-  border-color: #d1fae5;
-  border-left-color: #10b981;
+  background: var(--positive-soft);
+  border-color: var(--positive-soft);
+  border-left-color: var(--positive);
 }
 .an-risk-card-head {
   display: flex;
@@ -855,9 +870,9 @@
   font-weight: 700;
   margin-right: 4px;
 }
-.an-risk-card.high .an-risk-why-tag { color: #b91c1c; }
-.an-risk-card.medium .an-risk-why-tag { color: #b45309; }
-.an-risk-card.low .an-risk-why-tag { color: #047857; }
+.an-risk-card.high .an-risk-why-tag { color: var(--negative); }
+.an-risk-card.medium .an-risk-why-tag { color: var(--warn); }
+.an-risk-card.low .an-risk-why-tag { color: var(--positive); }
 
 .an-risk-detail {
   margin: 0;
@@ -866,7 +881,7 @@
   line-height: 1.5;
   background: rgba(0, 0, 0, 0.02);
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 
 /* ---------- AI Recommendations Grid Section ---------- */
@@ -878,7 +893,7 @@
 .an-reco-card {
   background: #ffffff;
   border: 1px solid var(--cuenta-border);
-  border-radius: 14px;
+  border-radius: var(--radius-surface);
   padding: 22px;
   display: flex;
   flex-direction: column;
@@ -902,10 +917,10 @@
 .an-reco-icon-wrap {
   width: 38px;
   height: 38px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   display: grid;
   place-items: center;
-  background: #f0fdf4;
+  background: var(--positive-soft);
   color: var(--cuenta-teal);
   flex-shrink: 0;
 }
@@ -985,10 +1000,10 @@
 .an-empty-icon-box {
   width: 64px;
   height: 64px;
-  border-radius: 18px;
+  border-radius: var(--radius-surface);
   display: grid;
   place-items: center;
-  background: #f1f5f9;
+  background: var(--surface-2);
   color: var(--cuenta-muted);
   font-size: 1.8rem;
 }
@@ -1030,7 +1045,7 @@
 .an-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--cuenta-border);
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   background: var(--cuenta-card);
 }
 .an-table-wrap:focus-visible {
@@ -1065,7 +1080,7 @@
   border-bottom: none;
 }
 .an-table tbody tr:hover {
-  background: #f8fafc;
+  background: var(--surface-2);
 }
 .an-table .align-right { text-align: right; }
 .an-table .align-center { text-align: center; }
@@ -1099,7 +1114,7 @@
 .an-util-track {
   height: 9px;
   border-radius: 999px;
-  background: #e2e8f0;
+  background: var(--line);
   overflow: hidden;
 }
 .an-util-fill {
@@ -1178,4 +1193,75 @@
   .an-page-title {
     font-size: 1.5rem;
   }
+}
+
+/* ---------- Recharts furniture ----------
+   Recharts draws its own tooltip, legend and axis text with library
+   defaults. Left alone, a chart's tooltip is a grey-bordered white box in
+   the browser's default face, sitting inside a card built from the system
+   set — the one part of the page that never matched. These override the
+   library defaults so every chart in the module reads as part of the app.
+   `!important` is required: recharts writes the tooltip's box styles as an
+   inline style attribute, which nothing else can outrank. */
+
+.recharts-default-tooltip,
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--surface) !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: var(--radius-control) !important;
+  box-shadow: var(--shadow-lift) !important;
+  padding: 10px 12px !important;
+  font-family: var(--font-body) !important;
+  font-size: 0.86rem !important;
+  color: var(--ink) !important;
+}
+
+.recharts-tooltip-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px !important;
+}
+
+.recharts-tooltip-item {
+  color: var(--ink-2) !important;
+  padding: 2px 0 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.recharts-tooltip-item-value,
+.recharts-tooltip-item-unit {
+  color: var(--ink) !important;
+  font-weight: 700;
+}
+
+/* Axis labels and legend share the body face and the muted ink, so the
+   data is the only thing in the frame drawing attention. */
+.recharts-cartesian-axis-tick text,
+.recharts-legend-item-text,
+.recharts-polar-angle-axis-tick text {
+  font-family: var(--font-body);
+  fill: var(--ink-3);
+  color: var(--ink-3) !important;
+}
+
+.recharts-legend-item-text {
+  font-size: 0.86rem;
+}
+
+.recharts-cartesian-grid line {
+  stroke: var(--line);
+}
+
+/* The hover band behind a bar group — a tint, not a slab. */
+.recharts-rectangle.recharts-tooltip-cursor {
+  fill: var(--accent-soft);
+  fill-opacity: 0.5;
+}
+
+/* Focus has to survive into the SVG: the chart wrapper is keyboard
+   reachable on the pages that make it tabbable. */
+.recharts-wrapper:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
 }

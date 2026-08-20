@@ -114,7 +114,7 @@ function DocumentsPage() {
 
       <section className="dashboard-content">
         {activeGeneratorType ? (
-          <div className="overview-card" style={{ backgroundColor: 'var(--surface)', padding: '24px', borderRadius: '12px' }}>
+          <div className="overview-card" style={{ backgroundColor: 'var(--surface)', padding: '24px', borderRadius: 'var(--radius-surface)' }}>
             <DocumentGenerator initialDocType={activeGeneratorType} />
           </div>
         ) : (
@@ -126,25 +126,25 @@ function DocumentsPage() {
               gap: '16px',
               marginBottom: '24px'
             }}>
-              <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Documents</p>
                 <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>{documents.length}</h3>
               </div>
-              <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Generated Documents</p>
                 <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>{activeDocuments.length}</h3>
               </div>
-              <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Uploaded Documents</p>
                 <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>0</h3>
               </div>
-              <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Archived Documents</p>
                 <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>{archivedDocuments.length}</h3>
               </div>
             </div>
 
-            <div className="overview-card" style={{ backgroundColor: 'var(--surface)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+            <div className="overview-card" style={{ backgroundColor: 'var(--surface)', borderRadius: 'var(--radius-surface)', overflow: 'hidden', border: '1px solid var(--border)' }}>
               
               {/* Header & Tabs */}
               <div style={{ padding: '24px', borderBottom: '1px solid var(--border)' }}>
@@ -183,7 +183,7 @@ function DocumentsPage() {
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       style={{
-                        width: '100%', padding: '10px 12px 10px 40px', borderRadius: '8px',
+                        width: '100%', padding: '10px 12px 10px 40px', borderRadius: 'var(--radius-control)',
                         border: '1px solid var(--border)', fontSize: '0.95rem'
                       }}
                     />
@@ -194,8 +194,8 @@ function DocumentsPage() {
                       value={typeFilter}
                       onChange={(e) => setTypeFilter(e.target.value)}
                       style={{
-                        width: '100%', padding: '10px 12px 10px 40px', borderRadius: '8px',
-                        border: '1px solid var(--border)', fontSize: '0.95rem', backgroundColor: '#fff'
+                        width: '100%', padding: '10px 12px 10px 40px', borderRadius: 'var(--radius-control)',
+                        border: '1px solid var(--border)', fontSize: '0.95rem', backgroundColor: 'var(--surface)'
                       }}
                     >
                       {documentTypes.map(type => (
@@ -303,7 +303,7 @@ function DocumentsPage() {
               </button>
             </div>
             <div className="modal-body">
-              <div style={{ backgroundColor: 'var(--background-color, #ffffff)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+              <div style={{ backgroundColor: 'var(--background-color, #ffffff)', padding: '24px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Document Name</p>
@@ -338,7 +338,7 @@ function DocumentsPage() {
               </button>
               {canCreate && (
                 !viewDetailsDoc.archivedAt ? (
-                  <button type="button" className="secondary-button" style={{ flex: '1 1 auto', maxWidth: '200px', justifyContent: 'center', color: '#e53e3e' }} onClick={() => {
+                  <button type="button" className="secondary-button" style={{ flex: '1 1 auto', maxWidth: '200px', justifyContent: 'center', color: 'var(--negative)' }} onClick={() => {
                     setArchiveModal({ open: true, docId: viewDetailsDoc.id })
                     setViewDetailsDoc(null)
                   }}>
@@ -386,7 +386,7 @@ function DocumentsPage() {
               <button
                 type="button"
                 className="primary-button"
-                style={{ backgroundColor: '#e53e3e', color: 'white', borderColor: '#e53e3e' }}
+                style={{ backgroundColor: 'var(--negative)', color: 'white', borderColor: 'var(--negative)' }}
                 onClick={() => {
                   archiveDocument(archiveModal.docId)
                   setArchiveModal({ open: false, docId: null })

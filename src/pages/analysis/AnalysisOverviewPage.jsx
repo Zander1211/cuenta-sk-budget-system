@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
+  ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from 'recharts'
 import {
   Wallet,
@@ -37,7 +37,10 @@ import {
   formatPercentage,
   periodLabel,
   CHART_COLORS,
+  CHART_INK,
+  pesoTick,
 } from '../../utils/analytics'
+
 
 const BREADCRUMB = [{ label: 'Home', to: '/dashboard' }, { label: 'Financial Analysis' }]
 
@@ -421,24 +424,25 @@ export default function AnalysisOverviewPage() {
                 <div className="an-chart-body">
                   {bvaData.length ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={bvaData} margin={{ top: 12, right: 12, left: -10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `₱${(v / 1000).toFixed(0)}k`} />
-                        <Tooltip formatter={(v) => [formatCurrency(v), '']} contentStyle={{ borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
-                        <Bar dataKey="Budget" fill={CHART_COLORS.budget} radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="Spending" fill={CHART_COLORS.actual} radius={[4, 4, 0, 0]} />
+                      <BarChart data={bvaData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }} barGap={4}>
+                        <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
+                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: CHART_INK.tick }} axisLine={false} tickLine={false} tickFormatter={pesoTick} width={56} />
+                        <Tooltip formatter={(v, k) => [formatCurrency(v), k]} cursor={{ fill: CHART_INK.cursor }} />
+                        <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                        <Bar dataKey="Budget" fill={CHART_COLORS.budget} radius={[4, 4, 0, 0]} maxBarSize={22} />
+                        <Bar dataKey="Spending" fill={CHART_COLORS.actual} radius={[4, 4, 0, 0]} maxBarSize={22} />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
+                    <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: 'var(--ink-3)' }}>
                       No budget vs actual data available
                     </div>
                   )}
                 </div>
 
                 <div className="an-chart-footer">
-                  <span style={{ fontSize: '0.84rem', color: '#64748b' }}>Updated for {label}</span>
+                  <span style={{ fontSize: '0.84rem', color: 'var(--ink-3)' }}>Updated for {label}</span>
                   <button
                     type="button"
                     className="an-chart-link"
@@ -461,30 +465,30 @@ export default function AnalysisOverviewPage() {
                 <div className="an-chart-body">
                   {trendData.length ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={trendData} margin={{ top: 12, right: 16, left: -10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `₱${(v / 1000).toFixed(0)}k`} />
-                        <Tooltip formatter={(v) => [formatCurrency(v), 'Expenses']} contentStyle={{ borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+                      <LineChart data={trendData} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+                        <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
+                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: CHART_INK.tick }} axisLine={false} tickLine={false} tickFormatter={pesoTick} width={56} />
+                        <Tooltip formatter={(v) => [formatCurrency(v), 'Expenses']} />
                         <Line
                           type="monotone"
                           dataKey="Spending"
                           stroke={CHART_COLORS.primaryLine}
-                          strokeWidth={3}
-                          dot={{ r: 4, fill: '#0E9F6E', strokeWidth: 2, stroke: '#ffffff' }}
-                          activeDot={{ r: 6 }}
+                          strokeWidth={2.5}
+                          dot={{ r: 3.5, fill: CHART_INK.surface, strokeWidth: 2, stroke: CHART_COLORS.primaryLine }}
+                          activeDot={{ r: 6, fill: CHART_COLORS.primaryLine, stroke: CHART_INK.surface, strokeWidth: 2 }}
                         />
                       </LineChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
+                    <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: 'var(--ink-3)' }}>
                       No trend data available
                     </div>
                   )}
                 </div>
 
                 <div className="an-chart-footer">
-                  <span style={{ fontSize: '0.84rem', color: '#64748b' }}>Velocity: {trend.trend.direction}</span>
+                  <span style={{ fontSize: '0.84rem', color: 'var(--ink-3)' }}>Velocity: {trend.trend.direction}</span>
                   <button
                     type="button"
                     className="an-chart-link"
@@ -517,7 +521,7 @@ export default function AnalysisOverviewPage() {
                     <div className="an-highlight-top">
                       <span className="an-highlight-label">{item.label}</span>
                       <span className="an-highlight-icon">
-                        <IconComponent size={16} color="#0E9F6E" />
+                        <IconComponent size={16} color={CHART_COLORS.primaryLine} />
                       </span>
                     </div>
                     <div className="an-highlight-value" title={item.value}>
@@ -575,7 +579,7 @@ export default function AnalysisOverviewPage() {
                   )
                 })
               ) : (
-                <div className="an-card" style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#64748b' }}>
+                <div className="an-card" style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--ink-3)' }}>
                   No risks or anomalies detected for this period.
                 </div>
               )}
@@ -617,7 +621,7 @@ export default function AnalysisOverviewPage() {
 
                     <div className="an-reco-footer">
                       <span className="an-reco-category">{rec.category}</span>
-                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#0E9F6E' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--accent)' }}>
                         Recommendation #{index + 1}
                       </span>
                     </div>

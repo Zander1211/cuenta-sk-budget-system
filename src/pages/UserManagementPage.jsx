@@ -508,7 +508,7 @@ function UserManagementPage() {
               </form>
             ) : (
               <form className="user-form" onSubmit={handleVerifyOtp}>
-                <div style={{ backgroundColor: 'rgba(21, 101, 192, 0.05)', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+                <div style={{ backgroundColor: 'rgba(21, 101, 192, 0.05)', padding: '16px', borderRadius: 'var(--radius-control)', marginBottom: '16px' }}>
                   <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-primary)', textAlign: 'center', lineHeight: '1.5' }}>
                     A verification code has been sent to<br />
                     <strong>{pendingUser?.email}</strong>
@@ -579,9 +579,9 @@ function UserManagementPage() {
                   <div key={user.id} style={{ 
                     backgroundColor: 'var(--background-color, #ffffff)', 
                     padding: '24px', 
-                    borderRadius: '12px', 
+                    borderRadius: 'var(--radius-surface)', 
                     border: '1px solid var(--border-color)',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                    boxShadow: 'var(--shadow)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '20px',
@@ -594,7 +594,7 @@ function UserManagementPage() {
                         backgroundColor: 'var(--accent)', color: 'white',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: '24px', fontWeight: 'bold', flexShrink: 0,
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                        boxShadow: 'var(--shadow-lift)'
                       }}>
                         {user.full_name?.charAt(0)?.toUpperCase() || '?'}
                       </div>
@@ -690,7 +690,7 @@ function UserManagementPage() {
                       <button
                         type="button"
                         className="secondary-button"
-                        style={{ flex: '1 1 auto', fontSize: '0.85rem', padding: '8px 12px', textAlign: 'center', color: '#dc2626', borderColor: '#fee2e2', backgroundColor: '#fef2f2' }}
+                        style={{ flex: '1 1 auto', fontSize: '0.85rem', padding: '8px 12px', textAlign: 'center', color: 'var(--negative)', borderColor: 'var(--negative-soft)', backgroundColor: 'var(--negative-soft)' }}
                         onClick={() => {
                           if (window.confirm(`Are you sure you want to permanently delete the account for ${user.full_name}?`)) {
                             handleDeleteAccount(user)
@@ -755,7 +755,7 @@ function UserManagementPage() {
                 className="primary-button"
                 style={
                   deactivateModal.action === 'deactivate'
-                    ? { backgroundColor: '#ef4444', color: 'white', borderColor: '#ef4444' }
+                    ? { backgroundColor: 'var(--negative)', color: 'white', borderColor: 'var(--negative)' }
                     : {}
                 }
                 onClick={confirmToggleActive}
@@ -781,7 +781,7 @@ function UserManagementPage() {
                   backgroundColor: 'var(--accent)', color: 'white',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '28px', fontWeight: 'bold', marginBottom: '16px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                  boxShadow: 'var(--shadow-lift)'
                 }}>
                   {viewModal.user.full_name?.charAt(0)?.toUpperCase() || '?'}
                 </div>
@@ -789,7 +789,7 @@ function UserManagementPage() {
                 <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem', wordBreak: 'break-all' }}>{viewModal.user.email}</p>
               </div>
 
-              <div style={{ backgroundColor: 'var(--background-color, #ffffff)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-color)', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+              <div style={{ backgroundColor: 'var(--background-color, #ffffff)', padding: '24px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow)' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '20px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>User Role</p>

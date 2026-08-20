@@ -14,22 +14,52 @@ export const MONTHS_FULL = [
 
 export const monthOptions = MONTHS_FULL.map((label, i) => ({ value: i + 1, label }))
 
-// Shared, consistent category color palette (used by charts, donut, legends, tables, tooltips).
-// Dark teal -> pale desaturated green-gray, matching the reference dashboards exactly.
+// ---------- Chart palette ----------
+// These are the literal values of the design tokens in index.css: the
+// category ramp is --c1…--c8, and the semantic roles map to --accent,
+// --warn, --negative, --line-strong and --surface-2.
+//
+// They stay literal rather than var(): the PDF export rasterises the chart
+// with html2canvas, which does not resolve custom properties inside SVG
+// presentation attributes, so a var() here exports as a black shape.
+//
+// The ramp is one hue family stepping down in lightness, so a chart still
+// reads in grayscale and for every kind of colour vision.
 export const CATEGORY_COLORS = [
-  '#0C2E30', '#0E6B4D', '#0E9F6E', '#34D399', '#8AD9BE', '#A7C4C9', '#CBD9DE',
+  '#02353C', '#0B5A44', '#12805C', '#2EAF7D', '#6FCFB4', '#A5E3D4', '#C9EFE7', '#B9CBC7',
 ]
 
-// Fixed semantic roles used across Budget vs Actual / Monthly Trend charts.
-// Two-tone comparison pairing: dark teal (budget) + light mint/seafoam (actual).
+// Fixed semantic roles across Budget vs Actual / Monthly Trend / Utilization.
+// Budget and actual sit at opposite ends of the ramp so the pair separates
+// even at bar widths of a few pixels.
 export const CHART_COLORS = {
-  budget: '#0E6B4D',
-  actual: '#34D399',
-  primaryLine: '#0E9F6E',
-  averageLine: '#78cbb0',
-  remaining: '#dceceb',
-  warning: '#F59A3C',
-  danger: '#DC6B4F',
+  budget: '#02353C',      // --c1
+  actual: '#2EAF7D',      // --c4
+  primaryLine: '#0E6B4D', // --accent
+  averageLine: '#B4CBC5', // --line-strong
+  remaining: '#EAF2EF',   // --surface-2, the unfilled track
+  warning: '#9A5B12',     // --warn
+  danger: '#A32C1C',      // --negative
+}
+
+// Chart furniture: axes, gridlines, dot centres, hover cursor. One set, so
+// every chart in the module sits on the same grid at the same weight.
+export const CHART_INK = {
+  tick: '#5F7B79',        // --ink-3, 4.6:1 on white
+  grid: '#D5E3DE',        // --line
+  surface: '#FFFFFF',     // --surface
+  muted: '#B4CBC5',       // --line-strong, for comparison series
+  cursor: 'rgba(14, 107, 77, 0.06)',
+}
+
+// Peso axis ticks. Steps the unit with the magnitude so a barangay-scale
+// chart keeps its precision instead of rendering an axis of zeros:
+// `(v/1000).toFixed(0)` printed "₱0k" for every amount under a thousand.
+export function pesoTick(v) {
+  const n = Math.abs(v)
+  if (n >= 1_000_000) return `₱${(v / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`
+  if (n >= 1_000) return `₱${(v / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`
+  return `₱${v}`
 }
 
 export function colorForCategory(name, index = 0) {

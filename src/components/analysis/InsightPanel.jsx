@@ -80,7 +80,7 @@ export function InsightPanel({
           </span>
           <div>
             <h3 className="an-card-title" style={{ fontSize: '1.1rem' }}>{title}</h3>
-            <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>
+            <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--ink-3)', fontWeight: 500 }}>
               {statusLabel}
             </p>
           </div>
@@ -111,15 +111,15 @@ export function InsightPanel({
         {insights.length ? (
           insights.map((item, i) => <InsightItem key={`${item.title}-${i}`} item={item} />)
         ) : (
-          <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', textAlign: 'center', padding: '16px' }}>
+          <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--ink-3)', textAlign: 'center', padding: '16px' }}>
             {emptyMessage}
           </p>
         )}
       </div>
 
       {recommendations.length ? (
-        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '0.9rem', color: '#0E9F6E' }}>
+        <div style={{ borderTop: '1px solid var(--line)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '0.9rem', color: 'var(--accent)' }}>
             <Lightbulb size={16} />
             <span>Recommended Actions</span>
           </div>
@@ -127,8 +127,8 @@ export function InsightPanel({
             {recommendations.map((rec, i) => {
               const text = typeof rec === 'object' ? (rec.detail || rec.title || '') : String(rec)
               return (
-                <div key={i} style={{ display: 'flex', gap: '8px', fontSize: '0.86rem', color: '#334155', lineHeight: '1.45' }}>
-                  <span style={{ color: '#0E9F6E', fontWeight: 700 }}>•</span>
+                <div key={i} style={{ display: 'flex', gap: '8px', fontSize: '0.86rem', color: 'var(--ink-2)', lineHeight: '1.45' }}>
+                  <span style={{ color: 'var(--accent)', fontWeight: 700 }}>•</span>
                   <span>{text}</span>
                 </div>
               )
@@ -138,7 +138,7 @@ export function InsightPanel({
       ) : null}
 
       {error ? (
-        <p style={{ margin: 0, fontSize: '0.84rem', color: '#b45309', background: '#fffbeb', padding: '10px 12px', border: '1px solid #fde68a', borderRadius: '8px' }}>
+        <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--warn)', background: 'var(--warn-soft)', padding: '10px 12px', border: '1px solid rgba(154, 91, 18, 0.25)', borderRadius: 'var(--radius-control)' }}>
           {error}
         </p>
       ) : null}

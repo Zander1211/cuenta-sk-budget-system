@@ -312,7 +312,7 @@ function ReceiptDetailsPage() {
                   <div style={{ display: 'flex', gap: '10px', fontSize: '0.85rem', color: 'var(--ink-soft)' }}>
                     <span>Category: <strong>{viewerExpense.category || 'General'}</strong></span>
                     <span>•</span>
-                    <span>Budget: <strong style={{ color: '#15803d' }}>₱{Number(viewerExpense.amount || 0).toLocaleString()}</strong></span>
+                    <span>Budget: <strong style={{ color: 'var(--positive)' }}>₱{Number(viewerExpense.amount || 0).toLocaleString()}</strong></span>
                   </div>
                 </div>
                 <button
