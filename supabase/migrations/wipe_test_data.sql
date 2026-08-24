@@ -1,4 +1,3 @@
--- ================================================================
 -- Cuenta: Hard Reset User Data
 -- ================================================================
 -- WARNING: This script will delete ALL user-entered and sample data, including

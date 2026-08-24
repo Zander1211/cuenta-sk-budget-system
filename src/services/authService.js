@@ -1,5 +1,21 @@
 import { supabase } from '../supabase/supabaseClient'
 
+function apiError(result, fallback) {
+  const candidate = result?.error || result?.message
+  const message = typeof candidate === 'string' ? candidate.trim() : ''
+  return new Error(message && message !== '{}' && message !== '[object Object]' ? message : fallback)
+}
+
+async function readApiResponse(response) {
+  const text = await response.text()
+  if (!text) return {}
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { error: response.ok ? '' : text }
+  }
+}
+
 // LOGIN
 export async function loginUser(email, password, recaptchaToken) {
   try {
@@ -59,13 +75,49 @@ export async function updatePassword(newPassword) {
   return { data, error }
 }
 
-// UPDATE EMAIL
-export async function updateEmail(newEmail) {
-  const { data, error } = await supabase.auth.updateUser({
-    email: newEmail,
-  })
+// EMAIL UPDATE OTP — uses the application's configured Gmail mailer.
+export async function sendEmailUpdateOtp(email) {
+  try {
+    const response = await fetch('/api/send-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    const result = await readApiResponse(response)
+    if (!response.ok) {
+      return { data: null, error: apiError(result, 'Unable to send the verification code. Please try again.') }
+    }
+    return { data: result, error: null }
+  } catch {
+    return { data: null, error: new Error('Unable to reach the email service. Check your connection and try again.') }
+  }
+}
 
-  return { data, error }
+// PROFILE DETAILS — authenticated, server-side synchronization.
+export async function saveProfileDetails(profile) {
+  try {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+    const accessToken = sessionData?.session?.access_token
+    if (sessionError || !accessToken) {
+      return { data: null, error: new Error('Your session has expired. Please log in again.') }
+    }
+
+    const response = await fetch('/api/update-profile', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(profile),
+    })
+    const result = await readApiResponse(response)
+    if (!response.ok) {
+      return { data: null, error: apiError(result, 'Unable to update the profile. Please try again.') }
+    }
+    return { data: result, error: null }
+  } catch {
+    return { data: null, error: new Error('Unable to reach the profile service. Check your connection and try again.') }
+  }
 }
 
 // PASSWORD UPDATE OTP
@@ -114,11 +166,27 @@ export async function resendSignupOtp(email) {
 
 // VERIFY EMAIL UPDATE OTP
 export async function verifyEmailUpdateOtp(email, token) {
-  const { data, error } = await supabase.auth.verifyOtp({
-    email,
-    token,
-    type: 'email_change',
-  })
+  try {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+    const accessToken = sessionData?.session?.access_token
+    if (sessionError || !accessToken) {
+      return { data: null, error: new Error('Your session has expired. Please log in again.') }
+    }
 
-  return { data, error }
+    const response = await fetch('/api/verify-otp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ email, code: token, purpose: 'email_change' }),
+    })
+    const result = await readApiResponse(response)
+    if (!response.ok) {
+      return { data: null, error: apiError(result, 'Unable to verify the code or update the email address.') }
+    }
+    return { data: result, error: null }
+  } catch {
+    return { data: null, error: new Error('Unable to reach the verification service. Check your connection and try again.') }
+  }
 }

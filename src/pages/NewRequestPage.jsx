@@ -276,7 +276,11 @@ function NewRequestPage() {
     }
 
     if (editId) {
-      resubmitRequest(editId, payload)
+      const { error } = await resubmitRequest(editId, payload)
+      if (error) {
+        setFormError(`The request could not be resubmitted: ${error.message || 'Unknown error'}`)
+        return
+      }
     } else {
       const { error } = await addRequest(payload)
       if (error) {

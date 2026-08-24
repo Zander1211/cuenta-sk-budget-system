@@ -5,6 +5,7 @@
 
 // @ts-ignore
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts'
+import { fetchWithFallback, ProviderConfig } from '../_shared/ai-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -130,6 +131,19 @@ Current Page: ${currentPage}
 Current System Date Context: ${currentMonthName} ${currentYear}
 
 ================================================================
+LANGUAGE — ALWAYS REPLY IN THE USER'S LANGUAGE (HIGHEST PRIORITY):
+================================================================
+
+Detect the language of the user's MOST RECENT message before writing your reply, and respond ENTIRELY in that language:
+- Message is in Tagalog/Filipino → reply entirely in natural, professional Tagalog.
+- Message is in English → reply entirely in English.
+- Message mixes Tagalog and English ("Taglish") → reply naturally in Taglish, the way Filipino speakers actually blend the two languages — not a stiff word-for-word translation. Stay professional and easy to understand.
+- If earlier turns were in a different language, follow the LATEST user message — the user may switch languages mid-conversation, and you must switch with them.
+- Never ask the user which language to use and never mention that you detected one. Just answer in it.
+- This rule governs every reply you produce below: data answers, the off-topic refusal, and recommendations all follow the detected language.
+- Regardless of reply language, copy peso amounts (₱...), dates, month names, and record names (project/event/category names) EXACTLY as they appear in the data block — never translate a proper name or invent a localized figure. Established SK program names (e.g. "Youth Leadership Seminar") may stay in English even inside a Tagalog reply, since that is how they are actually named in the system.
+
+================================================================
 IDENTITY & SCOPE RESTRICTION (HIGHEST PRIORITY):
 ================================================================
 
@@ -146,8 +160,16 @@ YOU MAY ONLY ANSWER QUESTIONS ABOUT:
 - Audit Trail: User Activities, Approvals, Budget Modifications, System Actions
 - User Guidance: How to create a budget request, upload receipts, generate reports, update a profile, use AI Analysis, manage projects/events/payroll/documents
 
-IF THE USER ASKS ANYTHING UNRELATED TO THE CUENTA SYSTEM (e.g., general knowledge, trivia, math problems, weather, sports, entertainment, programming tutorials, jokes, poems, science, history, politics, or any topic not listed above), YOU MUST RESPOND WITH EXACTLY:
+IF THE USER ASKS ANYTHING UNRELATED TO THE CUENTA SYSTEM (e.g., general knowledge, trivia, math problems, weather, sports, entertainment, programming tutorials, jokes, poems, science, history, politics, or any topic not listed above), YOU MUST RESPOND WITH EXACTLY the version matching the detected language of the user's message (see LANGUAGE section above):
+
+- If the user's message is in English, respond with EXACTLY:
 "I'm Cue, the AI assistant for the Cuenta: SK Budget Monitoring and Document Tracking with AI Analysis system. I can only assist with questions related to this system, such as budgets, expenses, projects, events, payroll, documents, reports, AI Analysis, and system features. Please ask a question related to the Cuenta system."
+
+- If the user's message is in Tagalog/Filipino, respond with EXACTLY:
+"Ako si Cue, ang AI assistant para sa Cuenta: SK Budget Monitoring and Document Tracking with AI Analysis system. Tumutulong lang ako sa mga tanong tungkol sa system na ito, tulad ng mga budget, gastos, proyekto, event, payroll, dokumento, ulat, AI Analysis, at iba pang feature ng system. Mangyaring magtanong tungkol sa Cuenta system."
+
+- If the user's message is Taglish (mixed Tagalog and English), respond with EXACTLY:
+"Ako si Cue, ang AI assistant para sa Cuenta: SK Budget Monitoring and Document Tracking with AI Analysis system. I can only help with questions related dito sa system — tulad ng budgets, expenses, projects, events, payroll, documents, reports, AI Analysis, at iba pang system features. Paki-tanong na lang ang tungkol sa Cuenta system."
 
 DO NOT attempt to answer unrelated questions under any circumstances. DO NOT provide general knowledge answers even if you know them.
 
@@ -212,6 +234,12 @@ STRICT FILTERING & RESPONSE ACCURACY RULES:
    - "What are the implemented budgets/projects for <month>?" → list that month's approved records from the APPROVED PROJECTS / EVENTS / PAYROLL sections, each with its amount and Progress status, then give the month's Total Expenses.
    - Progress meaning: "Completed" = fully implemented; "Ongoing" = currently being implemented. If the user asks only for one of these, filter the list by that Progress value.
    - Answering an implementation question with the Allocated Budget figure is a WRONG ANSWER even when the two amounts happen to be equal.
+
+1C. **LIST EVERY MATCHING RECORD — NEVER TRUNCATE OR SAMPLE**:
+   - When asked to list, count, or enumerate projects, events, payroll, expenses, budgets, or requests, include EVERY record from the data block above that matches the user's stated filters — never stop early, never show only "the first few," and never silently cap a list at a round number.
+   - If the user names no month, year, project, event, payroll or status filter, do NOT invent one. Treat the request as unscoped and include every matching record from every period recorded.
+   - When your answer lists 2 or more records, state the total count first — e.g. "There are 4 approved projects for August 2026:" — and the number you state MUST equal the number of lines you then list.
+   - If a filter you applied (a month, a year, a status) narrows the results below what another part of the system shows at a glance (for example, a records page that lists every period together), name that filter in your first sentence so the scope is obvious — e.g. "for August 2026" — instead of leaving the user to guess why your count differs from an unfiltered view elsewhere.
 
 2. **NEVER AGGREGATE UNRELATED MONTHS**:
    - Never combine or sum budgets from different months unless the user explicitly requests "total budget", "annual budget", "overall budget", "entire year budget", or "all months combined".
@@ -281,6 +309,7 @@ STRICT FILTERING & RESPONSE ACCURACY RULES:
    - Always write amounts with the Philippine Peso symbol (₱) and thousands separators, copying the figure exactly as it appears in the data above.
    - Keep replies concise, friendly, warm, and accurate to the requested period.
    - When providing recommendations, organize them clearly with sections but keep the overall length reasonable.
+   - Write the ENTIRE reply — including section labels like "Current Financial Status" or "Suggested Projects" — in the language detected from the user's latest message (see LANGUAGE section above). Translate section labels naturally into Tagalog/Taglish when replying in those languages; do not leave the surrounding prose in English while only the data is localized.
 `
 }
 
@@ -295,48 +324,18 @@ serve(async (req: Request) => {
   }
 
   // @ts-ignore
-  const groqApiKey = Deno.env.get('GROQ_API_KEY')
-
-  if (!groqApiKey) {
-    console.error('[Cue Edge Function] GROQ_API_KEY is not set in Supabase secrets.')
+  const primaryKey = Deno.env.get('PRIMARY_AI_API_KEY') || Deno.env.get('GROQ_API_KEY')
+  
+  if (!primaryKey) {
+    console.error('[Cue Edge Function] API_KEY is not set.')
     return new Response(JSON.stringify({ error: 'AI service API key is not configured.', code: 'AUTH_ERROR' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 
-  /*
-   * GET is a health check that also reports the models Groq is serving right
-   * now. This whole outage came down to nobody being able to see that a
-   * pinned model name had been retired: the function failed, the client fell
-   * back to its offline rule engine, and nothing anywhere said "that model is
-   * gone". Asking Groq directly turns that into a one-request answer.
-   *
-   * Only model ids are returned. The key stays server-side.
-   */
   if (req.method === 'GET') {
-    let models: string[] = []
-    let listOk = false
-    try {
-      const r = await fetch('https://api.groq.com/openai/v1/models', {
-        headers: { 'Authorization': `Bearer ${groqApiKey}` },
-      })
-      listOk = r.ok
-      const listBody: any = await r.json().catch(() => ({}))
-      models = Array.isArray(listBody?.data)
-        ? listBody.data.map((m: any) => m.id).filter(Boolean).sort()
-        : []
-    } catch (err: any) {
-      console.error(`[Cue Edge Function] Could not list Groq models: ${err.message}`)
-    }
-
-    return new Response(JSON.stringify({
-      ok: true,
-      hasGroqKey: true,
-      groqModelsReachable: listOk,
-      configuredModel: Deno.env.get('GROQ_MODEL') || null,
-      availableModels: models,
-    }, null, 2), {
+    return new Response(JSON.stringify({ ok: true, configured: true }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
@@ -368,19 +367,9 @@ serve(async (req: Request) => {
     })
   }
 
-  // Build the system prompt with full financial context
   const systemPrompt = buildSystemPrompt(systemContext)
 
-  // Format messages for Groq (OpenAI-compatible format)
-  /*
-   * Only the tail of the conversation is replayed. The whole transcript used
-   * to be resent every turn, and because the system prompt already carries
-   * the entire budget/expense/request dataset, a long chat steadily pushed
-   * that data down the context until answers drifted from the records. The
-   * figures live in the system prompt, not in the history, so the older turns
-   * cost accuracy without adding anything.
-   */
-  const MAX_HISTORY = 12
+  const MAX_HISTORY = 10
   const recentMessages = messages.slice(-MAX_HISTORY)
 
   const formattedMessages = [
@@ -395,166 +384,68 @@ serve(async (req: Request) => {
   const totalExpenses = systemContext.totals?.totalExpenses ?? systemContext.totalExpenses ?? 0
   const remaining = systemContext.totals?.remaining ?? systemContext.remaining ?? 0
 
-  console.log(`[Cue Edge Function] User: "${systemContext.userName || 'Unknown'}" | Role: "${systemContext.role || 'Unknown'}" | Page: "${systemContext.currentPage || 'Unknown'}"`)
-  console.log(`[Cue Edge Function] Budget: ₱${totalBudget} | Expenses: ₱${totalExpenses} | Remaining: ₱${remaining}`)
-  console.log(`[Cue Edge Function] Sending ${formattedMessages.length} messages to Groq (llama-3.3-70b-versatile)...`)
+  console.log(`[Cue] User: "${systemContext.userName || 'Unknown'}" | Page: "${systemContext.currentPage || 'Unknown'}"`)
+  
+  // Default Groq endpoint — working models verified 2026-08-20.
+  // llama-3.3-70b-versatile and llama-3.1-8b-instant are retired (404).
+  const groqEndpoint = 'https://api.groq.com/openai/v1/chat/completions'
+  const primaryEndpoint = Deno.env.get('PRIMARY_AI_ENDPOINT') || groqEndpoint
+  const primaryModel = Deno.env.get('PRIMARY_AI_MODEL') || 'openai/gpt-oss-120b'
 
-  /*
-   * Groq retires models periodically, and a retired name returns 404 from the
-   * completions endpoint. Pinning a single name means the day it is retired
-   * the assistant silently degrades to the client-side rule engine, which is
-   * exactly what happened with llama-3.3-70b-versatile.
-   *
-   * This list was built from what the account actually serves on 2026-08-20
-   * (GET this function to re-check — it asks Groq and returns the live ids).
-   * Every llama chat model has been retired: llama-3.3-70b-versatile,
-   * llama-3.1-8b-instant and meta-llama/llama-4-scout all return 404.
-   *
-   * The three below are the only general chat models available, ordered
-   * strongest first. They are deliberately from two different families and
-   * three different sizes, so a rate limit or a retirement on one does not
-   * take the others with it.
-   *
-   * Excluded on purpose: whisper-* (speech-to-text), canopylabs/orpheus-*
-   * (text-to-speech), meta-llama/llama-prompt-guard-* and
-   * openai/gpt-oss-safeguard-20b (safety classifiers, not chat), allam-2-7b
-   * (Arabic-focused), and groq/compound* (agentic systems that can reach the
-   * web — wrong for an assistant that must answer only from the data block).
-   *
-   * GROQ_MODEL overrides the list without a redeploy.
-   */
-  const configuredModel = Deno.env.get('GROQ_MODEL')
-  const candidateModels = configuredModel
-    ? [configuredModel]
-    : [
-        'openai/gpt-oss-120b',
-        'openai/gpt-oss-20b',
-        'qwen/qwen3.6-27b',
-      ]
-  try {
-    let groqResponse: Response | null = null
-    let usedModel = ''
-    const attempts: string[] = []
+  const fallbackKey = Deno.env.get('FALLBACK_AI_API_KEY')
+  const fallbackEndpoint = Deno.env.get('FALLBACK_AI_ENDPOINT')
+  const fallbackModel = Deno.env.get('FALLBACK_AI_MODEL')
 
-    for (const model of candidateModels) {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${groqApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          messages: formattedMessages,
-          /*
-           * Deterministic decoding. This assistant reports recorded figures,
-           * so sampling variety is not a feature — at temperature 0.5 the
-           * same question genuinely produced different answers between sends,
-           * which is what users were reporting. temperature 0 + top_p 1 +
-           * a fixed seed makes a repeated question return a repeated answer.
-           */
-          temperature: 0,
-          top_p: 1,
-          seed: 1,
-          /*
-           * The recommendation format asks for four labelled sections; 800
-           * tokens truncated them mid-sentence, which read as the bot getting
-           * the answer wrong rather than running out of room.
-           */
-          max_tokens: 1600,
-        }),
-      })
-
-      if (response.ok) {
-        groqResponse = response
-        usedModel = model
-        break
-      }
-
-      const errorText = await response.text()
-      attempts.push(`${model} -> ${response.status}`)
-      console.error(`[Cue Edge Function] Groq rejected ${model}: ${response.status} - ${errorText}`)
-
-      /*
-       * Which failures are worth trying the next model for:
-       *   404 - this model is gone; a different one may exist.
-       *   429 - rate limited. Groq meters each model separately, so another
-       *         model very often still has budget. This used to break here,
-       *         which meant one busy model took the whole assistant down
-       *         while an idle fallback sat untried.
-       * Anything else (401/403 bad key, 5xx outage) fails identically for
-       * every model, so stop rather than burn latency on certain failures.
-       */
-      const worthTryingNext = response.status === 404 || response.status === 429
-      if (!worthTryingNext) break
+  const providers: ProviderConfig[] = []
+  
+  if (primaryKey) {
+    providers.push({ apiKey: primaryKey, endpoint: primaryEndpoint, model: primaryModel, label: 'Primary (Chat)' })
+    // When using the default Groq setup (no custom PRIMARY_AI_API_KEY set),
+    // add internal model fallbacks. Groq meters each model separately so a
+    // rate-limited model doesn't take down the others.
+    if (!Deno.env.get('PRIMARY_AI_API_KEY')) {
+      providers.push({ apiKey: primaryKey, endpoint: groqEndpoint, model: 'openai/gpt-oss-20b', label: 'Groq Fallback 1' })
+      providers.push({ apiKey: primaryKey, endpoint: groqEndpoint, model: 'qwen/qwen3.6-27b', label: 'Groq Fallback 2' })
     }
+  }
 
-    if (!groqResponse) {
-      return new Response(JSON.stringify({
-        error: `Groq API error. Tried: ${attempts.join(', ')}`,
-        code: 'AI_ERROR',
-      }), {
-        status: 502,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+  if (fallbackKey && fallbackEndpoint && fallbackModel) {
+    providers.push({ apiKey: fallbackKey, endpoint: fallbackEndpoint, model: fallbackModel, label: 'Secondary Fallback (Chat)' })
+  }
 
-    if (usedModel !== candidateModels[0]) {
-      console.warn(`[Cue Edge Function] Fell back to ${usedModel}. Set GROQ_MODEL to pin it.`)
-    }
+  const aiResponse = await fetchWithFallback({
+    messages: formattedMessages,
+    providers,
+    temperature: 0,
+    topP: 1,
+    seed: 1,
+    maxTokens: 1600,
+    timeoutMs: 25000,
+  })
 
-    const data = await groqResponse.json()
-    /*
-     * Normalise exotic Unicode spaces before returning. Even at
-     * temperature 0 the model sometimes emits U+202F (narrow no-break
-     * space) where it otherwise emits U+0020 -- batched GPU inference is
-     * not bit-deterministic, so ties break differently between runs. The
-     * words and figures are identical either way, but the raw bytes were
-     * not, and a no-break space also breaks copy-paste and text search in
-     * exported reports. Collapsing them keeps repeated answers byte-equal.
-     */
-    /*
-     * qwen/qwen3.6-27b is a reasoning model: it emits its chain of thought in
-     * <think> ... </think> before the answer, and that was landing verbatim in
-     * the chat bubble ("<think> Here's a thinking process: 1. Analyze User
-     * Input..."). Stripped here rather than by dropping the model, because it
-     * is one of only three chat models the account can reach and it is the
-     * last line of defence when the two gpt-oss models are rate limited.
-     * An unterminated <think> (hit the token cap mid-thought) drops the rest.
-     */
-    const replyText = (data.choices?.[0]?.message?.content || '')
-      .replace(/<think>[\s\S]*?<\/think>/gi, '')
-      .replace(/<think>[\s\S]*$/gi, '')
-      .replace(/[\u00A0\u2007\u202F\u2009\u2002-\u2006\u2008\u205F\u3000]/g, ' ')
-      /*
-       * Strip markdown bold. The bubble in ChatWidget renders msg.content as
-       * plain text (white-space: pre-wrap), so "**₱39,000**" reached the user
-       * with the asterisks visible. The prompt already asks for plain text,
-       * but the models apply emphasis anyway and — worse — apply it
-       * inconsistently, so the same question came back bolded on one run and
-       * unbolded on the next. Only ** and __ are removed; single asterisks
-       * are left alone because the recommendation format uses them as bullets.
-       */
-      .replace(/\*\*(.+?)\*\*/g, '$1')
-      .replace(/__(.+?)__/g, '$1')
-
-    console.log(`[Cue Edge Function] Success! Generated response (${replyText.length} chars)`)
-
-    // `model` is returned so a silent fallback to a different (weaker) model
-    // is visible to the caller instead of looking like the bot changed its mind.
-    return new Response(JSON.stringify({ reply: replyText.trim(), model: usedModel }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-
-  } catch (err: any) {
-    console.error(`[Cue Edge Function] Unexpected error: ${err.message}`)
+  if (!aiResponse.ok) {
     return new Response(JSON.stringify({
-      error: 'Failed to generate AI response.',
+      error: aiResponse.error,
       code: 'AI_ERROR',
     }), {
-      status: 500,
+      status: 502,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
+
+  const usedModel = aiResponse.usedModel
+  
+  const replyText = aiResponse.text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<think>[\s\S]*$/gi, '')
+    .replace(/[\u00A0\u2007\u202F\u2009\u2002-\u2006\u2008\u205F\u3000]/g, ' ')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+
+  console.log(`[Cue] Generated response (${replyText.length} chars) using ${usedModel}`)
+
+  return new Response(JSON.stringify({ reply: replyText.trim(), model: usedModel }), {
+    status: 200,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
 })

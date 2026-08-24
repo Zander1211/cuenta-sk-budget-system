@@ -17,7 +17,7 @@ import { getPublicTransparencyData } from '../services/publicTransparencyService
 import { AllocationComposition, SpendComparison } from '../components/transparency/AllocationCharts'
 import { useAllocationByCategory } from '../hooks/useAllocationByCategory'
 import { useScrollReveal } from '../hooks/useScrollReveal'
-import skLogo from '../assets/logo.png'
+import skLogo from '../assets/cuenta-logo.png'
 import './PublicTransparencyPage.css'
 
 const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 })

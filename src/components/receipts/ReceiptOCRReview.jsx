@@ -17,15 +17,22 @@ const TEXT_FIELDS = [
   { key: 'receiptNumber', label: 'Receipt number', placeholder: 'Not detected' },
   { key: 'receivedFrom', label: 'Received from', placeholder: 'Not detected' },
   { key: 'organization', label: 'Organization', placeholder: 'Not detected' },
+  { key: 'address', label: 'Store address', placeholder: 'Not detected' },
+  { key: 'telephone', label: 'Telephone', placeholder: 'Not detected' },
+  { key: 'tin', label: 'TIN', placeholder: 'Not detected' },
+  { key: 'time', label: 'Receipt time', placeholder: 'Not detected' },
   { key: 'receiver', label: 'Receiver', placeholder: 'Not detected' },
   { key: 'bank', label: 'Bank', placeholder: 'Not detected' },
   { key: 'chequeNumber', label: 'Cheque number', placeholder: 'Not detected' },
 ]
 
 const AMOUNT_FIELDS = [
-  { key: 'totalAmount', label: 'Total' },
+  { key: 'subtotal', label: 'Subtotal' },
+  { key: 'vatAmount', label: 'VAT amount' },
+  { key: 'discount', label: 'Discount' },
   { key: 'cashAmount', label: 'Cash amount' },
   { key: 'chequeAmount', label: 'Cheque amount' },
+  { key: 'totalCashAndCheque', label: 'Cash and cheque total' },
 ]
 
 export default function ReceiptOCRReview({ scanSrc, values, onChange, flags, confidence, rawText }) {
@@ -95,10 +102,22 @@ export default function ReceiptOCRReview({ scanSrc, values, onChange, flags, con
             <pre>{rawText}</pre>
             <small>
               This is the raw recognition output, shown so you can tell a poor scan from an
-              unreadable receipt. It is not saved.
+              unreadable receipt. It is retained in the receipt's OCR diagnostics for auditing.
             </small>
           </details>
         ) : null}
+
+        <label className="scan-grand-total" data-flagged={flagged.has('totalAmount')}>
+          <span>Detected Grand Total</span>
+          <CurrencyInput
+            value={values.totalAmount ?? ''}
+            onValueChange={value => setField('totalAmount', value === '' ? '' : Number(value))}
+          />
+          <small>
+            Confirm this against the receipt's Grand Total or Amount Due. Correct it here if OCR
+            selected cash tendered, change, VAT, or another amount.
+          </small>
+        </label>
 
         <div className="scan-field-grid">
           {TEXT_FIELDS.map(field => (

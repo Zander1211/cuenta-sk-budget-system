@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import {
-  Search, ChevronLeft, ChevronRight,
+  Search,
   Shield, Clock, Users, Activity,
   ChevronDown, ChevronUp, Info,
 } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
+import PaginationControls from '../components/PaginationControls'
 import { useAuditLog } from '../context/AuditLogContext'
 
 // ── Constants ────────────────────────────────────────────────────
@@ -183,9 +184,7 @@ function AuditTrailPage() {
     totalPages,
     currentPage,
     goToPage,
-    activeFilters,
     setActiveFilters,
-    fetchLogs,
     PAGE_SIZE,
   } = useAuditLog()
 
@@ -240,7 +239,7 @@ function AuditTrailPage() {
     })
   }
 
-  const hasActiveFilters = Object.entries(localFilters).some(([k, v]) => v && v !== 'All' && v !== '')
+  const hasActiveFilters = Object.values(localFilters).some((value) => value && value !== 'All')
 
   return (
     <RoleGate allow={['SK Chairman']}>
@@ -555,66 +554,17 @@ function AuditTrailPage() {
           </div>
 
           {/* ── Pagination ──────────────────────────────────────── */}
-          {totalPages > 1 && (
-            <div className="audit-pagination">
-              <button
-                type="button"
-                className="secondary-button audit-page-btn"
-                id="audit-prev-page"
-                onClick={() => goToPage(currentPage - 1)}
-                disabled={currentPage <= 1 || isLoadingLogs}
-                aria-label="Previous page"
-              >
-                <ChevronLeft size={16} />
-                Previous
-              </button>
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalCount}
+            pageSize={PAGE_SIZE}
+            onPageChange={goToPage}
+            isLoading={isLoadingLogs}
+            isFiltered={hasActiveFilters}
+            idPrefix="audit"
+          />
 
-              <div className="audit-page-numbers">
-                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                  let page = i + 1
-                  if (totalPages > 7) {
-                    if (currentPage <= 4) {
-                      page = i + 1
-                    } else if (currentPage >= totalPages - 3) {
-                      page = totalPages - 6 + i
-                    } else {
-                      page = currentPage - 3 + i
-                    }
-                  }
-                  return (
-                    <button
-                      key={page}
-                      type="button"
-                      className={`audit-page-number${page === currentPage ? ' is-active' : ''}`}
-                      onClick={() => goToPage(page)}
-                      disabled={isLoadingLogs}
-                      aria-current={page === currentPage ? 'page' : undefined}
-                    >
-                      {page}
-                    </button>
-                  )
-                })}
-              </div>
-
-              <button
-                type="button"
-                className="secondary-button audit-page-btn"
-                id="audit-next-page"
-                onClick={() => goToPage(currentPage + 1)}
-                disabled={currentPage >= totalPages || isLoadingLogs}
-                aria-label="Next page"
-              >
-                Next
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          )}
-
-          {/* Showing X-Y of N */}
-          <p className="audit-pagination-info">
-            Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, totalCount)}–{Math.min(currentPage * PAGE_SIZE, totalCount)} of {totalCount.toLocaleString()} records
-            {hasActiveFilters ? ' (filtered)' : ''}
-          </p>
         </div>
 
       </section>

@@ -1,6 +1,6 @@
-import React from 'react'
 import { X } from 'lucide-react'
 import { useBudget } from '../context/BudgetContext'
+import { calculateProjectEventFinancials } from '../utils/projectEventFinancials'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -9,24 +9,21 @@ const currency = new Intl.NumberFormat('en-PH', {
 })
 
 export default function ArchivedRequestModal({ request, onClose }) {
-  const { expenses } = useBudget()
+  const { expenses, verifiedReceiptTotals } = useBudget()
 
-  const additionalExpenses = expenses.filter(e => e.parentProjectId === request.id)
-  
-  const approvedBudget = Number(request.amount || 0)
-  const totalAdditional = additionalExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
+  const financials = calculateProjectEventFinancials(request, expenses, verifiedReceiptTotals)
+  const additionalExpenses = financials.linkedExpenses
+  const approvedBudget = financials.approvedBudget
+  const totalAdditional = financials.recordedExpenseTotal
   
   const breakdown = request.type === 'Payroll' ? (request.payrollBreakdown || []) : (request.breakdown || [])
   
-  let totalRequisition = 0
-  if (request.type === 'Payroll') {
-    totalRequisition = breakdown.reduce((sum, item) => sum + Number(item.honoraria || 0), 0)
-  } else {
-    totalRequisition = breakdown.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.unitCost || 0)), 0)
-  }
+  const totalRequisition = request.type === 'Payroll'
+    ? breakdown.reduce((sum, item) => sum + Number(item.honoraria || 0), 0)
+    : breakdown.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.unitCost || 0)), 0)
 
-  const totalExpenses = totalRequisition + totalAdditional
-  const remainingBalance = approvedBudget - totalExpenses
+  const totalExpenses = financials.totalExpenses
+  const remainingBalance = financials.remainingBudget
 
   return (
     <div className="modal-overlay">
@@ -44,7 +41,7 @@ export default function ArchivedRequestModal({ request, onClose }) {
               <h3 style={{ margin: 0 }}>{currency.format(approvedBudget)}</h3>
             </div>
             <div className="overview-card" style={{ padding: '16px' }}>
-              <p className="eyebrow">Total Additional</p>
+              <p className="eyebrow">Total Requisitions</p>
               <h3 style={{ margin: 0 }}>{currency.format(totalAdditional)}</h3>
             </div>
             <div className="overview-card" style={{ padding: '16px' }}>
@@ -68,7 +65,7 @@ export default function ArchivedRequestModal({ request, onClose }) {
           </div>
         </div>
 
-        <h3 style={{ marginBottom: '16px' }}>Budget Breakdown (Requisition)</h3>
+        <h3 style={{ marginBottom: '16px' }}>Approved Allocation Breakdown</h3>
         {breakdown.length > 0 ? (
           <table className="data-table" style={{ marginBottom: '32px' }}>
             <thead>
@@ -118,7 +115,7 @@ export default function ArchivedRequestModal({ request, onClose }) {
           <p className="empty-state" style={{ marginBottom: '32px' }}>No breakdown recorded.</p>
         )}
 
-        <h3 style={{ marginBottom: '16px' }}>Additional Expenses</h3>
+        <h3 style={{ marginBottom: '16px' }}>Requisition Breakdown</h3>
         {additionalExpenses.length > 0 ? (
           <table className="data-table">
             <thead>
@@ -152,13 +149,13 @@ export default function ArchivedRequestModal({ request, onClose }) {
             </tbody>
             <tfoot>
               <tr>
-                <th colSpan="4">Total Additional Expenses</th>
+                <th colSpan="4">Total Requisition</th>
                 <th style={{ textAlign: 'right' }}>{currency.format(totalAdditional)}</th>
               </tr>
             </tfoot>
           </table>
         ) : (
-          <p className="empty-state">No additional expenses recorded.</p>
+          <p className="empty-state">No requisitions recorded.</p>
         )}
       </div>
     </div>

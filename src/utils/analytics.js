@@ -1,6 +1,7 @@
 // analytics.js — Deterministic financial calculation layer for the Analysis module.
 // These functions are the single source of truth. AI only *interprets* these numbers;
 // it never recalculates or invents values.
+import { getRecordPeriod } from './budgetUtils'
 
 export const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -15,19 +16,40 @@ export const MONTHS_FULL = [
 export const monthOptions = MONTHS_FULL.map((label, i) => ({ value: i + 1, label }))
 
 // ---------- Chart palette ----------
-// These are the literal values of the design tokens in index.css: the
-// category ramp is --c1…--c8, and the semantic roles map to --accent,
-// --warn, --negative, --line-strong and --surface-2.
+// These are literal values: category hues are intentionally separated, while
+// the semantic roles map to --accent, --warn, --negative, --line-strong and
+// --surface-2.
 //
 // They stay literal rather than var(): the PDF export rasterises the chart
 // with html2canvas, which does not resolve custom properties inside SVG
 // presentation attributes, so a var() here exports as a black shape.
 //
-// The ramp is one hue family stepping down in lightness, so a chart still
-// reads in grayscale and for every kind of colour vision.
+// Category charts need hue as well as lightness separation. These tones are
+// deliberately dark enough to support white data labels inside pie slices.
 export const CATEGORY_COLORS = [
-  '#02353C', '#0B5A44', '#12805C', '#2EAF7D', '#6FCFB4', '#A5E3D4', '#C9EFE7', '#B9CBC7',
+  '#1D4ED8', // blue
+  '#15803D', // green
+  '#B45309', // orange
+  '#B91C1C', // red
+  '#6D28D9', // purple
+  '#0F766E', // teal
+  '#A21CAF', // magenta
+  '#475569', // slate
 ]
+
+const CATEGORY_COLOR_BY_NAME = {
+  project: '#1D4ED8',
+  projects: '#1D4ED8',
+  event: '#15803D',
+  events: '#15803D',
+  payroll: '#B45309',
+  'additional expense': '#B91C1C',
+  'additional expenses': '#B91C1C',
+  other: '#6D28D9',
+  others: '#6D28D9',
+  uncategorized: '#6D28D9',
+  'remaining budget': '#0F766E',
+}
 
 // Fixed semantic roles across Budget vs Actual / Monthly Trend / Utilization.
 // Budget and actual sit at opposite ends of the ramp so the pair separates
@@ -63,7 +85,9 @@ export function pesoTick(v) {
 }
 
 export function colorForCategory(name, index = 0) {
-  return CATEGORY_COLORS[index % CATEGORY_COLORS.length]
+  const normalizedName = String(name || '').trim().toLowerCase()
+  return CATEGORY_COLOR_BY_NAME[normalizedName]
+    || CATEGORY_COLORS[index % CATEGORY_COLORS.length]
 }
 
 // ---------- Normalization helpers ----------
@@ -133,8 +157,15 @@ export function isActiveExpense(expense) {
   return !expense.archivedAt && expense.status !== 'Cancelled'
 }
 
+export function isApprovedAllocation(expense) {
+  return isActiveExpense(expense)
+    && !expense.isAdditional
+    && ['Approved', 'Released'].includes(expense.status || 'Approved')
+    && (!expense.actualExpenseKind || normalizeAmount(expense.amount) > 0)
+}
+
 export function isMissingReceipt(expense) {
-  return !expense.receiptUrl && !expense.receiptName
+  return !expense.hasVerifiedReceipt && !expense.receiptUrl && !expense.receiptName
 }
 
 // Returns the previous period descriptor for comparison.
@@ -150,9 +181,18 @@ export function previousPeriod(filters) {
 // ---------- Core selectors ----------
 
 export function filterExpenses(expenses, filters) {
-  return (expenses || []).filter(
-    (e) => isActiveExpense(e) && isInPeriod(expenseDate(e), filters)
-  )
+  const seen = new Set()
+  return (expenses || []).filter((expense) => {
+    if (!isApprovedAllocation(expense)) return false
+    const period = getRecordPeriod(expense)
+    if (!period || period.year !== Number(filters.year)) return false
+    if (filters.view === 'monthly' && period.month !== Number(filters.month)) return false
+
+    const key = expense.requestId ? `request:${expense.requestId}` : `expense:${expense.id}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 export function filterBudgets(budgets, filters) {
@@ -231,13 +271,18 @@ export function groupExpensesByCategory(expenses) {
   const map = new Map()
   ;(expenses || []).forEach((e) => {
     const key = (e.category && String(e.category).trim()) || 'Uncategorized'
-    map.set(key, (map.get(key) || 0) + normalizeAmount(e.amount))
+    const current = map.get(key) || { value: 0, count: 0 }
+    map.set(key, {
+      value: current.value + normalizeAmount(e.amount),
+      count: current.count + 1,
+    })
   })
-  const total = Array.from(map.values()).reduce((a, b) => a + b, 0)
-  return Array.from(map, ([name, value]) => ({
+  const total = Array.from(map.values()).reduce((sum, row) => sum + row.value, 0)
+  return Array.from(map, ([name, row]) => ({
     name,
-    value,
-    percent: total > 0 ? (value / total) * 100 : 0,
+    value: row.value,
+    count: row.count,
+    percent: total > 0 ? (row.value / total) * 100 : 0,
   })).sort((a, b) => b.value - a.value)
 }
 
@@ -256,11 +301,15 @@ export function groupExpensesByMonth(expenses, year) {
   const totals = new Array(12).fill(0)
   const counts = new Array(12).fill(0)
   const missing = new Array(12).fill(0)
+  const seen = new Set()
   ;(expenses || []).forEach((e) => {
-    if (!isActiveExpense(e)) return
-    const d = parseDate(expenseDate(e))
-    if (!d || d.getFullYear() !== Number(year)) return
-    const m = d.getMonth()
+    if (!isApprovedAllocation(e)) return
+    const key = e.requestId ? `request:${e.requestId}` : `expense:${e.id}`
+    if (seen.has(key)) return
+    seen.add(key)
+    const period = getRecordPeriod(e)
+    if (!period || period.year !== Number(year)) return
+    const m = period.month - 1
     totals[m] += normalizeAmount(e.amount)
     counts[m] += 1
     if (isMissingReceipt(e)) missing[m] += 1
@@ -278,8 +327,12 @@ export function groupExpensesByMonth(expenses, year) {
 // Budget allocation per month for a year.
 export function budgetByMonth(budgets, year) {
   const totals = new Array(12).fill(0)
+  const seen = new Set()
   ;(budgets || []).forEach((b) => {
     if (Number(b.year) !== Number(year)) return
+    const key = b.id === null || b.id === undefined ? b : String(b.id)
+    if (seen.has(key)) return
+    seen.add(key)
     const m = Number(b.month)
     if (m >= 1 && m <= 12) totals[m - 1] += normalizeAmount(b.amount)
   })

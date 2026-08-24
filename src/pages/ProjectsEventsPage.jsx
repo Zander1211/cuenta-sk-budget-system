@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
 import CurrencyInput from '../components/CurrencyInput'
 import BudgetBreakdownTable from '../components/BudgetBreakdownTable'
+import RecordFilterBar from '../components/RecordFilterBar'
 import { useNotifications } from '../context/NotificationContext'
 import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
 
@@ -21,6 +22,22 @@ function ProjectsEventsPage() {
 
   const [activeTab, setActiveTab] = useState('projects') // 'projects' | 'events'
   const [expanded, setExpanded] = useState({})
+
+  const [searchFilter, setSearchFilter] = useState('')
+  const [dateFilter, setDateFilter] = useState('')
+  const [monthFilter, setMonthFilter] = useState('')
+  const [yearFilter, setYearFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+
+  const hasActiveFilters = searchFilter || dateFilter || monthFilter || yearFilter || statusFilter
+
+  function resetFilters() {
+    setSearchFilter('')
+    setDateFilter('')
+    setMonthFilter('')
+    setYearFilter('')
+    setStatusFilter('')
+  }
 
   const [errorsById, setErrorsById] = useState({})
   const [uploadingId, setUploadingId] = useState(null)
@@ -171,7 +188,7 @@ function ProjectsEventsPage() {
     setScanStatus('idle')
   }
 
-  const filteredItems = useMemo(() => {
+  const baseItems = useMemo(() => {
     return expenses.filter((item) => {
       const isProject = !item.type || item.type === 'Project'
       const isEvent = item.type === 'Event'
@@ -183,6 +200,36 @@ function ProjectsEventsPage() {
       return false
     })
   }, [expenses, activeTab])
+
+  const filteredItems = useMemo(() => {
+    return baseItems.filter((item) => {
+      if (searchFilter) {
+        const title = (item.project || item.event || '').toLowerCase()
+        const purpose = (item.description || '').toLowerCase()
+        const category = (item.category || '').toLowerCase()
+        const creator = (item.requestedBy || '').toLowerCase()
+        const q = searchFilter.toLowerCase()
+        if (!title.includes(q) && !purpose.includes(q) && !category.includes(q) && !creator.includes(q)) {
+          return false
+        }
+      }
+
+      if (statusFilter && (item.projectStatus || 'Ongoing') !== statusFilter) return false
+
+      const itemDate = new Date(item.eventDate || item.date || item.approvedAt || item.created_at)
+      if (dateFilter) {
+        const selected = new Date(dateFilter)
+        if (itemDate.toDateString() !== selected.toDateString()) return false
+      }
+      if (monthFilter) {
+        const mStr = itemDate.toLocaleString('default', { month: 'long' })
+        if (mStr !== monthFilter) return false
+      }
+      if (yearFilter && itemDate.getFullYear().toString() !== yearFilter) return false
+
+      return true
+    })
+  }, [baseItems, searchFilter, statusFilter, dateFilter, monthFilter, yearFilter])
 
   function toggleDetails(id) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
@@ -203,7 +250,6 @@ function ProjectsEventsPage() {
     const approvedBudget = Number(item.amount || 0)
     const totalExpenses = approvedBudget + additionalSum
     const remainingBalance = approvedBudget - totalExpenses
-    const utilization = approvedBudget > 0 ? Math.round((totalExpenses / approvedBudget) * 100) : 0
 
     return (
       <tr className="details-row">
@@ -220,7 +266,6 @@ function ProjectsEventsPage() {
                 { label: 'Total Expenses', value: currency.format(totalExpenses) },
                 { label: 'Additional Expenses', value: currency.format(additionalSum) },
                 { label: 'Remaining Balance', value: currency.format(remainingBalance), highlight: remainingBalance < 0 },
-                { label: 'Budget Utilization', value: `${utilization}%` },
                 { label: 'Date Approved', value: item.approvedAt ? new Date(item.approvedAt).toLocaleDateString() : '—' }
               ].map((stat, i) => (
                 <div key={i} style={{ 
@@ -336,6 +381,25 @@ function ProjectsEventsPage() {
           </button>
         </div>
 
+        <RecordFilterBar
+          searchValue={searchFilter}
+          onSearchChange={setSearchFilter}
+          searchLabel={`${activeTab === 'projects' ? 'Project' : 'Event'} search`}
+          searchPlaceholder="Search title, purpose, category, or creator"
+          dateValue={dateFilter}
+          onDateChange={setDateFilter}
+          monthValue={monthFilter}
+          onMonthChange={setMonthFilter}
+          yearValue={yearFilter}
+          onYearChange={setYearFilter}
+          statusValue={statusFilter}
+          onStatusChange={setStatusFilter}
+          hasActiveFilters={Boolean(hasActiveFilters)}
+          onReset={resetFilters}
+          resultCount={filteredItems.length}
+          totalCount={baseItems.length}
+        />
+
         <div className="overview-card">
           <p className="eyebrow">Overview</p>
           <h2>{activeTab === 'projects' ? 'All Approved Projects' : 'All Approved Events'}</h2>
@@ -345,7 +409,6 @@ function ProjectsEventsPage() {
                 <th>{activeTab === 'projects' ? 'Project Title' : 'Event Title'}</th>
                 <th>Category</th>
                 <th>Total Budget</th>
-                <th>Utilization</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -356,8 +419,6 @@ function ProjectsEventsPage() {
                   const additionalExpenses = expenses.filter(e => e.isAdditional && e.parentProjectId === item.id && !e.archivedAt)
                   const additionalSum = additionalExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
                   const approvedBudget = Number(item.amount || 0)
-                  const totalExpenses = approvedBudget + additionalSum
-                  const utilization = approvedBudget > 0 ? Math.min(100, Math.round((totalExpenses / approvedBudget) * 100)) : 0
                   
                   return (
                     <Fragment key={item.id}>
@@ -365,14 +426,6 @@ function ProjectsEventsPage() {
                         <td data-label={activeTab === 'projects' ? 'Project Title' : 'Event Title'}>{item.project || item.event || 'Untitled'}</td>
                         <td data-label="Category">{item.category || '—'}</td>
                         <td data-label="Total Budget">{currency.format(approvedBudget)}</td>
-                        <td data-label="Utilization">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div style={{ flex: 1, height: '6px', background: 'var(--border-color)', borderRadius: 'var(--radius-bar)', overflow: 'hidden' }}>
-                              <div style={{ height: '100%', background: utilization > 100 ? 'var(--danger-color)' : 'var(--primary-color)', width: `${Math.min(utilization, 100)}%` }} />
-                            </div>
-                            <span style={{ fontSize: '0.75rem' }}>{utilization}%</span>
-                          </div>
-                        </td>
                         <td data-label="Status">
                           {role === 'SK Chairman' ? (
                             <select
@@ -407,7 +460,9 @@ function ProjectsEventsPage() {
               ) : (
                 <tr>
                   <td colSpan="6" className="empty-state">
-                    No approved {activeTab === 'projects' ? 'projects' : 'events'} yet.
+                    {hasActiveFilters
+                      ? `No ${activeTab === 'projects' ? 'projects' : 'events'} match the selected filters.`
+                      : `No approved ${activeTab === 'projects' ? 'projects' : 'events'} yet.`}
                   </td>
                 </tr>
               )}

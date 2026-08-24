@@ -72,6 +72,32 @@
   line-height: 1.4;
 }
 
+/* Upper Glad 2 seal watermark used by the official Purchase Request form. */
+.purchase-request-document {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.purchase-request-document > :not(.purchase-request-watermark) {
+  position: relative;
+  z-index: 1;
+}
+
+.purchase-request-watermark {
+  position: absolute;
+  z-index: 0;
+  top: 205px;
+  /* The Item Description column is centered slightly left of the full table. */
+  left: calc(50% - 15px);
+  width: min(72%, 500px);
+  height: auto;
+  transform: translateX(-50%);
+  opacity: 0.085;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* ── Document Title ── */
 .doc-title {
   text-align: center;
@@ -350,6 +376,21 @@
     min-height: auto;
     page-break-after: avoid;
     width: 100%;
+  }
+
+  .purchase-request-document {
+    position: relative !important;
+    overflow: hidden !important;
+    isolation: isolate;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .purchase-request-watermark {
+    top: 155px;
+    width: 72%;
+    max-width: 500px;
+    opacity: 0.09;
   }
 
   /* Hide all siblings of the tree that leads to print-preview-overlay to prevent extra blank pages */

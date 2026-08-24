@@ -6,7 +6,7 @@ import { loginUser, registerUser } from '../services/authService'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
-import logo from '../assets/logo.png'
+import logo from '../assets/cuenta-logo.png'
 import './LoginPage.css'
 
 const GMAIL_PATTERN = /^[a-zA-Z0-9._%+-]+@gmail\.com$/i

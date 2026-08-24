@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import '../components/PrintPreview.css'
+import barangaySeal from '../assets/brgy-logo-2.png'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -62,7 +63,14 @@ function PurchaseRequestPreview({ data, onClose, onSave }) {
           </button>
         </div>
 
-        <div className="print-page">
+        <div className="print-page purchase-request-document">
+          <img
+            className="purchase-request-watermark"
+            src={barangaySeal}
+            alt=""
+            aria-hidden="true"
+          />
+
           {/* Title */}
           <div className="doc-title">Purchase Request</div>
 

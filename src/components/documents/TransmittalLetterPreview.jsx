@@ -35,8 +35,14 @@ function TransmittalLetterPreview({ data, onClose, onSave }) {
   } = data
 
   const hasDvData = dvRows.some((row) => row.payee || row.dvNo || row.amount)
-  const hasRcdData = rcdRows.some((row) => row.no || row.amount)
-  const hasOtherData = otherRows.some((row) => row.typeOfReport)
+  const rcdDisplayRows = Array.from(
+    { length: Math.max(4, rcdRows.length) },
+    (_, index) => rcdRows[index] || { date: '', no: '', amount: '' }
+  )
+  const otherDisplayRows = Array.from(
+    { length: Math.max(2, otherRows.length) },
+    (_, index) => otherRows[index] || { date: '', typeOfReport: '' }
+  )
 
   async function handlePrint(e) {
     e.preventDefault()
@@ -86,22 +92,23 @@ function TransmittalLetterPreview({ data, onClose, onSave }) {
           </div>
 
           {/* Title */}
-          <div className="doc-title">Transmittal Letter</div>
+          <div className="doc-title transmittal-reference-title">Transmittal Letter</div>
 
-          <div className="transmittal-body">
+          <div className="transmittal-body transmittal-reference">
             {/* Date */}
             <div className="transmittal-date">
-              {formatDateLocal(date)}
+              <span>Date:</span>
+              <strong>{formatDateLocal(date)}</strong>
             </div>
 
             {/* To block */}
             <div className="transmittal-to">
-              <p style={{ margin: 0 }}>To:</p>
-              <p style={{ margin: 0 }}>The Audit Team Leader</p>
-              <p style={{ margin: 0 }}>
-                COA Regional Office XII, LAS-A Team {coaTeamNumber || '___'}
-              </p>
-              <p style={{ margin: 0 }}>PSAO, Amas, Kidapawan City</p>
+              <div className="transmittal-to-label">To:</div>
+              <div>
+                <p>The Audit Team Leader</p>
+                <p>COA Regional Office XII, LGS-A Team {coaTeamNumber || '___'}</p>
+                <p>PSAO, Amas, Kidapawan City</p>
+              </div>
             </div>
 
             {/* Salutation */}
@@ -109,120 +116,122 @@ function TransmittalLetterPreview({ data, onClose, onSave }) {
 
             {/* Body paragraph */}
             <div className="transmittal-paragraph">
-              {bodyText}
+              {bodyText || `We submit the original copies of the disbursement vouchers issued for the month of ${month}, duly acknowledged by the payees together with the supporting documents, and copies of the corresponding checks and Sangguniang Kabataan Certification (SKC).`}
             </div>
 
             {/* Account No */}
             <div className="transmittal-account">
-              Account No.: {accountNo}
+              <span>Account No.:</span> <strong>{accountNo}</strong>
             </div>
 
             {/* DV Table */}
-            {hasDvData ? (
-              <table className="doc-table">
+            <div className="transmittal-table-wrap">
+              <table className="transmittal-table transmittal-dv-table">
+                <colgroup>
+                  <col className="transmittal-date-col" />
+                  <col className="transmittal-number-col" />
+                  <col className="transmittal-date-col" />
+                  <col className="transmittal-number-col" />
+                  <col className="transmittal-payee-col" />
+                  <col className="transmittal-amount-col" />
+                  <col className="transmittal-date-col" />
+                  <col className="transmittal-number-col" />
+                </colgroup>
                 <thead>
                   <tr>
                     <th colSpan={2}>DV</th>
                     <th colSpan={2}>Check</th>
                     <th rowSpan={2}>Payee</th>
-                    <th rowSpan={2} style={{ width: '90px' }}>Amount</th>
-                    <th colSpan={2}>SKC&apos;s Issued</th>
+                    <th rowSpan={2}>Amount</th>
+                    <th colSpan={2}>SKC/s Issued</th>
                   </tr>
                   <tr>
-                    <th style={{ width: '70px' }}>Date</th>
-                    <th style={{ width: '70px' }}>No.</th>
-                    <th style={{ width: '70px' }}>Date</th>
-                    <th style={{ width: '70px' }}>No.</th>
-                    <th style={{ width: '70px' }}>Date</th>
-                    <th style={{ width: '70px' }}>No.</th>
+                    <th>Date</th>
+                    <th>No.</th>
+                    <th>Date</th>
+                    <th>No.</th>
+                    <th>Date</th>
+                    <th>No.</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {dvRows.map((row, idx) => {
-                    const hasRowData = row.payee || row.dvNo || row.amount
-                    return (
-                      <tr key={idx} className={hasRowData ? '' : 'empty-row'}>
-                        <td>{formatDateLocal(row.dvDate)}</td>
-                        <td>{row.dvNo}</td>
-                        <td>{formatDateLocal(row.checkDate)}</td>
-                        <td>{row.checkNo}</td>
-                        <td className="text-left">{row.payee}</td>
-                        <td className="text-right">
-                          {Number(row.amount) ? currency.format(Number(row.amount)) : ''}
-                        </td>
-                        <td>{formatDateLocal(row.skcDate)}</td>
-                        <td>{row.skcNo}</td>
-                      </tr>
-                    )
-                  })}
-                  <tr style={{ fontWeight: 700 }}>
-                    <td colSpan={5} style={{ textAlign: 'right' }}>TOTAL</td>
-                    <td className="text-right">{currency.format(dvTotal)}</td>
+                  {hasDvData ? dvRows.map((row, idx) => (
+                    <tr key={idx}>
+                      <td>{formatDateLocal(row.dvDate)}</td>
+                      <td>{row.dvNo}</td>
+                      <td>{formatDateLocal(row.checkDate)}</td>
+                      <td>{row.checkNo}</td>
+                      <td className="text-left">{row.payee}</td>
+                      <td className="text-right">
+                        {Number(row.amount) ? currency.format(Number(row.amount)) : ''}
+                      </td>
+                      <td>{formatDateLocal(row.skcDate)}</td>
+                      <td>{row.skcNo}</td>
+                    </tr>
+                  )) : (
+                    <tr className="transmittal-no-transaction-row">
+                      <td colSpan={8}>NO TRANSACTION</td>
+                    </tr>
+                  )}
+                  <tr className="transmittal-blank-row">
+                    <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+                  </tr>
+                  <tr className="transmittal-total-row">
+                    <th colSpan={5}>TOTAL</th>
+                    <td>{dvTotal ? currency.format(dvTotal) : '-'}</td>
                     <td colSpan={2}></td>
                   </tr>
                 </tbody>
               </table>
-            ) : (
-              <div className="transmittal-no-transaction">NO TRANSACTION</div>
-            )}
+            </div>
 
             {/* RCDs */}
-            {hasRcdData ? (
-              <>
-                <div className="transmittal-section-title">
-                  RCDs and Supporting Documents (RCRs, OR, VDS):
-                </div>
-                <table className="doc-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: '100px' }}>Date</th>
-                      <th style={{ width: '100px' }}>No.</th>
-                      <th style={{ width: '120px' }}>Amount</th>
+            <div className="transmittal-section-title">
+              RCDs and Supporting Documents (RCRs, OR, VDS)
+            </div>
+            <div className="transmittal-table-wrap">
+              <table className="transmittal-table transmittal-rcd-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>No.</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rcdDisplayRows.map((row, idx) => (
+                    <tr key={idx}>
+                      <td>{formatDateLocal(row.date)}</td>
+                      <td>{row.no}</td>
+                      <td className="text-right">
+                        {Number(row.amount) ? currency.format(Number(row.amount)) : ''}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {rcdRows.map((row, idx) => {
-                      const hasRowData = row.no || row.amount
-                      return (
-                        <tr key={idx} className={hasRowData ? '' : 'empty-row'}>
-                          <td>{formatDateLocal(row.date)}</td>
-                          <td>{row.no}</td>
-                          <td className="text-right">
-                            {Number(row.amount) ? currency.format(Number(row.amount)) : ''}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </>
-            ) : null}
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             {/* Others */}
-            {hasOtherData ? (
-              <>
-                <div className="transmittal-section-title">Others:</div>
-                <table className="doc-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: '100px' }}>Date</th>
-                      <th>Type of Report</th>
+            <div className="transmittal-section-title">Others</div>
+            <div className="transmittal-table-wrap">
+              <table className="transmittal-table transmittal-others-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type of Report</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {otherDisplayRows.map((row, idx) => (
+                    <tr key={idx}>
+                      <td>{formatDateLocal(row.date)}</td>
+                      <td className="text-left">{row.typeOfReport}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {otherRows.map((row, idx) => {
-                      const hasRowData = row.typeOfReport
-                      return (
-                        <tr key={idx} className={hasRowData ? '' : 'empty-row'}>
-                          <td>{formatDateLocal(row.date)}</td>
-                          <td className="text-left">{row.typeOfReport}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </>
-            ) : null}
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             {/* Acknowledge */}
             <div className="transmittal-acknowledge">Please acknowledge receipt hereof.</div>
@@ -236,13 +245,14 @@ function TransmittalLetterPreview({ data, onClose, onSave }) {
 
             {/* Bottom signatures */}
             <div className="transmittal-bottom-sigs">
-              <div className="transmittal-sig-block">
+              <div className="transmittal-sig-block transmittal-noted-block">
+                <div className="transmittal-signature-label">Noted by:</div>
                 <div className="transmittal-sig-name">{skChairperson || '___________'}</div>
                 <div className="transmittal-sig-role">SK Chairperson</div>
               </div>
               <div className="transmittal-sig-block">
                 <div className="transmittal-received">
-                  <p style={{ margin: '0 0 4px', fontWeight: 700 }}>Received by:</p>
+                  <p>Received by:</p>
                   <div className="transmittal-received-sig">
                     Signature, Name and Designation
                   </div>

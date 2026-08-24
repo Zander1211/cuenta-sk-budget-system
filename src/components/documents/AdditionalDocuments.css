@@ -493,56 +493,419 @@
   font-size: 12px;
 }
 
-/* ── Print preview: Transmittal Letter ── */
-.transmittal-body {
-  font-size: 12px;
-  line-height: 1.8;
-}
-
-.transmittal-date {
-  text-align: right;
-  margin-bottom: 16px;
-}
-
-.transmittal-to {
-  margin-bottom: 16px;
-  line-height: 1.6;
-}
-
-.transmittal-salutation {
-  margin-bottom: 12px;
-}
-
-.transmittal-paragraph {
-  text-indent: 40px;
-  margin-bottom: 16px;
-  line-height: 1.8;
-}
-
-.transmittal-account {
-  margin-bottom: 12px;
-  font-weight: 700;
-}
-
-.transmittal-no-transaction {
-  text-align: center;
-  padding: 12px;
-  font-weight: 700;
-  font-style: italic;
-  color: #333;
-}
-
-.transmittal-section-title {
-  font-weight: 700;
+/* Itinerary of Travel reference form */
+.itinerary-reference-form {
+  color: #000;
+  font-family: 'Times New Roman', Times, serif;
   font-size: 11px;
-  margin: 16px 0 6px;
+  line-height: 1.2;
+}
+
+.itinerary-reference-title {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 54px;
+  border: 1px solid #000;
   text-transform: uppercase;
 }
 
+.itinerary-reference-title strong {
+  font-size: 17px;
+  letter-spacing: 0.02em;
+}
+
+.itinerary-reference-title span {
+  position: absolute;
+  right: 18px;
+  bottom: 7px;
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: none;
+}
+
+.itinerary-reference-title b {
+  display: inline-block;
+  min-width: 82px;
+  margin-left: 6px;
+  border-bottom: 1px solid #000;
+  text-align: center;
+  font-weight: 400;
+}
+
+.itinerary-reference-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
+  border-left: 1px solid #000;
+}
+
+.itinerary-detail-column {
+  border-right: 1px solid #000;
+}
+
+.itinerary-detail-column:last-child {
+  border-right: 0;
+}
+
+.itinerary-detail-column > div {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  min-height: 22px;
+  border-bottom: 1px solid #000;
+  align-items: center;
+}
+
+.itinerary-detail-column > div:last-child {
+  border-bottom: 0;
+}
+
+.itinerary-detail-column span,
+.itinerary-detail-column strong {
+  padding: 2px 5px;
+}
+
+.itinerary-detail-column strong {
+  min-width: 0;
+  text-align: center;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.itinerary-travel-details > div {
+  grid-template-columns: 105px 1fr;
+}
+
+.itinerary-purpose-line {
+  min-height: 44px !important;
+  align-items: start !important;
+}
+
+.itinerary-purpose-line strong {
+  font-style: italic;
+  line-height: 1.25;
+}
+
+.itinerary-table-wrap {
+  width: 100%;
+  margin-top: -1px;
+  overflow-x: auto;
+}
+
+.itinerary-reference-table {
+  width: 100%;
+  min-width: 700px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #000;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 9px;
+  line-height: 1.1;
+}
+
+.itinerary-reference-table th,
+.itinerary-reference-table td {
+  height: 45px;
+  padding: 2px 3px;
+  border: 1px solid #000;
+  background: #fff;
+  vertical-align: middle;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.itinerary-reference-table th {
+  height: 22px;
+  color: #000;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.itinerary-reference-table thead tr:nth-child(2) th {
+  height: 18px;
+  font-size: 8px;
+  font-style: italic;
+}
+
+.itinerary-col-date {
+  width: 10%;
+}
+
+.itinerary-col-destination {
+  width: 24%;
+}
+
+.itinerary-col-time {
+  width: 7.5%;
+}
+
+.itinerary-col-means {
+  width: 10%;
+}
+
+.itinerary-col-cost {
+  width: 9%;
+}
+
+.itinerary-col-total {
+  width: 14%;
+}
+
+.itinerary-total-row th,
+.itinerary-total-row td {
+  height: 23px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.itinerary-total-row th {
+  text-align: center;
+}
+
+.itinerary-approval-grid {
+  display: grid;
+  grid-template-columns: 46% 54%;
+  grid-template-rows: 135px 135px;
+  margin-top: -1px;
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
+  border-left: 1px solid #000;
+}
+
+.itinerary-certification-panel,
+.itinerary-signatory-panel {
+  position: relative;
+  padding: 12px;
+}
+
+.itinerary-certification-panel {
+  grid-row: 1 / 3;
+  border-right: 1px solid #000;
+}
+
+.itinerary-certification-panel p {
+  margin: 38px 3px 0;
+  text-align: justify;
+  text-indent: 12px;
+  line-height: 1.35;
+}
+
+.itinerary-prepared-panel {
+  border-bottom: 1px solid #000;
+}
+
+.itinerary-panel-label {
+  font-weight: 700;
+}
+
+.itinerary-reference-signature {
+  position: absolute;
+  right: 20px;
+  bottom: 14px;
+  left: 20px;
+  display: grid;
+  justify-items: center;
+  font-size: 10px;
+}
+
+.itinerary-reference-signature strong {
+  width: 85%;
+  padding: 0 4px 2px;
+  border-bottom: 1px solid #000;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.itinerary-reference-signature span {
+  margin-top: 2px;
+  font-style: italic;
+}
+
+.itinerary-reference-signature span + span {
+  font-style: normal;
+}
+
+.itinerary-note {
+  margin: 8px 0 0;
+  color: #555;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 10px;
+  font-style: italic;
+}
+
+/* ── Print preview: Transmittal Letter ── */
+.transmittal-body {
+  color: #000;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.transmittal-reference-title {
+  width: fit-content;
+  margin: 0 auto 18px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 22px;
+  text-align: center;
+}
+
+.transmittal-date {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.transmittal-date strong {
+  min-width: 120px;
+  padding: 0 6px 1px;
+  border-bottom: 1px solid #000;
+  text-align: center;
+  font-weight: 400;
+}
+
+.transmittal-to {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  margin-bottom: 12px;
+  line-height: 1.25;
+}
+
+.transmittal-to p {
+  margin: 0;
+}
+
+.transmittal-to-label {
+  padding-top: 1px;
+}
+
+.transmittal-salutation {
+  margin-bottom: 8px;
+}
+
+.transmittal-paragraph {
+  margin-bottom: 10px;
+  text-align: justify;
+  text-indent: 46px;
+  line-height: 1.35;
+}
+
+.transmittal-account {
+  margin-bottom: 3px;
+  font-style: italic;
+}
+
+.transmittal-account strong {
+  padding: 0 4px 1px;
+  border-bottom: 1px solid #000;
+  font-weight: 700;
+}
+
+.transmittal-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.transmittal-table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #000;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 9.5px;
+  line-height: 1.1;
+}
+
+.transmittal-table th,
+.transmittal-table td {
+  height: 20px;
+  padding: 1px 3px;
+  border: 1px solid #000;
+  background: #fff;
+  vertical-align: middle;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.transmittal-table th {
+  color: #000;
+  font-style: italic;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.transmittal-date-col {
+  width: 10%;
+}
+
+.transmittal-number-col {
+  width: 7%;
+}
+
+.transmittal-payee-col {
+  width: 28%;
+}
+
+.transmittal-amount-col {
+  width: 16%;
+}
+
+.transmittal-no-transaction-row td {
+  height: 40px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.transmittal-blank-row td {
+  height: 21px;
+}
+
+.transmittal-total-row th {
+  text-align: center;
+}
+
+.transmittal-total-row td {
+  font-weight: 700;
+}
+
+.transmittal-rcd-table th:first-child,
+.transmittal-rcd-table td:first-child {
+  width: 43%;
+}
+
+.transmittal-rcd-table th:nth-child(2),
+.transmittal-rcd-table td:nth-child(2) {
+  width: 28%;
+}
+
+.transmittal-others-table th:first-child,
+.transmittal-others-table td:first-child {
+  width: 30%;
+}
+
+.transmittal-section-title {
+  margin: 16px 0 2px;
+  font-size: 10px;
+  font-style: italic;
+  font-weight: 400;
+  text-decoration: underline;
+  text-transform: none;
+}
+
 .transmittal-closing {
-  text-align: right;
-  margin-top: 24px;
-  line-height: 1.6;
+  width: 42%;
+  margin: 8px 0 0 auto;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.transmittal-closing p {
+  margin: 0;
 }
 
 .transmittal-closing-name {
@@ -559,9 +922,9 @@
 .transmittal-bottom-sigs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  gap: 54px;
   margin-top: 24px;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .transmittal-sig-block {
@@ -583,24 +946,34 @@
 }
 
 .transmittal-received {
-  margin-top: 20px;
-  font-size: 12px;
+  font-size: 11px;
+  text-align: left;
+}
+
+.transmittal-received p {
+  margin: 0;
 }
 
 .transmittal-received-sig {
-  margin-top: 24px;
+  width: 100%;
+  margin-top: 42px;
   border-top: 1px solid #000;
-  display: inline-block;
+  display: block;
   padding-top: 4px;
-  min-width: 200px;
   font-style: italic;
   font-size: 10px;
+  text-align: center;
 }
 
 .transmittal-acknowledge {
   margin-top: 24px;
   font-style: italic;
   font-size: 11px;
+}
+
+.transmittal-signature-label {
+  margin-bottom: 42px;
+  text-align: left;
 }
 
 /* ── @media print additions ── */
@@ -612,5 +985,479 @@
   .doc-gen-form,
   .doc-gen-actions {
     display: none !important;
+  }
+}
+
+/* Disbursement Voucher reference form */
+.dv-document {
+  padding: 28px 30px;
+  min-height: 1100px;
+}
+
+.dv-form-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.dv-form-table {
+  width: 100%;
+  min-width: 650px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #000;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+.dv-form-table th,
+.dv-form-table td {
+  border: 1px solid #000;
+  padding: 3px 4px;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.dv-form-table th {
+  background: #fff;
+  color: #000;
+  text-transform: none;
+}
+
+.dv-form-title-row {
+  height: 35px;
+}
+
+.dv-form-title-row th {
+  vertical-align: middle;
+  text-align: center;
+  font-size: 16px;
+  text-transform: uppercase;
+}
+
+.dv-form-title-row td,
+.dv-form-info-row td {
+  vertical-align: middle;
+}
+
+.dv-form-info-row {
+  height: 34px;
+}
+
+.dv-form-info-row span,
+.dv-form-title-row td span {
+  margin-right: 4px;
+}
+
+.dv-form-column-headings {
+  height: 22px;
+}
+
+.dv-form-column-headings th {
+  padding: 2px 4px;
+  vertical-align: middle;
+  text-align: center;
+  font-size: 13px;
+}
+
+.dv-form-particulars-row {
+  height: 205px;
+}
+
+.dv-form-particulars-row p {
+  margin: 4px;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.dv-form-amount {
+  padding: 8px !important;
+  text-align: right;
+  font-weight: 700;
+}
+
+.dv-form-total-row {
+  height: 30px;
+}
+
+.dv-form-total-row th {
+  vertical-align: middle;
+  text-align: center;
+  text-transform: uppercase;
+  font-size: 13px;
+}
+
+.dv-form-total-row td {
+  vertical-align: middle;
+  text-align: right;
+  font-weight: 700;
+  padding-right: 8px;
+}
+
+.dv-form-certifications {
+  height: 155px;
+}
+
+.dv-form-certifications > td {
+  position: relative;
+  padding: 3px;
+}
+
+.dv-form-certified {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.dv-form-certifications p {
+  min-height: 54px;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.dv-form-cert-fields {
+  display: grid;
+  gap: 2px;
+  font-size: 10.5px;
+}
+
+.dv-form-cert-fields > div,
+.dv-form-payment-fields > div {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dv-form-cert-fields span {
+  flex: 0 0 auto;
+}
+
+.dv-form-write-line {
+  display: inline-block;
+  flex: 1 1 auto;
+  min-width: 28px;
+  min-height: 13px;
+  border-bottom: 1px solid #000;
+  text-align: center;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.dv-form-section-label {
+  height: 22px;
+}
+
+.dv-form-section-label > td,
+.dv-form-section-label > th {
+  vertical-align: middle;
+  padding: 2px 3px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.dv-form-payment-row {
+  height: 82px;
+}
+
+.dv-form-payment-row > td {
+  padding: 0;
+}
+
+.dv-form-signature-space {
+  height: 53px;
+}
+
+.dv-form-signature-caption {
+  border-top: 1px solid #000;
+  padding: 5px 4px;
+  text-align: center;
+}
+
+.dv-form-payment-fields {
+  display: grid;
+  gap: 9px;
+  padding: 32px 7px 5px;
+}
+
+.dv-form-payment-pair {
+  display: grid !important;
+  grid-template-columns: auto minmax(55px, 1fr) auto minmax(55px, 1fr);
+}
+
+.dv-form-account-headings {
+  height: 22px;
+}
+
+.dv-form-account-headings th {
+  padding: 2px 3px;
+  vertical-align: middle;
+  text-align: center;
+  font-weight: 400;
+}
+
+.dv-form-account-row {
+  height: 22px;
+}
+
+.dv-form-account-space {
+  height: 205px;
+}
+
+@media print {
+  .dv-document {
+    min-height: auto;
+    padding: 0 !important;
+  }
+
+  .dv-form-scroll {
+    overflow: visible !important;
+  }
+
+  .dv-form-table {
+    min-width: 0;
+  }
+}
+
+/* Payroll reference form */
+.payroll-preview-container {
+  max-width: 1180px;
+}
+
+.payroll-document {
+  min-height: 740px;
+  padding: 34px 40px;
+}
+
+.payroll-header {
+  margin-bottom: 12px;
+  color: #000;
+  font-family: 'Times New Roman', Times, serif;
+  line-height: 1.05;
+}
+
+.payroll-header h2 {
+  font-size: 25px;
+  letter-spacing: 2px;
+}
+
+.payroll-period {
+  display: inline-block;
+  margin: 5px 0 0;
+  padding: 0 6px 1px;
+  border-bottom: 1px solid #000;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.payroll-period-label {
+  margin: 2px 0 0;
+  font-size: 11px;
+}
+
+.payroll-reference-sheet {
+  color: #000;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 10px;
+  line-height: 1.15;
+}
+
+.payroll-reference-info {
+  display: grid;
+  grid-template-columns: 40% 34% 26%;
+  border: 1px solid #000;
+}
+
+.payroll-reference-info-column {
+  padding: 2px 6px;
+  border-right: 1px solid #000;
+}
+
+.payroll-reference-info-column:last-child {
+  border-right: 0;
+}
+
+.payroll-reference-info-column > div {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  min-height: 18px;
+  align-items: center;
+}
+
+.payroll-reference-info-column strong {
+  font-weight: 700;
+}
+
+.payroll-table-wrap {
+  width: 100%;
+  margin-top: -1px;
+  overflow-x: auto;
+}
+
+.payroll-reference-table {
+  width: 100%;
+  min-width: 1040px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #000;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 9.5px;
+  line-height: 1.05;
+}
+
+.payroll-reference-table th,
+.payroll-reference-table td {
+  height: 24px;
+  padding: 2px 3px;
+  border: 1px solid #000;
+  background: #fff;
+  vertical-align: middle;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.payroll-reference-table thead th {
+  height: 48px;
+  color: #000;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.payroll-col-number {
+  width: 3%;
+}
+
+.payroll-col-name {
+  width: 26%;
+}
+
+.payroll-col-position {
+  width: 12%;
+}
+
+.payroll-col-money {
+  width: 10%;
+}
+
+.payroll-col-service {
+  width: 11%;
+}
+
+.payroll-col-deduction {
+  width: 8%;
+}
+
+.payroll-col-net,
+.payroll-col-signature {
+  width: 10%;
+}
+
+.payroll-total-row th,
+.payroll-total-row td {
+  height: 26px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.payroll-total-row th {
+  font-size: 13px;
+  font-style: italic;
+  text-align: center;
+}
+
+.payroll-reference-certifications {
+  display: grid;
+  grid-template-columns: 30% 28% 22% 20%;
+  min-width: 1040px;
+  min-height: 165px;
+  margin-top: -1px;
+  border: 1px solid #000;
+}
+
+.payroll-reference-cert {
+  position: relative;
+  padding: 3px 5px;
+  border-right: 1px solid #000;
+  font-size: 10px;
+}
+
+.payroll-reference-cert:last-child {
+  border-right: 0;
+}
+
+.payroll-reference-cert > strong {
+  display: block;
+  font-size: 11px;
+}
+
+.payroll-reference-cert > p {
+  min-height: 47px;
+  margin: 5px 0 0;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.payroll-cert-fields {
+  position: absolute;
+  right: 6px;
+  bottom: 5px;
+  left: 6px;
+  display: grid;
+  gap: 3px;
+}
+
+.payroll-cert-fields > div {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.payroll-cert-fields span {
+  flex: 0 0 auto;
+}
+
+.payroll-cert-fields b {
+  display: inline-block;
+  flex: 1 1 auto;
+  min-width: 30px;
+  min-height: 13px;
+  padding: 0 2px 1px;
+  border-bottom: 1px solid #000;
+  text-align: center;
+  font-weight: 400;
+}
+
+.payroll-cert-centered > div {
+  justify-content: center;
+}
+
+.payroll-cert-centered b {
+  max-width: 90%;
+  font-weight: 700;
+}
+
+@page payroll-landscape {
+  size: A4 landscape;
+  margin: 10mm;
+}
+
+@media print {
+  .payroll-document {
+    page: payroll-landscape;
+    min-height: auto;
+    padding: 0 !important;
+  }
+
+  .payroll-table-wrap {
+    overflow: visible !important;
+  }
+
+  .payroll-reference-table,
+  .payroll-reference-certifications {
+    min-width: 0;
   }
 }

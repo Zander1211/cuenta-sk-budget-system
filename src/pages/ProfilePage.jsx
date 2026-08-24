@@ -8,23 +8,13 @@ import ImageCropper from '../components/ImageCropper'
 import { isBiodataComplete, formatBirthdate } from '../utils/biodata'
 
 function ProfilePage() {
-  const { user, role, refreshSession } = useAuth()
+  const { user, role, profileName, profileSurname, refreshSession } = useAuth()
   const navigate = useNavigate()
 
-  const [avatarUrl, setAvatarUrl] = useState(
-    user?.user_metadata?.avatar_url || ''
-  )
+  const [avatarOverride, setAvatarOverride] = useState('')
   const [avatarError, setAvatarError] = useState('')
   const [avatarStatus, setAvatarStatus] = useState('')
   const [isUploading, setIsUploading] = useState(false)
-  const [firstName, setFirstName] = useState(
-    user?.user_metadata?.first_name || ''
-  )
-  const [lastName, setLastName] = useState(user?.user_metadata?.last_name || '')
-  const [nickname, setNickname] = useState(
-    user?.user_metadata?.nickname || ''
-  )
-  
   // Cropper state
   const [cropImageSrc, setCropImageSrc] = useState(null)
   const [selectedSafeExt, setSelectedSafeExt] = useState('png')
@@ -33,24 +23,22 @@ function ProfilePage() {
   const [biodata, setBiodata] = useState({ status: 'loading', data: null })
 
   const email = user?.email || ''
+  const avatarUrl = avatarOverride || user?.user_metadata?.avatar_url || ''
+  const firstName = user?.user_metadata?.first_name || ''
+  const lastName = user?.user_metadata?.last_name || ''
+  const nickname = user?.user_metadata?.nickname || ''
   const metadataFullName = user?.user_metadata?.full_name?.trim() || ''
   const trimmedNickname = nickname.trim()
   const resolvedFullName =
-    [firstName.trim(), lastName.trim()].filter(Boolean).join(' ') ||
+    profileName ||
+    [firstName.trim(), user?.user_metadata?.middle_name?.trim(), lastName.trim()].filter(Boolean).join(' ') ||
     metadataFullName
   const displayName =
     trimmedNickname || resolvedFullName || email.split('@')[0] || 'User'
   const surname =
-    lastName.trim() || resolvedFullName.split(' ').filter(Boolean).slice(-1)[0] || ''
+    profileSurname || lastName.trim() || resolvedFullName.split(' ').filter(Boolean).slice(-1)[0] || ''
   const formalTitle = [role, surname].filter(Boolean).join(', ')
   const initials = getInitials(displayName || email)
-
-  useEffect(() => {
-    setAvatarUrl(user?.user_metadata?.avatar_url || '')
-    setFirstName(user?.user_metadata?.first_name || '')
-    setLastName(user?.user_metadata?.last_name || '')
-    setNickname(user?.user_metadata?.nickname || '')
-  }, [user])
 
   useEffect(() => {
     let isMounted = true
@@ -164,7 +152,7 @@ function ProfilePage() {
       return
     }
 
-    setAvatarUrl(publicUrl)
+    setAvatarOverride(publicUrl)
     setAvatarStatus('Profile picture updated successfully.')
     await refreshSession()
     setIsUploading(false)

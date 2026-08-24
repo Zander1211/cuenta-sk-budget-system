@@ -166,3 +166,26 @@ serve(async (req: any) => {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 })
+timeoutMs: 15000,
+  })
+
+const elapsed = Date.now() - startTime
+
+if (aiResponse.ok) {
+  const extracted = extractJson(aiResponse.text)
+  const result = extracted ? safeParse(extracted) : null
+
+  logEvent('ai_success', { model: aiResponse.usedModel, elapsed })
+  return new Response(
+    JSON.stringify(normalizeOutput(result)),
+    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  )
+}
+
+// ── All models failed — return structured fallback (HTTP 200) ─────────────
+logEvent('ai_all_models_failed', { error: aiResponse.error })
+return new Response(
+  JSON.stringify({ ok: false, error: aiResponse.error, fallbackToComputed: true }),
+  { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+)
+})

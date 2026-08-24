@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import CurrencyInput from '../CurrencyInput'
-import { PlusCircle, Trash2 } from 'lucide-react'
 import { supabase } from '../../supabase/supabaseClient'
 
 const currency = new Intl.NumberFormat('en-PH', {
@@ -178,12 +177,12 @@ function DisbursementVoucherForm({ profileName, role, selectedRequest, onPreview
         <h3>Certification Signatories</h3>
         <div className="form-grid">
           <label className="field">
-            <span>A. SK Kagawad Name</span>
+            <span>A. Budget Monitoring Officer Name</span>
             <input
               type="text"
               value={skKagawad}
               onChange={(e) => setSkKagawad(e.target.value)}
-              placeholder="SK Kagawad"
+              placeholder="Budget Monitoring Officer"
             />
           </label>
           <label className="field">

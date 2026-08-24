@@ -59,7 +59,11 @@ export function useAnalysisAI(payload, { fallback = [], enabled = true } = {}) {
       if (id !== requestId.current) return
       if (import.meta.env?.DEV) console.warn('AI analysis failed:', err?.message || err)
       setState((prev) => ({ ...prev, status: 'error' }))
-      setError('AI interpretation is temporarily unavailable. Showing computed insights.')
+      let errorMessage = err?.message || 'AI interpretation is temporarily unavailable.'
+      if (errorMessage.includes('non-2xx status code')) {
+        errorMessage = 'AI interpretation failed (API quota exceeded or service error).'
+      }
+      setError(errorMessage)
     }
     // `signature` fully encodes `payload`; listing payload would re-create on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps

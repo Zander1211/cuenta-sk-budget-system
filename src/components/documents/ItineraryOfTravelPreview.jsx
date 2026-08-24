@@ -50,6 +50,7 @@ function ItineraryOfTravelPreview({ data, onClose, onSave }) {
       departure: '',
       arrival: '',
       transportation: '',
+      transportationCost: '',
       perDiem: '',
       others: '',
       total: '',
@@ -88,11 +89,7 @@ function ItineraryOfTravelPreview({ data, onClose, onSave }) {
         </div>
 
         <div className="print-page">
-          {/* Top-right labels */}
-          <div className="itinerary-top-labels">
-            <p style={{ margin: 0, fontStyle: 'italic' }}>SK copy</p>
-            <p style={{ margin: 0 }}>Appendix 46</p>
-          </div>
+          <div className="itinerary-top-labels">Appendix 46</div>
 
           {/* Letterhead */}
           <div className="gov-letterhead" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '30px' }}>
@@ -104,138 +101,124 @@ function ItineraryOfTravelPreview({ data, onClose, onSave }) {
             </div>
           </div>
 
-          {/* Title */}
-          <div className="doc-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>Itinerary of Travel</span>
-            <span style={{ fontSize: '12px', fontWeight: 400, letterSpacing: 0 }}>
-              No: {itineraryNumber}
-            </span>
-          </div>
+          <div className="itinerary-reference-form">
+            <div className="itinerary-reference-title">
+              <strong>Itinerary of Travel</strong>
+              <span>No: <b>{itineraryNumber}</b></span>
+            </div>
 
-          {/* Info grid */}
-          <div className="itinerary-info-grid">
-            <div>
-              <div className="doc-info-row">
-                <span className="doc-info-label">Name:</span>
-                <span className="doc-info-value">{travelerName}</span>
+            <div className="itinerary-reference-details">
+              <div className="itinerary-detail-column">
+                <div><span>Name:</span><strong>{travelerName}</strong></div>
+                <div><span>Position:</span><strong>{position}</strong></div>
+                <div><span>Official Station:</span><strong>{officialStation}</strong></div>
               </div>
-              <div className="doc-info-row">
-                <span className="doc-info-label">Position:</span>
-                <span className="doc-info-value">{position}</span>
-              </div>
-              <div className="doc-info-row">
-                <span className="doc-info-label">Official Station:</span>
-                <span className="doc-info-value">{officialStation}</span>
+              <div className="itinerary-detail-column itinerary-travel-details">
+                <div>
+                  <span>Date of Travel:</span>
+                  <strong>{formatDateLocal(travelStart)} - {formatDateLocal(travelEnd)}</strong>
+                </div>
+                <div className="itinerary-purpose-line">
+                  <span>Purpose of Travel:</span>
+                  <strong>{purpose}</strong>
+                </div>
               </div>
             </div>
-            <div>
-              <div className="doc-info-row">
-                <span className="doc-info-label">Date of Travel:</span>
-                <span className="doc-info-value">
-                  {formatDateLocal(travelStart)} - {formatDateLocal(travelEnd)}
-                </span>
-              </div>
-              <div className="doc-info-row">
-                <span className="doc-info-label">Purpose of Travel:</span>
-                <span className="doc-info-value">{purpose}</span>
-              </div>
-            </div>
-          </div>
 
-          {/* Travel table */}
-          <table className="doc-table">
-            <thead>
-              <tr>
-                <th style={{ width: '70px' }}>Date</th>
-                <th>Places to be visited (Destination)</th>
-                <th colSpan={2}>TIME</th>
-                <th style={{ width: '90px' }}>Means of Transportation</th>
-                <th style={{ width: '70px' }}>Per Diem</th>
-                <th style={{ width: '60px' }}>Others</th>
-                <th style={{ width: '90px' }}>Total Amount</th>
-              </tr>
-              <tr>
-                <th></th>
-                <th></th>
-                <th style={{ width: '60px' }}>Departure</th>
-                <th style={{ width: '60px' }}>Arrival</th>
-                <th></th>
-                <th></th>
-                <th></th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {paddedRows.map((row, idx) => {
-                const hasData = row.destination || row.date
-                return (
-                  <tr key={idx} className={hasData ? '' : 'empty-row'}>
-                    <td>{hasData ? formatDateLocal(row.date) : ''}</td>
-                    <td className="text-left">{row.destination || ''}</td>
-                    <td>{hasData ? formatTime(row.departure) : ''}</td>
-                    <td>{hasData ? formatTime(row.arrival) : ''}</td>
-                    <td>{row.transportation || ''}</td>
-                    <td className="text-right">
-                      {hasData && Number(row.perDiem) ? currency.format(Number(row.perDiem)) : ''}
-                    </td>
-                    <td className="text-right">
-                      {hasData && Number(row.others) ? currency.format(Number(row.others)) : ''}
-                    </td>
-                    <td className="text-right">
-                      {hasData && Number(row.total) ? currency.format(Number(row.total)) : ''}
-                    </td>
+            <div className="itinerary-table-wrap">
+              <table className="itinerary-reference-table">
+                <colgroup>
+                  <col className="itinerary-col-date" />
+                  <col className="itinerary-col-destination" />
+                  <col className="itinerary-col-time" />
+                  <col className="itinerary-col-time" />
+                  <col className="itinerary-col-means" />
+                  <col className="itinerary-col-cost" />
+                  <col className="itinerary-col-cost" />
+                  <col className="itinerary-col-cost" />
+                  <col className="itinerary-col-total" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th rowSpan={2}>Date</th>
+                    <th rowSpan={2}>Places to be visited<br />(Destination)</th>
+                    <th colSpan={2}>TIME</th>
+                    <th rowSpan={2}>Means of<br />Transportation</th>
+                    <th rowSpan={2}>Transportation</th>
+                    <th rowSpan={2}>Per Diem</th>
+                    <th rowSpan={2}>Others</th>
+                    <th rowSpan={2}>Total<br />Amount</th>
                   </tr>
-                )
-              })}
-              {/* Total row */}
-              <tr style={{ fontWeight: 700 }}>
-                <td colSpan={7} style={{ textAlign: 'right' }}>
-                  TOTAL
-                </td>
-                <td className="text-right">{currency.format(grandTotal)}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          {/* Signatures */}
-          <div className="itinerary-signatures">
-            <div className="itinerary-sig-block">
-              <div className="itinerary-sig-title">Prepared by:</div>
-              <div className="itinerary-sig-name">{travelerName || '___________'}</div>
-              <div className="itinerary-sig-line">Signature over Printed Name</div>
+                  <tr>
+                    <th>Departure</th>
+                    <th>Arrival</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paddedRows.map((row, idx) => {
+                    const hasData = row.destination || row.date
+                    return (
+                      <tr key={idx}>
+                        <td>{hasData ? formatDateLocal(row.date) : ''}</td>
+                        <td className="text-left">{row.destination || ''}</td>
+                        <td>{hasData ? formatTime(row.departure) : ''}</td>
+                        <td>{hasData ? formatTime(row.arrival) : ''}</td>
+                        <td>{row.transportation || ''}</td>
+                        <td className="text-right">
+                          {Number(row.transportationCost) ? currency.format(Number(row.transportationCost)) : ''}
+                        </td>
+                        <td className="text-right">
+                          {Number(row.perDiem) ? currency.format(Number(row.perDiem)) : ''}
+                        </td>
+                        <td className="text-right">
+                          {Number(row.others) ? currency.format(Number(row.others)) : ''}
+                        </td>
+                        <td className="text-right">
+                          {Number(row.total) ? currency.format(Number(row.total)) : ''}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  <tr className="itinerary-total-row">
+                    <th colSpan={8}>TOTAL</th>
+                    <td className="text-right">{grandTotal ? currency.format(grandTotal) : ''}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <div className="itinerary-sig-block">
-              <div className="itinerary-sig-title">Approved by:</div>
-              <div className="itinerary-sig-name">{approvedBy || '___________'}</div>
-              <div className="itinerary-sig-line">Signature over Printed Name</div>
-              <div className="itinerary-sig-role">Punong Barangay</div>
-            </div>
-          </div>
 
-          {/* Certification */}
-          <div className="itinerary-cert-box">
-            <p style={{ margin: 0 }}>
-              I certify that: (1) I have reviewed the foregoing itinerary, (2) the travel is
-              necessary to the service, (3) the period covered is reasonable and (4) the expenses
-              claimed are proper.
-            </p>
-          </div>
-
-          <div className="itinerary-supervisor">
-            <div style={{ marginTop: '28px', borderTop: '1px solid #000', display: 'inline-block', paddingTop: '4px', minWidth: '200px' }}>
-              <div style={{ fontWeight: 700, textTransform: 'uppercase' }}>
-                {immediateSupervisor || '___________'}
+            <div className="itinerary-approval-grid">
+              <div className="itinerary-certification-panel">
+                <p>
+                  I certify that: (1) I have reviewed the foregoing itinerary, (2) the travel is
+                  necessary to the service, (3) the period covered is reasonable and (4) the
+                  expenses claimed are proper.
+                </p>
+                <div className="itinerary-reference-signature">
+                  <strong>{immediateSupervisor || '___________'}</strong>
+                  <span>Signature over Printed Name</span>
+                  <span>Immediate Supervisor</span>
+                </div>
+              </div>
+              <div className="itinerary-signatory-panel itinerary-prepared-panel">
+                <div className="itinerary-panel-label">Prepared by:</div>
+                <div className="itinerary-reference-signature">
+                  <strong>{travelerName || '___________'}</strong>
+                  <span>Signature over Printed Name</span>
+                </div>
+              </div>
+              <div className="itinerary-signatory-panel itinerary-approved-panel">
+                <div className="itinerary-panel-label">Approved by:</div>
+                <div className="itinerary-reference-signature">
+                  <strong>{approvedBy || '___________'}</strong>
+                  <span>Signature over Printed Name</span>
+                  <span>Punong Barangay</span>
+                </div>
               </div>
             </div>
-            <div style={{ fontStyle: 'italic', fontSize: '10px' }}>
-              Signature over Printed Name
-            </div>
-            <div style={{ fontSize: '11px' }}>Immediate Supervisor</div>
           </div>
 
-          <p style={{ fontSize: '10px', marginTop: '16px', fontStyle: 'italic', color: '#666' }}>
-            Note:
-          </p>
+          <p className="itinerary-note">Note:</p>
         </div>
       </div>
     </div>

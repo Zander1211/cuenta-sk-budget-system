@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, Plus, X, Eye, Download, Archive, RotateCcw, Search, Filter } from 'lucide-react'
+import { FileText, Plus, X, Eye, Download, Archive, RotateCcw, Search, Filter, Receipt } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import DocumentGenerator from '../components/DocumentGenerator'
 import { useAuth } from '../context/AuthContext'
@@ -11,11 +11,30 @@ import PayrollPreview from '../components/documents/PayrollPreview'
 import ProjectDesignPreview from '../components/documents/ProjectDesignPreview'
 import ItineraryOfTravelPreview from '../components/documents/ItineraryOfTravelPreview'
 import TransmittalLetterPreview from '../components/documents/TransmittalLetterPreview'
+import AnnualReportPreview from '../components/documents/AnnualReportPreview'
+import NarrativeReportPreview from '../components/documents/NarrativeReportPreview'
+import PaginationControls from '../components/PaginationControls'
+import { useBudget } from '../context/BudgetContext'
+import { supabase } from '../supabase/supabaseClient'
+
+const DOCUMENTS_PAGE_SIZE = 10
 
 function DocumentsPage() {
   const navigate = useNavigate()
   const { role } = useAuth()
-  const { documents, archiveDocument, restoreDocument } = useDocuments()
+  const { expenses } = useBudget()
+  const {
+    documents,
+    isLoadingDocuments,
+    documentsError,
+    totalCount,
+    documentStats,
+    documentTypes,
+    refreshDocuments,
+    refreshDocumentStats,
+    archiveDocument,
+    restoreDocument,
+  } = useDocuments()
   
   const canCreate = ['SK Chairman', 'SK Treasurer'].includes(role)
   
@@ -26,31 +45,99 @@ function DocumentsPage() {
   const [viewingDoc, setViewingDoc] = useState(null)
   const [activeTab, setActiveTab] = useState('active')
   const [archiveModal, setArchiveModal] = useState({ open: false, docId: null })
+  const [receiptDocuments, setReceiptDocuments] = useState([])
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('')
   const [typeFilter, setTypeFilter] = useState('All')
+  const [currentPage, setCurrentPage] = useState(1)
 
-  // Document Categorization
-  const activeDocuments = useMemo(() => documents.filter((doc) => !doc.archivedAt), [documents])
-  const archivedDocuments = useMemo(() => documents.filter((doc) => doc.archivedAt), [documents])
-  
-  // Filtering logic
-  const displayedDocuments = useMemo(() => {
-    const baseDocs = activeTab === 'active' ? activeDocuments : archivedDocuments
-    return baseDocs.filter(doc => {
-      const matchesSearch = doc.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            doc.project?.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesType = typeFilter === 'All' || doc.type === typeFilter
-      return matchesSearch && matchesType
+  const totalPages = Math.max(1, Math.ceil(totalCount / DOCUMENTS_PAGE_SIZE))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const hasActiveFilters = Boolean(searchTerm.trim() || typeFilter !== 'All')
+
+  useEffect(() => {
+    refreshDocuments({
+      page: currentPage,
+      pageSize: DOCUMENTS_PAGE_SIZE,
+      search: searchTerm,
+      type: typeFilter,
+      archived: activeTab === 'archive',
     })
-  }, [activeTab, activeDocuments, archivedDocuments, searchTerm, typeFilter])
+  }, [activeTab, currentPage, refreshDocuments, searchTerm, typeFilter])
 
-  // Unique types for filter
-  const documentTypes = useMemo(() => {
-    const types = new Set(documents.map(d => d.type).filter(Boolean))
-    return ['All', ...Array.from(types)]
-  }, [documents])
+  useEffect(() => {
+    refreshDocumentStats()
+  }, [refreshDocumentStats])
+
+  useEffect(() => {
+    const handleDocumentCreated = () => {
+      setActiveTab('active')
+      setSearchTerm('')
+      setTypeFilter('All')
+      setCurrentPage(1)
+    }
+
+    window.addEventListener('cuenta:document-created', handleDocumentCreated)
+    return () => window.removeEventListener('cuenta:document-created', handleDocumentCreated)
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
+    const recordIds = expenses.map(expense => String(expense.id))
+    if (!recordIds.length) return undefined
+
+    const parents = new Map()
+    expenses.filter(expense => !expense.isAdditional).forEach(parent => {
+      parents.set(String(parent.id), parent)
+      if (parent.requestId) parents.set(String(parent.requestId), parent)
+    })
+    const requisitions = new Map()
+    expenses.filter(expense => expense.isAdditional).forEach(requisition => {
+      requisitions.set(String(requisition.id), requisition)
+    })
+
+    ;(async () => {
+      let { data, error } = await supabase
+        .from('receipt_records')
+        .select('id, record_id, requisition_id, file_path, file_name, uploaded_at')
+        .in('record_id', recordIds)
+        .order('uploaded_at', { ascending: false })
+        .limit(50)
+
+      if (error) {
+        const legacy = await supabase
+          .from('receipt_records')
+          .select('id, record_id, file_path, file_name, uploaded_at')
+          .in('record_id', recordIds)
+          .order('uploaded_at', { ascending: false })
+          .limit(50)
+        data = legacy.data
+        error = legacy.error
+      }
+      if (error || !mounted) return
+
+      const rows = await Promise.all((data || []).map(async receipt => {
+        const legacyRequisition = requisitions.get(String(receipt.record_id))
+        const requisition = requisitions.get(String(receipt.requisition_id)) || legacyRequisition
+        const parent = parents.get(String(receipt.record_id))
+          || parents.get(String(requisition?.parentProjectId))
+        const { data: signed } = await supabase.storage
+          .from('receipts')
+          .createSignedUrl(receipt.file_path, 60 * 60)
+        return {
+          ...receipt,
+          url: signed?.signedUrl || null,
+          parentTitle: parent?.event || parent?.project || 'Approved record',
+          parentType: parent?.type || 'Record',
+          requisitionTitle: requisition?.description || requisition?.category || null,
+        }
+      }))
+      if (mounted) setReceiptDocuments(rows)
+    })()
+
+    return () => { mounted = false }
+  }, [expenses])
 
   function handleCreateSelect(type) {
     if (type === 'annual-report') {
@@ -65,7 +152,15 @@ function DocumentsPage() {
 
   function renderViewingDoc() {
     if (!viewingDoc) return null
-    const { type, data } = viewingDoc.data
+    const storedData = viewingDoc.data || {}
+    const legacyTypeByLabel = {
+      'Annual Report': 'annual',
+      'Narrative Report': 'narrative',
+      'Photo Documentation': 'narrative',
+      'Narrative Report & Photo Documentation': 'narrative',
+    }
+    const type = storedData.type || legacyTypeByLabel[viewingDoc.type]
+    const data = storedData.data || storedData
     const onClose = () => setViewingDoc(null)
 
     switch (type) {
@@ -75,6 +170,8 @@ function DocumentsPage() {
       case 'project': return <ProjectDesignPreview data={data} onClose={onClose} />
       case 'itinerary': return <ItineraryOfTravelPreview data={data} onClose={onClose} />
       case 'transmittal': return <TransmittalLetterPreview data={data} onClose={onClose} />
+      case 'annual': return <AnnualReportPreview data={data} onClose={onClose} />
+      case 'narrative': return <NarrativeReportPreview data={data} onClose={onClose} />
       default: return null
     }
   }
@@ -128,19 +225,19 @@ function DocumentsPage() {
             }}>
               <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Documents</p>
-                <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>{documents.length}</h3>
+                <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>{documentStats.total}</h3>
               </div>
               <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Generated Documents</p>
-                <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>{activeDocuments.length}</h3>
+                <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>{documentStats.active}</h3>
               </div>
               <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Uploaded Documents</p>
-                <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>0</h3>
+                <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>{documentStats.uploaded}</h3>
               </div>
               <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Archived Documents</p>
-                <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>{archivedDocuments.length}</h3>
+                <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>{documentStats.archived}</h3>
               </div>
             </div>
 
@@ -160,13 +257,13 @@ function DocumentsPage() {
                   <div className="page-tabs" role="tablist">
                     <button
                       className={`page-tab ${activeTab === 'active' ? 'is-active' : ''}`}
-                      onClick={() => { setActiveTab('active'); setSearchTerm(''); setTypeFilter('All'); }}
+                      onClick={() => { setActiveTab('active'); setSearchTerm(''); setTypeFilter('All'); setCurrentPage(1); }}
                     >
                       Active
                     </button>
                     <button
                       className={`page-tab ${activeTab === 'archive' ? 'is-active' : ''}`}
-                      onClick={() => { setActiveTab('archive'); setSearchTerm(''); setTypeFilter('All'); }}
+                      onClick={() => { setActiveTab('archive'); setSearchTerm(''); setTypeFilter('All'); setCurrentPage(1); }}
                     >
                       Archived
                     </button>
@@ -181,7 +278,7 @@ function DocumentsPage() {
                       type="text"
                       placeholder="Search documents by name or project..."
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                       style={{
                         width: '100%', padding: '10px 12px 10px 40px', borderRadius: 'var(--radius-control)',
                         border: '1px solid var(--border)', fontSize: '0.95rem'
@@ -192,13 +289,13 @@ function DocumentsPage() {
                     <Filter size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                     <select
                       value={typeFilter}
-                      onChange={(e) => setTypeFilter(e.target.value)}
+                      onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
                       style={{
                         width: '100%', padding: '10px 12px 10px 40px', borderRadius: 'var(--radius-control)',
                         border: '1px solid var(--border)', fontSize: '0.95rem', backgroundColor: 'var(--surface)'
                       }}
                     >
-                      {documentTypes.map(type => (
+                      {['All', ...documentTypes].map(type => (
                         <option key={type} value={type}>{type === 'All' ? 'All Types' : type}</option>
                       ))}
                     </select>
@@ -219,11 +316,29 @@ function DocumentsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {displayedDocuments.length > 0 ? (
-                      displayedDocuments.map((doc) => (
+                    {isLoadingDocuments ? (
+                      <tr>
+                        <td colSpan="5" style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                          Loading documents...
+                        </td>
+                      </tr>
+                    ) : documentsError ? (
+                      <tr>
+                        <td colSpan="5" style={{ padding: '48px 24px', textAlign: 'center' }}>
+                          <p role="alert" style={{ color: 'var(--negative)', fontSize: '0.95rem', margin: '0 0 16px' }}>
+                            {documentsError}
+                          </p>
+                          <button type="button" className="secondary-button" onClick={() => refreshDocuments()}>
+                            Try again
+                          </button>
+                        </td>
+                      </tr>
+                    ) : documents.length > 0 ? (
+                      documents.map((doc) => (
                         <tr key={doc.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background-color 0.2s', opacity: doc.archivedAt ? 0.7 : 1 }} className="hover-row">
                           <td data-label="Document Name" style={{ padding: '16px 24px' }}>
                             <p style={{ margin: 0, fontWeight: 500, color: 'var(--text-primary)' }}>{doc.name}</p>
+                            <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>{doc.type}</p>
                           </td>
                           <td data-label="Project/Event" style={{ padding: '16px 24px', color: 'var(--text-primary)' }}>{doc.project || '—'}</td>
                           <td data-label="Date Created" style={{ padding: '16px 24px', color: 'var(--text-primary)' }}>
@@ -262,7 +377,65 @@ function DocumentsPage() {
                   </tbody>
                 </table>
               </div>
+              {!isLoadingDocuments && !documentsError ? (
+                <PaginationControls
+                  currentPage={safeCurrentPage}
+                  totalPages={totalPages}
+                  totalItems={totalCount}
+                  pageSize={DOCUMENTS_PAGE_SIZE}
+                  onPageChange={setCurrentPage}
+                  isFiltered={hasActiveFilters}
+                  idPrefix="documents"
+                />
+              ) : null}
             </div>
+
+            {activeTab === 'active' ? (
+              <section className="overview-card" style={{ marginTop: '24px', overflow: 'hidden' }}>
+                <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)' }}>
+                  <p className="eyebrow">Supporting documents</p>
+                  <h2 style={{ margin: '4px 0 6px' }}>Receipt attachments</h2>
+                  <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+                    Original and requisition receipts remain grouped under their approved Project, Event, or Payroll.
+                  </p>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Approved record</th>
+                        <th>Receipt</th>
+                        <th>Scope</th>
+                        <th>Date uploaded</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {receiptDocuments.length ? receiptDocuments.map(receipt => (
+                        <tr key={receipt.id}>
+                          <td data-label="Approved record">
+                            <strong>{receipt.parentTitle}</strong><br />
+                            <span style={{ color: 'var(--text-secondary)', fontSize: '.82rem' }}>{receipt.parentType}</span>
+                          </td>
+                          <td data-label="Receipt">{receipt.file_name || 'Receipt attachment'}</td>
+                          <td data-label="Scope">{receipt.requisitionTitle ? `Requisition: ${receipt.requisitionTitle}` : 'Original budget receipt'}</td>
+                          <td data-label="Date uploaded">{receipt.uploaded_at ? new Date(receipt.uploaded_at).toLocaleDateString() : '—'}</td>
+                          <td data-label="Action">
+                            {receipt.url ? (
+                              <a className="secondary-button" href={receipt.url} target="_blank" rel="noreferrer">
+                                <Receipt size={15} /> View receipt
+                              </a>
+                            ) : 'Unavailable'}
+                          </td>
+                        </tr>
+                      )) : (
+                        <tr><td colSpan="5" className="empty-state">No receipt attachments found.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ) : null}
           </>
         )}
       </section>
@@ -329,6 +502,14 @@ function DocumentsPage() {
                     <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Created By</p>
                     <p style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '400' }}>{viewDetailsDoc.generatedBy}</p>
                   </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Document Type</p>
+                    <p style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '400' }}>{viewDetailsDoc.type}</p>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>File Name</p>
+                    <p style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '400', overflowWrap: 'anywhere' }}>{viewDetailsDoc.fileName || 'Not stored as a file'}</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -347,6 +528,7 @@ function DocumentsPage() {
                 ) : (
                   <button type="button" className="secondary-button" style={{ flex: '1 1 auto', maxWidth: '200px', justifyContent: 'center', color: 'var(--accent)' }} onClick={() => {
                     restoreDocument(viewDetailsDoc.id)
+                    setCurrentPage(1)
                     setViewDetailsDoc(null)
                   }}>
                     <RotateCcw size={16} /> Restore
@@ -389,6 +571,7 @@ function DocumentsPage() {
                 style={{ backgroundColor: 'var(--negative)', color: 'white', borderColor: 'var(--negative)' }}
                 onClick={() => {
                   archiveDocument(archiveModal.docId)
+                  setCurrentPage(1)
                   setArchiveModal({ open: false, docId: null })
                 }}
               >

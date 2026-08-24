@@ -20,6 +20,7 @@ function createEmptyTravelRow() {
     departure: '',
     arrival: '',
     transportation: 'Vehicle',
+    transportationCost: '',
     perDiem: '',
     others: '',
   }
@@ -92,7 +93,11 @@ function ItineraryOfTravelForm({ profileName, role, onPreview }) {
   }
 
   function getRowTotal(row) {
-    return (Number(row.perDiem) || 0) + (Number(row.others) || 0)
+    return (
+      (Number(row.transportationCost) || 0) +
+      (Number(row.perDiem) || 0) +
+      (Number(row.others) || 0)
+    )
   }
 
   const grandTotal = rows.reduce((sum, row) => sum + getRowTotal(row), 0)
@@ -194,7 +199,8 @@ function ItineraryOfTravelForm({ profileName, role, onPreview }) {
                 <th>Destination</th>
                 <th style={{ width: '80px' }}>Departure</th>
                 <th style={{ width: '80px' }}>Arrival</th>
-                <th style={{ width: '110px' }}>Transportation</th>
+                <th style={{ width: '130px' }}>Means of Transportation</th>
+                <th style={{ width: '110px' }}>Transportation Cost</th>
                 <th style={{ width: '90px' }}>Per Diem</th>
                 <th style={{ width: '80px' }}>Others</th>
                 <th style={{ width: '100px' }}>Total</th>
@@ -245,6 +251,9 @@ function ItineraryOfTravelForm({ profileName, role, onPreview }) {
                     </select>
                   </td>
                   <td>
+                    <CurrencyInput value={row.transportationCost} onValueChange={(val) => updateRow(index, 'transportationCost', Number(val))} placeholder="0.00" />
+                  </td>
+                  <td>
                     <CurrencyInput value={row.perDiem} onValueChange={(val) => updateRow(index, 'perDiem', Number(val))} placeholder="0.00" />
                   </td>
                   <td>
@@ -264,7 +273,7 @@ function ItineraryOfTravelForm({ profileName, role, onPreview }) {
                 </tr>
               ))}
               <tr className="total-row">
-                <td colSpan={7} style={{ textAlign: 'right', fontWeight: 700 }}>
+                <td colSpan={8} style={{ textAlign: 'right', fontWeight: 700 }}>
                   TOTAL
                 </td>
                 <td className="computed-cell">{currency.format(grandTotal)}</td>

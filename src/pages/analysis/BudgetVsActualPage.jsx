@@ -12,7 +12,7 @@ import {
   MetricCard, ChartCard, StatusBadge, EmptyState, DataTable,
 } from '../../components/analysis/AnalysisUI'
 import { buildVarianceInsights } from '../../utils/insights'
-import { formatCurrency, formatPercentage, CHART_COLORS, CHART_INK, pesoTick } from '../../utils/analytics'
+import { formatCurrency, formatPercentage, periodLabel, CHART_COLORS, CHART_INK, pesoTick } from '../../utils/analytics'
 
 import { exportToCsv } from '../../utils/exportCsv'
 import { exportBudgetVsActualPdf } from '../../utils/exportPdf'
@@ -39,9 +39,8 @@ export default function BudgetVsActualPage() {
   const chartRef = useRef(null)
   const [exporting, setExporting] = useState(false)
 
-  // This comparison is most meaningful across the full year's months.
-  const yearFilters = useMemo(() => ({ ...filters, view: 'yearly' }), [filters])
-  const bva = useBudgetVsActual(yearFilters)
+  const bva = useBudgetVsActual(filters)
+  const label = periodLabel(filters)
 
   async function handleExportPdf() {
     if (exporting || !bva.hasData) return
@@ -56,24 +55,24 @@ export default function BudgetVsActualPage() {
   }
 
   const chartData = bva.monthly.map((m) => ({
-    month: m.key, 'Allocated Budget': m.budget, 'Approved Spending': m.spending,
+    month: m.key, 'Total Budget (Monthly Budget)': m.budget, 'Approved Budgets': m.spending,
   }))
 
   const fallback = useMemo(() => buildVarianceInsights(bva), [bva])
   const aiPayload = useMemo(() => ({
     page: 'budget-vs-actual',
-    period: `${filters.year}`,
-    note: 'Data model has no separate actual-spend field; spending = approved expenses (allocated budget vs approved spending).',
-    totals: { allocatedBudget: bva.totalBudget, approvedSpending: bva.totalSpending, variance: bva.totalVariance },
-    monthly: bva.rowsWithData.map((r) => ({ month: r.label, budget: Math.round(r.budget), spending: Math.round(r.spending), status: r.status })),
-  }), [bva, filters.year])
+    period: label,
+    note: 'The Total Budget is the monthly budget allocated by the SK Treasurer. Approved Budgets are the sum of all approved requests (Projects, Events, Payroll) from the SK Chairman.',
+    totals: { totalBudget: bva.totalBudget, approvedBudgets: bva.totalSpending, variance: bva.totalVariance },
+    monthly: bva.rowsWithData.map((r) => ({ month: r.label, totalBudget: Math.round(r.budget), approvedBudgets: Math.round(r.spending), status: r.status })),
+  }), [bva, label])
 
   const ai = useAnalysisAI(aiPayload, { fallback, enabled: bva.hasData })
 
   const perf = bva.performance
   const cards = [
-    { icon: Wallet, label: 'Total Budget', value: formatCurrency(bva.totalBudget), meta: `Allocated in ${filters.year}` },
-    { icon: Receipt, label: 'Approved Spending', value: formatCurrency(bva.totalSpending), meta: 'Sum of approved expenses' },
+    { icon: Wallet, label: 'Total Budget (Monthly Budget)', value: formatCurrency(bva.totalBudget), meta: `Monthly budget for ${label}` },
+    { icon: Receipt, label: 'Approved Budgets', value: formatCurrency(bva.totalSpending), meta: 'Total approved budget requests' },
     { icon: Scale, label: 'Total Variance', value: formatCurrency(bva.totalVariance), meta: bva.totalVariance < 0 ? 'Over budget' : 'Under budget', tone: bva.totalVariance < 0 ? 'danger' : 'positive' },
     { icon: Gauge, label: 'Budget Performance', value: perf.label, meta: perf.message, tone: perf.tone },
   ]
@@ -90,9 +89,9 @@ export default function BudgetVsActualPage() {
   return (
     <AnalysisLayout
       breadcrumb={BREADCRUMB}
-      title="Budget vs Actual Spending"
-      description="Allocated monthly budget compared with approved spending. This system records approved expenses as spending — there is no separate 'actual' amount, so figures are labeled accordingly."
-      filterBar={<AnalysisFilterBar filters={filters} setFilter={setFilter} showView={false} />}
+      title="Budget vs Approved Budgets"
+      description="Monthly budget allocated by the SK Treasurer compared with total approved requests from the SK Chairman."
+      filterBar={<AnalysisFilterBar filters={filters} setFilter={setFilter} />}
     >
       <section className="an-metric-grid">
         {cards.map((c) => <MetricCard key={c.label} {...c} />)}
@@ -100,7 +99,7 @@ export default function BudgetVsActualPage() {
 
       <div className="an-detail-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <ChartCard eyebrow="Financial Performance" title={`Allocated Budget vs Approved Spending — ${filters.year}`}
+          <ChartCard eyebrow="Financial Allocation" title={`Total Budget vs Approved Budgets — ${label}`}
             action={bva.hasData ? (
               <button type="button" className={`an-btn an-btn-outline`} onClick={handleExportPdf} disabled={exporting} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                 <FileDown size={15} />
@@ -110,17 +109,17 @@ export default function BudgetVsActualPage() {
           >
             {bva.hasData ? (
               <div ref={chartRef}>
-              <ResponsiveContainer width="100%" height={340}>
-                <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
-                  <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
-                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />
-                  <YAxis tickFormatter={pesoTick} tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} width={64} />
-                  <Tooltip content={<Money />} cursor={{ fill: CHART_INK.cursor }} />
-                  <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 13, paddingTop: 12 }} />
-                  <Bar dataKey="Allocated Budget" fill={CHART_COLORS.budget} radius={[4, 4, 0, 0]} maxBarSize={34} />
-                  <Bar dataKey="Approved Spending" fill={CHART_COLORS.actual} radius={[4, 4, 0, 0]} maxBarSize={34} />
-                </BarChart>
-              </ResponsiveContainer>
+                <ResponsiveContainer width="100%" height={340}>
+                  <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
+                    <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
+                    <XAxis dataKey="month" tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={pesoTick} tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} width={64} />
+                    <Tooltip content={<Money />} cursor={{ fill: CHART_INK.cursor }} />
+                    <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 13, paddingTop: 12 }} />
+                    <Bar dataKey="Total Budget (Monthly Budget)" fill={CHART_COLORS.budget} radius={[4, 4, 0, 0]} maxBarSize={34} />
+                    <Bar dataKey="Approved Budgets" fill={CHART_COLORS.actual} radius={[4, 4, 0, 0]} maxBarSize={34} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             ) : (
               <EmptyState title="No budget or spending data" message={`No allocated budget or approved expenses recorded for ${filters.year}.`} />

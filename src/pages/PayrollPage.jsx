@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
 
 import CurrencyInput from '../components/CurrencyInput'
+import RecordFilterBar from '../components/RecordFilterBar'
 import { useNotifications } from '../context/NotificationContext'
 import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
 
@@ -28,6 +29,22 @@ function PayrollPage() {
   const { addNotification } = useNotifications()
 
   const [expanded, setExpanded] = useState({})
+
+  const [searchFilter, setSearchFilter] = useState('')
+  const [dateFilter, setDateFilter] = useState('')
+  const [monthFilter, setMonthFilter] = useState('')
+  const [yearFilter, setYearFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+
+  const hasActiveFilters = searchFilter || dateFilter || monthFilter || yearFilter || statusFilter
+
+  function resetFilters() {
+    setSearchFilter('')
+    setDateFilter('')
+    setMonthFilter('')
+    setYearFilter('')
+    setStatusFilter('')
+  }
 
   const [errorsById, setErrorsById] = useState({})
   const [uploadingId, setUploadingId] = useState(null)
@@ -188,6 +205,34 @@ function PayrollPage() {
     })
   }, [expenses])
 
+  const filteredPayroll = useMemo(() => {
+    return parentPayroll.filter(item => {
+      if (searchFilter) {
+        const title = (item.project || item.event || '').toLowerCase()
+        const purpose = (item.description || '').toLowerCase()
+        const category = (item.category || '').toLowerCase()
+        const creator = (item.requestedBy || '').toLowerCase()
+        const q = searchFilter.toLowerCase()
+        if (!title.includes(q) && !purpose.includes(q) && !category.includes(q) && !creator.includes(q)) return false
+      }
+
+      if (statusFilter && (item.projectStatus || 'Ongoing') !== statusFilter) return false
+      
+      const itemDate = new Date(item.eventDate || item.date || item.approvedAt || item.created_at)
+      if (dateFilter) {
+        const selected = new Date(dateFilter)
+        if (itemDate.toDateString() !== selected.toDateString()) return false
+      }
+      if (monthFilter) {
+        const mStr = itemDate.toLocaleString('default', { month: 'long' })
+        if (mStr !== monthFilter) return false
+      }
+      if (yearFilter && itemDate.getFullYear().toString() !== yearFilter) return false
+      
+      return true
+    })
+  }, [parentPayroll, searchFilter, statusFilter, dateFilter, monthFilter, yearFilter])
+
   function toggleDetails(id) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
   }
@@ -204,7 +249,6 @@ function PayrollPage() {
     const approvedBudget = Number(project.amount || 0)
     const totalExpenses = approvedBudget + additionalSum
     const remainingBalance = approvedBudget - totalExpenses
-    const utilization = approvedBudget > 0 ? Math.round((totalExpenses / approvedBudget) * 100) : 0
 
     return (
       <tr className="details-row">
@@ -221,7 +265,6 @@ function PayrollPage() {
                 { label: 'Total Expenses', value: currency.format(totalExpenses) },
                 { label: 'Additional Expenses', value: currency.format(additionalSum) },
                 { label: 'Remaining Balance', value: currency.format(remainingBalance), highlight: remainingBalance < 0 },
-                { label: 'Budget Utilization', value: `${utilization}%` },
                 { label: 'Date Approved', value: project.approvedAt ? new Date(project.approvedAt).toLocaleDateString() : '—' }
               ].map((item, i) => (
                 <div key={i} style={{ 
@@ -354,6 +397,25 @@ function PayrollPage() {
       </header>
 
       <section className="dashboard-content">
+        <RecordFilterBar
+          searchValue={searchFilter}
+          onSearchChange={setSearchFilter}
+          searchLabel="Payroll search"
+          searchPlaceholder="Search title, purpose, category, or creator"
+          dateValue={dateFilter}
+          onDateChange={setDateFilter}
+          monthValue={monthFilter}
+          onMonthChange={setMonthFilter}
+          yearValue={yearFilter}
+          onYearChange={setYearFilter}
+          statusValue={statusFilter}
+          onStatusChange={setStatusFilter}
+          hasActiveFilters={Boolean(hasActiveFilters)}
+          onReset={resetFilters}
+          resultCount={filteredPayroll.length}
+          totalCount={parentPayroll.length}
+        />
+
         <div className="overview-card">
           <p className="eyebrow">Overview</p>
           <h2>All Approved Payroll</h2>
@@ -363,19 +425,16 @@ function PayrollPage() {
                 <th>Payroll Title</th>
                 <th>Purpose</th>
                 <th>Total Budget</th>
-                <th>Utilization</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {parentPayroll.length ? (
-                parentPayroll.map((project) => {
+              {filteredPayroll.length ? (
+                filteredPayroll.map((project) => {
                   const additionalExpenses = expenses.filter(e => e.isAdditional && e.parentProjectId === project.id && !e.archivedAt)
                   const additionalSum = additionalExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
                   const approvedBudget = Number(project.amount || 0)
-                  const totalExpenses = approvedBudget + additionalSum
-                  const utilization = approvedBudget > 0 ? Math.min(100, Math.round((totalExpenses / approvedBudget) * 100)) : 0
                   
                   return (
                     <Fragment key={project.id}>
@@ -383,14 +442,6 @@ function PayrollPage() {
                         <td data-label="Payroll Title">{project.project || project.event || 'Untitled'}</td>
                         <td data-label="Purpose">{project.description || '—'}</td>
                         <td data-label="Total Budget">{currency.format(approvedBudget)}</td>
-                        <td data-label="Utilization">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div style={{ flex: 1, height: '6px', background: 'var(--border-color)', borderRadius: 'var(--radius-bar)', overflow: 'hidden' }}>
-                              <div style={{ height: '100%', background: utilization > 100 ? 'var(--danger-color)' : 'var(--primary-color)', width: `${Math.min(utilization, 100)}%` }} />
-                            </div>
-                            <span style={{ fontSize: '0.75rem' }}>{utilization}%</span>
-                          </div>
-                        </td>
                         <td data-label="Status">
                           {role === 'SK Chairman' ? (
                             <select
@@ -425,7 +476,7 @@ function PayrollPage() {
               ) : (
                 <tr>
                   <td colSpan="6" className="empty-state">
-                    No approved payroll yet.
+                    {hasActiveFilters ? 'No payroll records match the selected filters.' : 'No approved payroll yet.'}
                   </td>
                 </tr>
               )}

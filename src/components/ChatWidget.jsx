@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { MessageCircle, X, Bot, Send } from 'lucide-react'
+import { X, Bot, Send } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { useBudget } from '../context/BudgetContext'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
+import { materializeActualExpenseRows, summarizeApprovedBudgetFinancials } from '../utils/projectEventFinancials'
 
 const PAGE_NAMES = {
   '/dashboard': 'Main Dashboard',
@@ -80,6 +81,53 @@ function getChips({ role, budgetUtilization, remaining, pendingApprovals, missin
   return chips.slice(0, 3)
 }
 
+const CUE_AVATAR_VIDEO = `${import.meta.env.BASE_URL}cue-ai-avatar.mp4`
+
+function CueAnimatedAvatar({ className = '' }) {
+  const videoRef = useRef(null)
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return undefined
+
+    const syncPlayback = () => {
+      if (document.hidden) {
+        video.pause()
+        return
+      }
+
+      const playPromise = video.play()
+      if (playPromise?.catch) playPromise.catch(() => {})
+    }
+
+    video.muted = true
+    syncPlayback()
+    document.addEventListener('visibilitychange', syncPlayback)
+
+    return () => {
+      document.removeEventListener('visibilitychange', syncPlayback)
+      video.pause()
+    }
+  }, [])
+
+  return (
+    <video
+      ref={videoRef}
+      className={`cue-avatar-video ${className}`.trim()}
+      src={CUE_AVATAR_VIDEO}
+      autoPlay
+      loop
+      muted
+      playsInline
+      preload="auto"
+      disablePictureInPicture
+      disableRemotePlayback
+      aria-hidden="true"
+      tabIndex={-1}
+    />
+  )
+}
+
 // Error boundary to prevent chatbot errors from crashing the whole app
 class ChatErrorBoundary extends React.Component {
   constructor(props) {
@@ -100,11 +148,11 @@ class ChatErrorBoundary extends React.Component {
       return (
         <button
           onClick={() => this.setState({ hasError: false })}
-          className="fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-[9999]"
+          className="chat-widget-fab cue-avatar-launcher fixed right-6 w-14 h-14 rounded-full flex items-center justify-center z-[9999] cursor-pointer border-none p-0"
           style={{ background: 'linear-gradient(135deg, #0C2E30 0%, #12805C 50%, #12b89a 100%)' }}
           aria-label="Chat error, click to reset"
         >
-          <MessageCircle size={22} color="white" />
+          <CueAnimatedAvatar className="cue-avatar-video--fab" />
         </button>
       )
     }
@@ -149,15 +197,21 @@ function ChatWidgetInner() {
 
   const location = useLocation()
   const { user, role, profileName } = useAuth()
-  const { requests, expenses, totals, budgets } = useBudget()
+  const { requests, expenses, totals, budgets, verifiedReceiptTotals } = useBudget()
+
+  const approvedFinancials = summarizeApprovedBudgetFinancials(expenses, verifiedReceiptTotals)
+  const actualExpenseRows = materializeActualExpenseRows(expenses, verifiedReceiptTotals)
+    .filter((expense) => !expense.isAdditional && !expense.archivedAt)
+  const actualExpenseTotal = approvedFinancials.totalExpenses
 
   const currentPage = PAGE_NAMES[location.pathname] || 'Dashboard'
+  // Budget utilization = approved allocations / monthly budget total
   const budgetUtilization = totals?.totalBudget
-    ? Math.round((totals.totalExpenses / totals.totalBudget) * 100)
+    ? Math.round((totals.totalApprovedAllocations / totals.totalBudget) * 100)
     : 0
   const pendingApprovals = (requests || []).filter(r => r.status === 'Pending').length
   const missingReceipts = (expenses || []).filter(e => !e.receiptUrl && !e.receiptName).length
-  const remaining = totals?.remaining || 0
+  const remaining = totals?.remaining ?? 0
   const userName = profileName || user?.user_metadata?.full_name || user?.email || 'Official'
 
   const LOCAL_CHAT_KEY = 'cuenta.chat_history.v1'
@@ -258,8 +312,17 @@ function ChatWidgetInner() {
     // expense row, so these ARE the projects and events — but without `type`
     // nothing in the payload was identifiable as a project or an event, and
     // without `projectStatus` nothing could be reported as Ongoing/Completed.
-    const expensesList = (expenses || []).map(e => {
-      const dateVal = e.date || e.eventDate || e.approvedAt || e.createdAt
+    const expensesList = actualExpenseRows.map(e => {
+      /*
+       * Matches useBudgetCalculations' bucketing (BudgetContext.jsx), which is
+       * what MainDashboardPage/AiAnalysisPage use for their own monthly
+       * totals: eventDate first, then date, then approval/creation time. The
+       * expense's raw `month`/`year` columns are NOT used here on purpose —
+       * they are set once at submission and can go stale relative to the
+       * event date, and using them would make Cue's month bucketing diverge
+       * from what the rest of the app actually displays for "this month".
+       */
+      const dateVal = e.eventDate || e.date || e.approvedAt || e.createdAt
       const d = dateVal ? new Date(dateVal) : null
       const mNum = d && !isNaN(d.getTime()) ? d.getMonth() + 1 : null
       const yNum = d && !isNaN(d.getTime()) ? d.getFullYear() : currentYear
@@ -267,13 +330,16 @@ function ChatWidgetInner() {
         id: e.id,
         project: e.project || e.event || 'Expense',
         type: e.type || 'Project',
-        amount: Number(e.amount) || 0,
+        amount: Number(e.approvedBudget) || Number(e.amount) || 0,
+        approvedBudget: Number(e.approvedBudget) || 0,
+        actualExpense: Number(e.amount) || 0,
         category: e.category || 'Other',
         status: e.status || 'Approved',
         projectStatus: e.projectStatus || null,
         isAdditional: !!e.isAdditional,
         archived: !!e.archivedAt,
         venue: e.venue || '',
+        description: e.description || e.purpose || '',
         month: mNum ? MONTH_NAMES[mNum - 1] : null,
         monthNumber: mNum,
         year: yNum,
@@ -311,21 +377,26 @@ function ChatWidgetInner() {
         const mBudgets = budgetsList.filter(b => b.year === yr && (b.monthNumber === m || b.month === mName))
         const mBudgetTotal = mBudgets.reduce((sum, b) => sum + b.amount, 0)
         
-        const mExpenses = expensesList.filter(e => e.year === yr && (e.monthNumber === m || e.month === mName))
-        const mExpenseTotal = mExpenses.reduce((sum, e) => sum + e.amount, 0)
-        
-        const mRemaining = mBudgetTotal - mExpenseTotal
+        const workingBudget = summarizeApprovedBudgetFinancials(
+          expenses,
+          verifiedReceiptTotals,
+          { view: 'monthly', year: yr, month: m },
+        )
+        const mExpenseTotal = workingBudget.totalExpenses
+        const mRemaining = workingBudget.remainingBudget
 
-        if (mBudgetTotal > 0 || mExpenseTotal > 0) {
+        if (mBudgetTotal > 0 || workingBudget.records.length > 0) {
           monthlySummaries.push({
             month: mName,
             monthNumber: m,
             year: yr,
             allocatedBudget: mBudgetTotal,
+            approvedBudget: workingBudget.totalApprovedBudget,
             totalExpenses: mExpenseTotal,
             remainingBalance: mRemaining,
+            remainingMonthlyAllocation: mBudgetTotal - workingBudget.totalApprovedBudget,
             sources: mBudgets.map(b => b.source).join(', ') || 'Regular SK Budget',
-            expenseCount: mExpenses.length
+            approvedRecordCount: workingBudget.records.length,
           })
         }
       }
@@ -338,16 +409,20 @@ function ChatWidgetInner() {
       currentYear,
       currentMonthName,
       totals: {
+        // Total Budget = sum of all monthly budgets (SK Treasurer entries)
         totalBudget: totals?.totalBudget || 0,
-        totalExpenses: totals?.totalExpenses || 0,
-        remaining,
+        // Total Approved Allocations = sum of all approved budget requests
+        totalApprovedAllocations: totals?.totalApprovedAllocations || 0,
+        totalExpenses: actualExpenseTotal,
+        remaining: totals?.remaining || 0,
+        remainingMonthlyAllocation: totals?.remainingMonthlyAllocation || 0,
         budgetUtilization,
       },
       monthlySummaries,
       allBudgets: budgetsList,
       allExpenses: expensesList,
       allRequests: requestsList,
-      topCategories: computeTopCategories(expenses || []),
+      topCategories: computeTopCategories(actualExpenseRows),
     }
   }
 
@@ -448,9 +523,10 @@ function ChatWidgetInner() {
     const allBudgets = systemCtx.allBudgets || []
     const allExpenses = systemCtx.allExpenses || []
     const allRequests = systemCtx.allRequests || []
+    const monthlySummaries = systemCtx.monthlySummaries || []
 
     if (isSuggestionQuery) {
-      return generateDataDrivenRecommendation(systemCtx, allBudgets, allExpenses, allRequests, targetMonth, targetYear, currentYear)
+      return generateDataDrivenRecommendation(systemCtx, allBudgets, allRequests, targetMonth, targetYear, currentYear)
     }
 
     /* "What are the spending patterns" is a question about shape, not size.
@@ -497,11 +573,14 @@ function ChatWidgetInner() {
       }
 
       if (isRemainingQuery) {
-        if (matchingBudgets.length === 0) {
-          return `No monthly budget has been recorded for ${targetMonth} ${targetYear}.`
+        const working = monthlySummaries.find((row) => (
+          Number(row.year) === targetYear
+          && String(row.month).toLowerCase() === targetMonth.toLowerCase()
+        ))
+        if (!working || Number(working.approvedBudget) <= 0) {
+          return `No approved Project, Event, or Payroll budget was recorded for ${targetMonth} ${targetYear}.`
         }
-        const remainingVal = budgetTotal - expenseTotal
-        return `The remaining balance for ${targetMonth} ${targetYear} is ₱${Number(remainingVal).toLocaleString('en-PH')} (Allocated: ₱${Number(budgetTotal).toLocaleString('en-PH')}, Spent: ₱${Number(expenseTotal).toLocaleString('en-PH')}).`
+        return `The remaining approved working budget for ${targetMonth} ${targetYear} is ₱${Number(working.remainingBalance).toLocaleString('en-PH')} (Approved: ₱${Number(working.approvedBudget).toLocaleString('en-PH')}, Spent: ₱${Number(working.totalExpenses).toLocaleString('en-PH')}).`
       }
 
       // Default Budget Query for specific Month & Year
@@ -529,11 +608,13 @@ function ChatWidgetInner() {
       }
 
       if (isRemainingQuery) {
-        if (yearBudgets.length === 0) {
-          return `No monthly budget has been recorded for ${targetYear}.`
+        const workingRows = monthlySummaries.filter((row) => Number(row.year) === targetYear)
+        const approvedBudget = workingRows.reduce((sum, row) => sum + Number(row.approvedBudget || 0), 0)
+        const remainingVal = workingRows.reduce((sum, row) => sum + Number(row.remainingBalance || 0), 0)
+        if (approvedBudget <= 0) {
+          return `No approved Project, Event, or Payroll budget was recorded for ${targetYear}.`
         }
-        const remainingVal = budgetTotal - expenseTotal
-        return `The remaining balance for ${targetYear} is ₱${Number(remainingVal).toLocaleString('en-PH')}.`
+        return `The remaining approved working budget for ${targetYear} is ₱${Number(remainingVal).toLocaleString('en-PH')} from ₱${Number(approvedBudget).toLocaleString('en-PH')} in approved requests.`
       }
 
       // Budget query for specific year
@@ -563,11 +644,14 @@ function ChatWidgetInner() {
       }
 
       if (isRemainingQuery) {
-        if (monthBudgets.length === 0) {
-          return `No monthly budget has been recorded for ${targetMonth} ${effectiveYear}.`
+        const working = monthlySummaries.find((row) => (
+          Number(row.year) === effectiveYear
+          && String(row.month).toLowerCase() === targetMonth.toLowerCase()
+        ))
+        if (!working || Number(working.approvedBudget) <= 0) {
+          return `No approved Project, Event, or Payroll budget was recorded for ${targetMonth} ${effectiveYear}.`
         }
-        const remainingVal = budgetTotal - expenseTotal
-        return `The remaining balance for ${targetMonth} ${effectiveYear} is ₱${Number(remainingVal).toLocaleString('en-PH')}.`
+        return `The remaining approved working budget for ${targetMonth} ${effectiveYear} is ₱${Number(working.remainingBalance).toLocaleString('en-PH')}.`
       }
 
       if (monthBudgets.length === 0) {
@@ -583,18 +667,18 @@ function ChatWidgetInner() {
       const totalB = systemCtx.totals?.totalBudget || 0
       const totalR = systemCtx.totals?.remaining || 0
       if (totalB === 0) {
-        return `No budgets have been recorded in the system yet.`
+        return `No approved Project, Event, or Payroll budgets have been recorded in the system yet.`
       }
-      return `The overall total budget recorded across all years is ₱${Number(totalB).toLocaleString('en-PH')} and you have ₱${Number(totalR).toLocaleString('en-PH')} remaining.`
+      return `The overall approved working budget across all years is ₱${Number(totalB).toLocaleString('en-PH')} and ₱${Number(totalR).toLocaleString('en-PH')} remains after recorded expenses.`
     }
 
     // Default fallback summary
     const totalB = systemCtx.totals?.totalBudget || 0
     const totalR = systemCtx.totals?.remaining || 0
     if (totalB === 0) {
-      return `No budgets have been recorded in the system yet. You can add a budget on the Budgets page.`
+      return `No approved Project, Event, or Payroll budgets have been recorded in the system yet.`
     }
-    return `Your overall total budget recorded is ₱${Number(totalB).toLocaleString('en-PH')} and you have ₱${Number(totalR).toLocaleString('en-PH')} remaining.`
+    return `Your overall approved working budget is ₱${Number(totalB).toLocaleString('en-PH')} and ₱${Number(totalR).toLocaleString('en-PH')} remains after recorded expenses.`
   }
 
   /**
@@ -620,11 +704,21 @@ function ChatWidgetInner() {
    * been approved yet instead of just reporting nothing.
    */
   function buildProjectListing(allExpenses, allRequests, targetMonth, targetYear, currentYear, text) {
+    /*
+     * Only filter by year when the user actually named one. This used to
+     * default effectiveYear to currentYear unconditionally, so an unscoped
+     * "list all approved projects" silently dropped every record from other
+     * years while claiming to answer for "all" of them — the opposite of
+     * what an unfiltered listing request means.
+     */
+    const hasYearFilter = !!targetYear
     const effectiveYear = targetYear || currentYear
-    const period = targetMonth ? `${targetMonth} ${effectiveYear}` : `${effectiveYear}`
+    const period = targetMonth
+      ? `${targetMonth} ${effectiveYear}`
+      : (hasYearFilter ? `${effectiveYear}` : 'all recorded years')
 
     const inPeriod = (r) =>
-      Number(r.year) === effectiveYear &&
+      (!hasYearFilter || Number(r.year) === effectiveYear) &&
       (!targetMonth || String(r.month || '').toLowerCase() === targetMonth.toLowerCase())
 
     // Newest first. Records with no usable date sort last rather than
@@ -843,7 +937,7 @@ function ChatWidgetInner() {
     return lines.join('\n')
   }
 
-  function generateDataDrivenRecommendation(systemCtx, allBudgets, allExpenses, allRequests, targetMonth, targetYear, currentYear) {
+  function generateDataDrivenRecommendation(systemCtx, allBudgets, allRequests, targetMonth, targetYear, currentYear) {
     const fmt = (n) => `₱${Number(n).toLocaleString('en-PH')}`
 
     const effectiveYear = targetYear || currentYear
@@ -854,18 +948,20 @@ function ChatWidgetInner() {
       Number(b.year) === effectiveYear &&
       String(b.month).toLowerCase() === effectiveMonth.toLowerCase()
     )
-    const periodExpenses = allExpenses.filter(e =>
-      Number(e.year) === effectiveYear &&
-      String(e.month).toLowerCase() === effectiveMonth.toLowerCase()
-    )
+    const workingBudget = (systemCtx.monthlySummaries || []).find((row) => (
+      Number(row.year) === effectiveYear
+      && String(row.month).toLowerCase() === effectiveMonth.toLowerCase()
+    ))
     const pendingRequests = (allRequests || []).filter(r =>
       String(r.status).toLowerCase() === 'pending'
     )
 
     const budgetTotal = periodBudgets.reduce((sum, b) => sum + (Number(b.amount) || 0), 0)
-    const expenseTotal = periodExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
-    const remaining = budgetTotal - expenseTotal
-    const utilization = budgetTotal > 0 ? Math.round((expenseTotal / budgetTotal) * 100) : 0
+    const approvedBudget = Number(workingBudget?.approvedBudget || 0)
+    const expenseTotal = Number(workingBudget?.totalExpenses || 0)
+    const workingRemaining = Number(workingBudget?.remainingBalance || 0)
+    const remaining = budgetTotal - approvedBudget
+    const utilization = approvedBudget > 0 ? Math.round((expenseTotal / approvedBudget) * 100) : 0
 
     if (periodBudgets.length === 0 || budgetTotal === 0) {
       return `I couldn't provide budget allocation suggestions because no monthly budget has been recorded for ${periodLabel}. Please add a monthly budget first so I can generate personalized recommendations.`
@@ -874,10 +970,12 @@ function ChatWidgetInner() {
     let response = ''
 
     response += `📊 Current Financial Status for ${periodLabel}:\n`
-    response += `• Allocated Budget: ${fmt(budgetTotal)}\n`
+    response += `• Monthly Allocation: ${fmt(budgetTotal)}\n`
+    response += `• Approved Working Budgets: ${fmt(approvedBudget)}\n`
     response += `• Total Expenses: ${fmt(expenseTotal)}\n`
-    response += `• Remaining Balance: ${fmt(remaining)}\n`
-    response += `• Budget Utilization: ${utilization}%\n`
+    response += `• Remaining Approved Budget: ${fmt(workingRemaining)}\n`
+    response += `• Remaining Monthly Approval Capacity: ${fmt(remaining)}\n`
+    response += `• Approved Budget Utilization: ${utilization}%\n`
     if (pendingRequests.length > 0) {
       const pendingTotal = pendingRequests.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
       response += `• Pending Requests: ${pendingRequests.length} (totaling ${fmt(pendingTotal)})\n`
@@ -1039,16 +1137,15 @@ function ChatWidgetInner() {
       <button
         id="cue-chat-fab"
         onClick={() => setIsOpen(prev => !prev)}
-        className="chat-widget-fab fixed right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-[9999] transition-all duration-300 cursor-pointer border-none"
+        className={`chat-widget-fab cue-avatar-launcher${isOpen ? ' is-open' : ''} fixed right-6 w-14 h-14 rounded-full flex items-center justify-center z-[9999] cursor-pointer border-none p-0`}
         style={{
           background: 'linear-gradient(135deg, #0C2E30 0%, #12805C 50%, #12b89a 100%)',
-          boxShadow: 'var(--shadow-lift)',
         }}
         aria-label={isOpen ? 'Close chat' : 'Open chat'}
       >
         {isOpen
           ? <X size={22} color="white" />
-          : <MessageCircle size={22} color="white" />
+          : <CueAnimatedAvatar className="cue-avatar-video--fab" />
         }
         {hasUnread && !isOpen && (
           <span
@@ -1095,10 +1192,10 @@ function ChatWidgetInner() {
             >
               <div className="flex items-center gap-2.5">
                 <div
-                  className="w-9 h-9 rounded-full flex items-center justify-center"
+                  className="cue-avatar-shell w-9 h-9 rounded-full flex items-center justify-center overflow-hidden shrink-0"
                   style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}
                 >
-                  <Bot size={18} color="white" />
+                  <CueAnimatedAvatar className="cue-avatar-video--header" />
                 </div>
                 <div>
                   <p className="text-white text-sm font-semibold" style={{ lineHeight: 1, margin: 0 }}>Cue</p>

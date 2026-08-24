@@ -207,6 +207,7 @@
 	height: 48px;
 	object-fit: contain;
 	flex: 0 0 auto;
+	transform: scale(1.8);
 }
 .public-brand-copy {
 	display: flex;
@@ -931,7 +932,7 @@
 @media (max-width: 760px) {
 	.public-portal { --pub-header-h: 64px; }
 	.public-brand { gap: 8px; }
-	.public-brand-logo { width: 40px; height: 40px; }
+	.public-brand-logo { width: 40px; height: 40px; transform: scale(1.8); }
 	.public-menu { display: inline-flex; }
 	.public-links {
 		display: none;

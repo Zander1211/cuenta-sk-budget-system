@@ -1,18 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import RoleGate from '../components/RoleGate'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../supabase/supabaseClient'
 
 function UpdateDetailsPage() {
-  const { user, refreshSession } = useAuth()
+  const { user, updateProfileDetails } = useAuth()
   const { addLog } = useAuditLog()
   const navigate = useNavigate()
 
   const [firstName, setFirstName] = useState(
     user?.user_metadata?.first_name || ''
   )
+  const [middleName, setMiddleName] = useState(user?.user_metadata?.middle_name || '')
   const [lastName, setLastName] = useState(user?.user_metadata?.last_name || '')
   const [nickname, setNickname] = useState(
     user?.user_metadata?.nickname || ''
@@ -21,18 +21,13 @@ function UpdateDetailsPage() {
   const [nameError, setNameError] = useState('')
   const [isSavingName, setIsSavingName] = useState(false)
 
-  useEffect(() => {
-    setFirstName(user?.user_metadata?.first_name || '')
-    setLastName(user?.user_metadata?.last_name || '')
-    setNickname(user?.user_metadata?.nickname || '')
-  }, [user])
-
   async function handleNameSave(event) {
     event.preventDefault()
     setNameStatus('')
     setNameError('')
 
     const trimmedFirst = firstName.trim()
+    const trimmedMiddle = middleName.trim()
     const trimmedLast = lastName.trim()
     const trimmedNick = nickname.trim()
 
@@ -42,14 +37,19 @@ function UpdateDetailsPage() {
     }
 
     setIsSavingName(true)
-    const updatedFullName = `${trimmedFirst} ${trimmedLast}`.trim()
-    const { error: updateError } = await supabase.auth.updateUser({
-      data: {
-        first_name: trimmedFirst,
-        last_name: trimmedLast,
-        nickname: trimmedNick,
-        full_name: updatedFullName,
-      },
+    const updatedFullName = [trimmedFirst, trimmedMiddle, trimmedLast].filter(Boolean).join(' ')
+    const previousValue = {
+      first_name: user?.user_metadata?.first_name || '',
+      middle_name: user?.user_metadata?.middle_name || '',
+      last_name: user?.user_metadata?.last_name || '',
+      nickname: user?.user_metadata?.nickname || '',
+      full_name: user?.user_metadata?.full_name || '',
+    }
+    const { error: updateError } = await updateProfileDetails({
+      firstName: trimmedFirst,
+      middleName: trimmedMiddle,
+      lastName: trimmedLast,
+      nickname: trimmedNick,
     })
 
     if (updateError) {
@@ -58,16 +58,23 @@ function UpdateDetailsPage() {
       return
     }
 
-    await refreshSession()
     addLog({
       action: 'Profile Updated',
       actionType: 'Profile Updated',
       module: 'Authentication',
       recordType: 'User',
+      recordId: user?.id,
       description: `Profile name updated to ${updatedFullName}`,
-      newValue: { first_name: trimmedFirst, last_name: trimmedLast, full_name: updatedFullName },
+      previousValue,
+      newValue: {
+        first_name: trimmedFirst,
+        middle_name: trimmedMiddle,
+        last_name: trimmedLast,
+        nickname: trimmedNick,
+        full_name: updatedFullName,
+      },
       status: 'Success',
-      actor: user?.email,
+      actor: updatedFullName,
     })
     setNameStatus('Name updated successfully.')
     setIsSavingName(false)
@@ -99,6 +106,15 @@ function UpdateDetailsPage() {
                   onChange={(event) => setFirstName(event.target.value)}
                   placeholder="Juan"
                   required
+                />
+              </label>
+              <label className="field">
+                <span>Middle name (optional)</span>
+                <input
+                  type="text"
+                  value={middleName}
+                  onChange={(event) => setMiddleName(event.target.value)}
+                  placeholder="Miguel"
                 />
               </label>
               <label className="field">
@@ -136,7 +152,7 @@ function UpdateDetailsPage() {
                 className="primary-button"
                 disabled={isSavingName}
               >
-                Save Name
+                {isSavingName ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </form>

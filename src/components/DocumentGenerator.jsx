@@ -269,6 +269,8 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
       generatedBy: profileName || role,
       type: typeLabel,
       data: previewData,
+      relatedEntityType: selectedRequest ? (docType === 'payroll' ? 'payroll' : 'request') : null,
+      relatedEntityId: selectedRequest?.id || null,
     })
   }
 

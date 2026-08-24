@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Receipt, PieChart, TrendingUp, BarChart3, Filter } from 'lucide-react'
+import { Receipt, PieChart, TrendingUp, BarChart3 } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import YearSpinner from '../components/YearSpinner'
+import { summarizeApprovedBudgetFinancials } from '../utils/projectEventFinancials'
+import { getBudgetTotalForPeriod } from '../utils/budgetUtils'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -40,7 +42,7 @@ function parseDate(value) {
 }
 
 function ExpenseSummaryPage() {
-  const { expenses, budgets, totals } = useBudget()
+  const { expenses, verifiedReceiptTotals, budgets } = useBudget()
   const [viewMode, setViewMode] = useState('monthly')
   const now = new Date()
   const currentYear = now.getFullYear()
@@ -53,50 +55,29 @@ function ExpenseSummaryPage() {
     ? `${monthOptions.find(m => m.value === selectedMonth)?.label} ${selectedYear}`
     : `${selectedYear}`
 
-  function isInPeriod(dateValue) {
-    const date = parseDate(dateValue)
-    if (!date) return false
-    if (viewMode === 'monthly') {
-      return date.getFullYear() === selectedYear && (date.getMonth() + 1) === selectedMonth
-    }
-    return date.getFullYear() === selectedYear
-  }
+  const workingFinancials = useMemo(() => summarizeApprovedBudgetFinancials(
+    expenses,
+    verifiedReceiptTotals,
+    {
+      view: viewMode,
+      month: viewMode === 'monthly' ? selectedMonth : null,
+      year: selectedYear,
+      category: categoryFilter === 'All' ? 'all' : categoryFilter,
+    },
+  ), [expenses, verifiedReceiptTotals, viewMode, selectedMonth, selectedYear, categoryFilter])
 
-  // Filter active approved expenses in the selected period
-  const filteredExpenses = useMemo(() => {
-    return expenses.filter((expense) => {
-      if (expense.archivedAt || expense.status === 'Cancelled') return false
-      const status = expense.status || 'Approved'
-      if (!['Approved', 'Released'].includes(status)) return false
-      const inPeriod = isInPeriod(
-        expense.eventDate || expense.date || expense.approvedAt
-      )
-      if (!inPeriod) return false
-      if (categoryFilter !== 'All' && expense.category !== categoryFilter) return false
-      return true
-    })
-  }, [expenses, selectedMonth, selectedYear, viewMode, categoryFilter])
+  const filteredExpenses = workingFinancials.records
 
-  const totalExpenses = filteredExpenses.reduce(
-    (sum, item) => sum + Number(item.amount || 0), 0
-  )
-
-  // Budget for the period
-  const periodBudget = useMemo(() => {
-    return budgets
-      .filter((b) => {
-        if (!Number.isFinite(b.month) || !Number.isFinite(b.year)) return false
-        if (viewMode === 'monthly') {
-          return b.year === selectedYear && b.month === selectedMonth
-        }
-        return b.year === selectedYear
-      })
-      .reduce((sum, b) => sum + Number(b.amount || 0), 0)
+  const monthlyAllocation = useMemo(() => {
+    return viewMode === 'monthly'
+      ? getBudgetTotalForPeriod(budgets, selectedMonth, selectedYear)
+      : getBudgetTotalForPeriod(budgets, null, selectedYear)
   }, [budgets, selectedMonth, selectedYear, viewMode])
 
-  const remaining = periodBudget - totalExpenses
-  const utilizationPercent = periodBudget > 0
-    ? Math.min(100, Math.round((totalExpenses / periodBudget) * 100))
+  const totalApprovedBudgets = workingFinancials.totalApprovedBudget
+  const remaining = monthlyAllocation - totalApprovedBudgets
+  const utilizationPercent = monthlyAllocation > 0
+    ? Math.min(100, Math.round((totalApprovedBudgets / monthlyAllocation) * 100))
     : 0
 
   // Category breakdown
@@ -104,53 +85,53 @@ function ExpenseSummaryPage() {
     const map = new Map()
     filteredExpenses.forEach((expense) => {
       const cat = expense.category || 'Uncategorized'
-      map.set(cat, (map.get(cat) || 0) + Number(expense.amount || 0))
+      map.set(cat, (map.get(cat) || 0) + Number(expense.approvedBudget || 0))
     })
     return Array.from(map, ([name, value]) => ({
       name,
       value,
-      percent: totalExpenses > 0 ? Math.round((value / totalExpenses) * 100) : 0,
+      percent: totalApprovedBudgets > 0 ? Math.round((value / totalApprovedBudgets) * 100) : 0,
     })).sort((a, b) => b.value - a.value)
-  }, [filteredExpenses, totalExpenses])
+  }, [filteredExpenses, totalApprovedBudgets])
 
   // Project breakdown
   const projectBreakdown = useMemo(() => {
     const map = new Map()
     filteredExpenses.forEach((expense) => {
       const project = expense.project || expense.event || 'Unlabeled'
-      map.set(project, (map.get(project) || 0) + Number(expense.amount || 0))
+      map.set(project, (map.get(project) || 0) + Number(expense.approvedBudget || 0))
     })
     return Array.from(map, ([name, value]) => ({
       name,
       value,
-      percent: totalExpenses > 0 ? Math.round((value / totalExpenses) * 100) : 0,
+      percent: totalApprovedBudgets > 0 ? Math.round((value / totalApprovedBudgets) * 100) : 0,
     })).sort((a, b) => b.value - a.value)
-  }, [filteredExpenses, totalExpenses])
+  }, [filteredExpenses, totalApprovedBudgets])
 
   // Monthly trend (for yearly view)
   const monthlyTrend = useMemo(() => {
     if (viewMode !== 'yearly') return []
     const monthTotals = Array.from({ length: 12 }, () => 0)
-    expenses.forEach((expense) => {
+    filteredExpenses.forEach((expense) => {
       if (expense.archivedAt || expense.status === 'Cancelled') return
       const date = parseDate(expense.eventDate || expense.date || expense.approvedAt)
       if (!date || date.getFullYear() !== selectedYear) return
-      monthTotals[date.getMonth()] += Number(expense.amount || 0)
+      monthTotals[date.getMonth()] += Number(expense.approvedBudget || 0)
     })
     return monthTotals.map((value, idx) => ({
       month: monthLabels[idx].slice(0, 3),
       value,
     }))
-  }, [expenses, selectedYear, viewMode])
+  }, [filteredExpenses, selectedYear, viewMode])
 
   // All unique categories for filter
   const allCategories = useMemo(() => {
     const cats = new Set()
-    expenses.forEach((e) => {
+    filteredExpenses.forEach((e) => {
       if (e.category) cats.add(e.category)
     })
     return Array.from(cats).sort()
-  }, [expenses])
+  }, [filteredExpenses])
 
   // SVG bar chart max value
   const barMax = monthlyTrend.length
@@ -232,15 +213,15 @@ function ExpenseSummaryPage() {
           <div className="summary-header">
             <div className="summary-icon"><Receipt size={18} /></div>
             <span className={`summary-chip ${utilizationPercent > 80 ? 'warning' : 'positive'}`}>
-              {utilizationPercent}% used
+              {utilizationPercent}% allocated
             </span>
           </div>
           <div className="summary-body">
-            <span className="summary-label">Total Expenses</span>
-            <span className="summary-value">{currency.format(totalExpenses)}</span>
+            <span className="summary-label">Total Approved Budgets</span>
+            <span className="summary-value">{currency.format(totalApprovedBudgets)}</span>
           </div>
           <span className="summary-meta">
-            {filteredExpenses.length} approved expense{filteredExpenses.length !== 1 ? 's' : ''} in {periodLabel}
+            {filteredExpenses.length} approved record{filteredExpenses.length !== 1 ? 's' : ''} in {periodLabel}
           </span>
         </div>
 
@@ -248,15 +229,15 @@ function ExpenseSummaryPage() {
           <div className="summary-header">
             <div className="summary-icon"><PieChart size={18} /></div>
             <span className={`summary-chip ${remaining < 0 ? 'warning' : 'neutral'}`}>
-              {periodBudget > 0 ? `${100 - utilizationPercent}% left` : 'No budget'}
+              {monthlyAllocation > 0 ? `${100 - utilizationPercent}% left` : 'No budget set'}
             </span>
           </div>
           <div className="summary-body">
-            <span className="summary-label">Remaining Budget</span>
+            <span className="summary-label">Remaining Balance</span>
             <span className="summary-value">{currency.format(remaining)}</span>
           </div>
           <span className="summary-meta">
-            {periodBudget > 0 ? `Budget: ${currency.format(periodBudget)}` : 'No budget allocated'}
+            {monthlyAllocation > 0 ? `Monthly Budget: ${currency.format(monthlyAllocation)}` : 'No monthly budget configured'}
           </span>
         </div>
 
@@ -299,14 +280,14 @@ function ExpenseSummaryPage() {
 
       <section className="dashboard-content" style={{ marginTop: '24px' }}>
         {/* Budget Utilization Bar */}
-        {periodBudget > 0 && (
+        {monthlyAllocation > 0 && (
           <div className="overview-card" style={{ marginBottom: '24px' }}>
-            <p className="eyebrow">Budget Utilization</p>
+            <p className="eyebrow">Budget Allocation</p>
             <h2>{periodLabel}</h2>
             <div style={{ marginTop: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem' }}>
-                <span>Used: {currency.format(totalExpenses)}</span>
-                <span>Budget: {currency.format(periodBudget)}</span>
+                <span>Allocated: {currency.format(totalApprovedBudgets)}</span>
+                <span>Monthly Budget: {currency.format(monthlyAllocation)}</span>
               </div>
               <div style={{
                 width: '100%',
@@ -324,7 +305,7 @@ function ExpenseSummaryPage() {
                 }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.8rem', color: 'var(--ink-soft)' }}>
-                <span>{utilizationPercent}% utilized</span>
+                <span>{utilizationPercent}% allocated</span>
                 <span>Remaining: {currency.format(remaining)}</span>
               </div>
             </div>
@@ -484,17 +465,17 @@ function ExpenseSummaryPage() {
           <div className="card-header-bar">
             <div>
               <p className="eyebrow">Records</p>
-              <h2>Approved Expenses</h2>
+              <h2>Approved Budgets</h2>
             </div>
-            <span className="items-found-badge">{filteredExpenses.length} expenses</span>
+            <span className="items-found-badge">{filteredExpenses.length} records</span>
           </div>
 
           <table className="data-table">
             <thead>
               <tr>
-                <th>Project / Event</th>
+                <th>Project / Event / Payroll</th>
                 <th>Category</th>
-                <th>Amount</th>
+                <th>Approved Amount</th>
                 <th>Status</th>
                 <th>Date Approved</th>
               </tr>
@@ -503,11 +484,11 @@ function ExpenseSummaryPage() {
               {filteredExpenses.length ? (
                 filteredExpenses.map((expense) => (
                   <tr key={expense.id}>
-                    <td data-label="Project / Event" style={{ fontWeight: 500 }}>
+                    <td data-label="Project / Event / Payroll" style={{ fontWeight: 500 }}>
                       {expense.project || expense.event || '—'}
                     </td>
                     <td data-label="Category">{expense.category || '—'}</td>
-                    <td data-label="Amount">{currency.format(Number(expense.amount || 0))}</td>
+                    <td data-label="Approved Amount">{currency.format(Number(expense.approvedBudget || 0))}</td>
                     <td data-label="Status">
                       <span className="status-chip is-positive">
                         {expense.status || 'Approved'}

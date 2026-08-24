@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState, useRef } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import { supabase } from '../supabase/supabaseClient'
@@ -8,13 +8,12 @@ import { useNotifications } from '../context/NotificationContext'
 import {
   validateReceiptFile,
   getUploadErrorMessage,
-  generateReceiptPath,
   generateReceiptScanPaths,
   logUploadDebugInfo,
-  insertReceiptRecord,
   insertScannedReceiptRecord,
   formatOcrMetadataNote,
 } from '../utils/uploadUtils'
+import ReceiptOCRDetailsModal from '../components/receipts/ReceiptOCRDetailsModal'
 
 // The scanner pulls in the image pipeline and, on demand, the OCR engine.
 // Splitting it out keeps that weight off users who only view receipts.
@@ -24,7 +23,13 @@ function ReceiptsPage() {
   const { user, role } = useAuth()
   const { addNotification } = useNotifications()
   const { addLog } = useAuditLog()
-  const { expenses, refreshExpensesFromSupabase, expensesSyncStatus, updateExpenseReceipt } = useBudget()
+  const {
+    expenses,
+    verifiedReceiptTotals,
+    refreshExpensesFromSupabase,
+    expensesSyncStatus,
+    updateExpenseReceipt,
+  } = useBudget()
   const [errorsById, setErrorsById] = useState({})
   const [uploadingId, setUploadingId] = useState(null)
   const [feedback, setFeedback] = useState(null)
@@ -32,12 +37,11 @@ function ReceiptsPage() {
   const [scanModalOpen, setScanModalOpen] = useState(false)
   const [activeExpense, setActiveExpense] = useState(null)
   const [viewerExpense, setViewerExpense] = useState(null)
+  const [ocrViewer, setOcrViewer] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterCategory, setFilterCategory] = useState('all')
 
-  const uploadInputRef = useRef(null)
-  const pendingUploadExpenseRef = useRef(null)
   const RECEIPTS_BUCKET = 'receipts'
 
   function formatReceiptName(fileName) {
@@ -62,12 +66,38 @@ function ReceiptsPage() {
     return '📎'
   }
 
+  function getReceiptScopeLabel(receipt) {
+    if (!receipt?.requisitionId) return 'Original budget receipt'
+    const requisition = expenses.find(item => String(item.id) === String(receipt.requisitionId))
+    return `Requisition: ${requisition?.description || requisition?.category || 'Additional expense'}`
+  }
+
   const approvedExpenses = useMemo(
     () => expenses.filter((expense) =>
-      (expense.status || 'Approved') === 'Approved'
+      !expense.isAdditional
+      && ['approved', 'released'].includes(String(expense.status || 'Approved').toLowerCase())
       && ['Project', 'Event', 'Payroll'].includes(expense.type || 'Project')
     ),
     [expenses]
+  )
+
+  const receiptOwnerByRecordId = useMemo(() => {
+    const owners = new Map()
+    approvedExpenses.forEach(parent => {
+      owners.set(String(parent.id), String(parent.id))
+      if (parent.requestId) owners.set(String(parent.requestId), String(parent.id))
+    })
+    expenses.filter(expense => expense.isAdditional && expense.parentProjectId).forEach(requisition => {
+      const parentId = owners.get(String(requisition.parentProjectId))
+        || String(requisition.parentProjectId)
+      owners.set(String(requisition.id), parentId)
+    })
+    return owners
+  }, [approvedExpenses, expenses])
+
+  const receiptSourceExpenses = useMemo(
+    () => expenses.filter(expense => receiptOwnerByRecordId.has(String(expense.id))),
+    [expenses, receiptOwnerByRecordId],
   )
 
   const categories = useMemo(() => {
@@ -99,6 +129,19 @@ function ReceiptsPage() {
     })
   }, [approvedExpenses, searchQuery, filterStatus, filterCategory, receiptLinks])
 
+  const receiptFinancialTotals = useMemo(() => {
+    const totals = { ...(verifiedReceiptTotals || {}) }
+    Object.entries(receiptLinks).forEach(([recordId, receipts]) => {
+      const verifiedTotal = (receipts || []).reduce((sum, receipt) => {
+        const isVerified = receipt.ocrVerifiedAt || receipt.ocrMetadata?.verifiedAt
+        const amount = Number(receipt.ocrMetadata?.totalAmount)
+        return isVerified && Number.isFinite(amount) && amount > 0 ? sum + amount : sum
+      }, 0)
+      if (verifiedTotal > 0) totals[String(recordId)] = verifiedTotal
+    })
+    return totals
+  }, [receiptLinks, verifiedReceiptTotals])
+
   useEffect(() => {
     let mounted = true
     if (!approvedExpenses.length) {
@@ -108,14 +151,14 @@ function ReceiptsPage() {
     ;(async () => {
       const updates = {}
 
-      const recordIds = approvedExpenses.map((expense) => String(expense.id))
+      const recordIds = receiptSourceExpenses.map((expense) => String(expense.id))
       // `original_path` and `is_scanned` only exist once the receipt-scan
       // migration has run. Falling back to the original column list keeps the
       // page working against an older database rather than showing nothing.
       let receiptRows
       const scanAware = await supabase
         .from('receipt_records')
-        .select('id, record_id, file_path, original_path, is_scanned, ocr_metadata, file_name, file_type, uploaded_at')
+        .select('id, record_id, requisition_id, file_path, original_path, is_scanned, ocr_metadata, scan_settings, ocr_verified_at, ocr_verified_by, file_name, file_type, uploaded_at')
         .in('record_id', recordIds)
         .order('uploaded_at', { ascending: true })
 
@@ -137,7 +180,8 @@ function ReceiptsPage() {
           .createSignedUrl(receipt.file_path, 60 * 60)
 
         if (data?.signedUrl) {
-          const key = String(receipt.record_id)
+          const key = receiptOwnerByRecordId.get(String(receipt.record_id))
+            || String(receipt.record_id)
           if (!updates[key]) updates[key] = []
 
           // The processed scan is what `file_path` points at, so the default
@@ -160,6 +204,15 @@ function ReceiptsPage() {
             isScanned: Boolean(receipt.is_scanned),
             originalUrl,
             ocrMetadata: receipt.ocr_metadata || null,
+            scanSettings: receipt.scan_settings || null,
+            ocrVerifiedAt: receipt.ocr_verified_at || null,
+            ocrVerifiedBy: receipt.ocr_verified_by || null,
+            uploadedAt: receipt.uploaded_at || null,
+            requisitionId: receipt.requisition_id || (
+              receiptOwnerByRecordId.get(String(receipt.record_id)) !== String(receipt.record_id)
+                ? String(receipt.record_id)
+                : null
+            ),
           })
         }
       }))
@@ -167,10 +220,10 @@ function ReceiptsPage() {
       // Preserve compatibility with receipts uploaded before receipt_records
       // existed. Do not duplicate a path already returned by the table.
       await Promise.all(
-        approvedExpenses.map(async (expense) => {
+        receiptSourceExpenses.map(async (expense) => {
           const path = expense.receiptUrl || expense.receipt_url
           if (!path) return
-          const key = String(expense.id)
+          const key = receiptOwnerByRecordId.get(String(expense.id)) || String(expense.id)
           const alreadyIncluded = (updates[key] || []).some((receipt) => receipt.path === path)
           if (alreadyIncluded) return
 
@@ -184,6 +237,11 @@ function ReceiptsPage() {
               url: data.signedUrl,
               path,
               name: expense.receiptName || expense.receipt_name || 'Receipt',
+              ocrMetadata: null,
+              scanSettings: null,
+              ocrVerifiedAt: null,
+              ocrVerifiedBy: null,
+              requisitionId: expense.isAdditional ? String(expense.id) : null,
             })
           }
         })
@@ -197,158 +255,13 @@ function ReceiptsPage() {
     return () => {
       mounted = false
     }
-  }, [approvedExpenses])
-
-  async function uploadReceipt(expense, file, { appendedNotes = '' } = {}) {
-    if (!expense || !['Project', 'Event', 'Payroll'].includes(expense.type || 'Project')) {
-      const message = 'Select a valid approved Project, Event, or Payroll record before uploading.'
-      setFeedback({ type: 'error', message })
-      return { error: new Error(message) }
-    }
-
-    const validationError = validateReceiptFile(file, role)
-    if (validationError) {
-      setErrorsById((prev) => ({ ...prev, [expense.id]: validationError }))
-      setFeedback({ type: 'error', message: validationError })
-      return { error: new Error(validationError) }
-    }
-
-    setUploadingId(expense.id)
-    setErrorsById((prev) => ({ ...prev, [expense.id]: '' }))
-    setFeedback(null)
-
-    const filePath = generateReceiptPath(expense, file)
-    try {
-      const { error: uploadError } = await supabase.storage
-        .from(RECEIPTS_BUCKET)
-        .upload(filePath, file, { upsert: false })
-
-      if (uploadError) {
-        throw Object.assign(uploadError, { uploadStep: 'storage' })
-      }
-
-      // 2. Persist one authoritative database row for this attachment
-      const { data: receiptData, error: dbError } = await insertReceiptRecord(
-        supabase,
-        expense,
-        file,
-        filePath,
-        user,
-        role
-      )
-
-      if (dbError) {
-        await supabase.storage.from(RECEIPTS_BUCKET).remove([filePath])
-        throw Object.assign(dbError, { uploadStep: 'receipt_record' })
-      }
-
-      // 3. Link receipt to expenses table in Supabase
-      const updatePayload = {
-        receipt_url: filePath,
-        receipt_name: file.name,
-      }
-      if (appendedNotes) {
-        updatePayload.remarks = expense.remarks
-          ? `${expense.remarks}\n\n${appendedNotes}`
-          : appendedNotes
-      }
-
-      const { error: linkError } = await supabase
-        .from('expenses')
-        .update(updatePayload)
-        .eq('id', expense.id)
-
-      if (linkError) {
-        console.warn('Could not update expenses table in Supabase:', linkError)
-      }
-
-      // 4. Update local state
-      updateExpenseReceipt(expense.id, filePath, file.name)
-
-      // 5. Generate signed URL for immediate viewing
-      const { data: signedData } = await supabase.storage
-        .from(RECEIPTS_BUCKET)
-        .createSignedUrl(filePath, 60 * 60)
-      if (signedData?.signedUrl) {
-        const receiptRow = receiptData?.[0]
-        setReceiptLinks((prev) => ({
-          ...prev,
-          [expense.id]: [
-            ...(prev[expense.id] || []),
-            {
-              id: receiptRow?.id || filePath,
-              url: signedData.signedUrl,
-              path: filePath,
-              name: file.name,
-              type: file.type,
-            },
-          ],
-        }))
-      }
-
-      await refreshExpensesFromSupabase()
-      const recordName = expense.event || expense.project || 'the selected record'
-      const message = `Receipt uploaded and attached to ${recordName}.`
-      setFeedback({ type: 'success', message })
-      addNotification({
-        type: 'system',
-        title: 'Receipt Uploaded',
-        message,
-      })
-      return { error: null }
-    } catch (error) {
-      logUploadDebugInfo(error, {
-        expenseId: expense.id,
-        filePath,
-        step: error.uploadStep || 'unknown',
-      })
-      const message = error.uploadStep === 'receipt_record'
-        ? `The file uploaded, but its receipt record could not be saved: ${error.message}`
-        : error.uploadStep === 'expense_link'
-          ? `The receipt could not be linked to the selected record: ${error.message}`
-          : getUploadErrorMessage(error)
-      setErrorsById((prev) => ({ ...prev, [expense.id]: message }))
-      setFeedback({ type: 'error', message })
-      return { error }
-    } finally {
-      setUploadingId(null)
-    }
-  }
+  }, [approvedExpenses, receiptOwnerByRecordId, receiptSourceExpenses])
 
   function triggerCamera(expense) {
     setActiveExpense(expense)
     setFeedback(null)
-    setScanModalOpen(true)
-  }
-
-  function triggerUpload(expense) {
-    if (uploadingId !== null) return
-    pendingUploadExpenseRef.current = expense
-    setActiveExpense(expense)
-    setFeedback(null)
     setErrorsById((prev) => ({ ...prev, [expense.id]: '' }))
-    if (uploadInputRef.current) uploadInputRef.current.value = ''
-    uploadInputRef.current?.click()
-  }
-
-  async function handleFileSelected(event) {
-    const files = Array.from(event.target.files || [])
-    const expense = pendingUploadExpenseRef.current
-    event.target.value = ''
-    pendingUploadExpenseRef.current = null
-
-    if (!files.length) return
-    if (!expense) {
-      setFeedback({
-        type: 'error',
-        message: 'No Project, Event, or Payroll record was selected. Please choose Upload again.',
-      })
-      return
-    }
-
-    for (const file of files) {
-      await uploadReceipt(expense, file)
-    }
+    setScanModalOpen(true)
   }
 
   /**
@@ -356,11 +269,11 @@ function ReceiptsPage() {
    *
    * Three artefacts are stored and kept distinct: the processed scan (the
    * image Cuenta displays), the original photograph (the underlying evidence),
-   * and the verified OCR metadata (supplementary).
+   * and the verified OCR metadata (the actual receipt amount).
    *
-   * Deliberately absent: any write to the expense's own `amount`, `date` or
-   * category. OCR never alters a financial record. The only thing it adds to
-   * the expense is an appended remark, which is descriptive, not accounting.
+   * The approved allocation row is never overwritten. Financial summaries use
+   * the confirmed receipt total directly, keeping the evidence and calculated
+   * actual spend synchronized without changing the approved budget.
    */
   async function saveScannedReceipt({ scanFile, originalFile, metadata, scanSettings }) {
     const expense = activeExpense
@@ -451,6 +364,9 @@ function ReceiptsPage() {
               isScanned: true,
               originalUrl,
               ocrMetadata: metadata,
+              scanSettings,
+              ocrVerifiedAt: new Date().toISOString(),
+              ocrVerifiedBy: user?.user_metadata?.full_name || user?.email || 'Unknown',
             },
           ],
         }))
@@ -506,16 +422,6 @@ function ReceiptsPage() {
             <h1>Approved Project, Event, and Payroll receipts</h1>
             <p>Upload and manage multiple receipts for approved Projects, Events, and Payroll records. Maximum 20 MB per file.</p>
           </div>
-        </div>
-        <div className="header-actions">
-          <input
-            type="file"
-            multiple
-            accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
-            ref={uploadInputRef}
-            onChange={handleFileSelected}
-            style={{ display: 'none' }}
-          />
         </div>
       </header>
 
@@ -585,12 +491,12 @@ function ReceiptsPage() {
             <table className="receipts-table">
               <thead>
                 <tr>
-                  <th style={{ width: '25%' }}>Event / Project</th>
+                  <th style={{ width: '23%' }}>Event / Project</th>
                   <th style={{ width: '18%' }}>Category</th>
                   <th style={{ width: '14%' }}>Amount</th>
                   <th style={{ width: '13%' }}>Approved</th>
-                  <th style={{ width: '18%' }}>Receipts</th>
-                  <th style={{ width: '12%', textAlign: 'right' }}>Actions</th>
+                  <th style={{ width: '16%' }}>Receipts</th>
+                  <th style={{ width: '16%', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -661,39 +567,30 @@ function ReceiptsPage() {
                           )}
                         </td>
                         <td style={{ textAlign: 'right' }}>
-                          {['SK Chairman', 'SK Treasurer'].includes(role) ? (
-                            <div className="receipt-actions-wrapper" style={{ justifyContent: 'flex-end' }}>
+                          <div className="receipt-actions-wrapper" style={{ justifyContent: 'flex-end' }}>
+                            {['SK Chairman', 'SK Treasurer'].includes(role) ? (
                               <button
-                                type="button"
-                                className="receipt-action-btn scan-btn"
-                                disabled={uploadingId !== null}
-                                onClick={() => triggerCamera(expense)}
-                                title="Scan receipt with camera & OCR"
-                              >
-                                📷 Scan
-                              </button>
-                              <button
-                                type="button"
-                                className="receipt-action-btn upload-btn"
-                                disabled={uploadingId !== null}
-                                onClick={() => triggerUpload(expense)}
-                                title="Upload file"
-                              >
-                                {uploadingId === expense.id ? (
-                                  <>
-                                    <span
-                                      className="spinner"
-                                      aria-hidden="true"
-                                      style={{ width: '12px', height: '12px', margin: 0 }}
-                                    />
-                                    <span>…</span>
-                                  </>
-                                ) : '📁 Upload'}
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="status-pill status-neutral">View Only</span>
-                          )}
+                                  type="button"
+                                  className="receipt-action-btn scan-btn"
+                                  disabled={uploadingId !== null}
+                                  onClick={() => triggerCamera(expense)}
+                                  title="Take a photo or upload a receipt image, then review the OCR details"
+                                >
+                                  {uploadingId === expense.id ? (
+                                    <>
+                                      <span
+                                        className="spinner"
+                                        aria-hidden="true"
+                                        style={{ width: '12px', height: '12px', margin: 0 }}
+                                      />
+                                      <span>Saving…</span>
+                                    </>
+                                  ) : '📷 Scan & Upload'}
+                                </button>
+                            ) : receipts.length === 0 ? (
+                              <span className="status-pill status-neutral">View Only</span>
+                            ) : null}
+                          </div>
                           {errorsById[expense.id] ? (
                             <div className="form-error" role="alert" style={{ marginTop: '4px', fontSize: '0.75rem' }}>
                               {errorsById[expense.id]}
@@ -754,52 +651,53 @@ function ReceiptsPage() {
                           <span className="receipt-multi-tag">View All →</span>
                         </button>
                       ) : receipts.length === 1 ? (
-                        <div className="receipt-chip-single">
-                          <a
-                            href={receipts[0].url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="receipt-chip-link"
-                            title={receipts[0].name}
+                        <div className="receipt-cell-wrapper">
+                          <div className="receipt-chip-single">
+                            <a
+                              href={receipts[0].url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="receipt-chip-link"
+                              title={receipts[0].name}
+                            >
+                              <span>{getFileIcon(receipts[0].name, receipts[0].type)}</span>
+                              <span>{formatReceiptName(receipts[0].name)}</span>
+                            </a>
+                          </div>
+                          <button
+                            type="button"
+                            className="receipt-action-btn"
+                            onClick={() => setViewerExpense(expense)}
+                            title="View attached receipt and OCR information"
                           >
-                            <span>{getFileIcon(receipts[0].name, receipts[0].type)}</span>
-                            <span>{formatReceiptName(receipts[0].name)}</span>
-                          </a>
+                            View Details
+                          </button>
                         </div>
                       ) : (
                         <span className="receipt-missing-chip">⚠️ Missing</span>
                       )}
                     </div>
 
-                    {['SK Chairman', 'SK Treasurer'].includes(role) ? (
-                      <div className="receipt-card-actions">
+                    <div className="receipt-card-actions">
+                      {['SK Chairman', 'SK Treasurer'].includes(role) ? (
                         <button
                           type="button"
                           className="receipt-action-btn scan-btn"
                           disabled={uploadingId !== null}
                           onClick={() => triggerCamera(expense)}
-                        >
-                          📷 Scan Receipt
-                        </button>
-                        <button
-                          type="button"
-                          className="receipt-action-btn upload-btn"
-                          disabled={uploadingId !== null}
-                          onClick={() => triggerUpload(expense)}
+                          title="Take a photo or upload a receipt image, then review the OCR details"
                         >
                           {uploadingId === expense.id ? (
                             <>
                               <span className="spinner" style={{ width: '14px', height: '14px', margin: 0 }} />
-                              Uploading…
+                              Saving…
                             </>
-                          ) : '📁 Upload File'}
+                          ) : '📷 Scan & Upload'}
                         </button>
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: 'right' }}>
+                      ) : receipts.length === 0 ? (
                         <span className="status-pill status-neutral">View Only</span>
-                      </div>
-                    )}
+                      ) : null}
+                    </div>
 
                     {errorsById[expense.id] ? (
                       <div className="form-error" role="alert" style={{ marginTop: '6px', fontSize: '0.82rem' }}>
@@ -869,10 +767,19 @@ function ReceiptsPage() {
                           </span>
                           <span className="receipt-viewer-item-meta">
                             Receipt #{idx + 1} {rcpt.isScanned ? '• Scanned' : ''} {rcpt.type ? `• ${rcpt.type}` : ''}
+                            {' • '}{getReceiptScopeLabel(rcpt)}
                           </span>
                         </div>
                       </div>
                       <div className="receipt-viewer-item-actions">
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          style={{ padding: '6px 12px', fontSize: '0.82rem' }}
+                          onClick={() => setOcrViewer({ expense: viewerExpense, receipt: rcpt })}
+                        >
+                          View OCR Details
+                        </button>
                         {/* `url` is the processed scan whenever one exists, so
                             the primary action already opens the clean version.
                             The photograph stays reachable as a secondary link
@@ -929,7 +836,7 @@ function ReceiptsPage() {
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     type="button"
-                    className="secondary-button"
+                    className="primary-button"
                     style={{ fontSize: '0.85rem', padding: '8px 14px' }}
                     onClick={() => {
                       const target = viewerExpense
@@ -937,19 +844,7 @@ function ReceiptsPage() {
                       triggerCamera(target)
                     }}
                   >
-                    📷 Scan Receipt
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    style={{ fontSize: '0.85rem', padding: '8px 14px' }}
-                    onClick={() => {
-                      const target = viewerExpense
-                      setViewerExpense(null)
-                      triggerUpload(target)
-                    }}
-                  >
-                    📁 Upload More
+                    📷 Scan & Upload
                   </button>
                 </div>
               ) : <div />}
@@ -963,6 +858,16 @@ function ReceiptsPage() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {ocrViewer ? (
+        <ReceiptOCRDetailsModal
+          expense={ocrViewer.expense}
+          receipt={ocrViewer.receipt}
+          expenses={expenses}
+          verifiedReceiptTotals={receiptFinancialTotals}
+          onClose={() => setOcrViewer(null)}
+        />
       ) : null}
 
       {scanModalOpen && activeExpense ? (

@@ -13,9 +13,13 @@ const LABELS = {
   receiptNumber: /(?:^|\b)(?:no|nº|num|number)\s*[.:]?\s*([A-Z0-9][A-Z0-9/-]{1,19})\b/i,
   receivedFrom: /received\s*from\s*[:.]?\s*(.+)/i,
   date: /\bdate\s*[:.]?\s*(.+)/i,
+  time: /\btime\s*[:.]?\s*((?:[01]?\d|2[0-3]):[0-5]\d(?:\s*[ap]m)?)/i,
   telephone: /(?:tel|telephone|phone|contact)\s*(?:no)?\s*[.:]?\s*([0-9()+\-\s]{7,20})/i,
   address: /\baddress\s*[:.]?\s*(.+)/i,
-  total: /\btotal\b(?!\s*in\s*cash)[^0-9-]{0,24}([0-9][0-9,\s]*(?:\.\d{1,2})?)/i,
+  tin: /\b(?:tin|tax\s+identification\s+number)\s*(?:no|number)?\s*[.:#]?\s*([0-9][0-9\-\s]{7,24})/i,
+  subtotal: /\bsub\s*total\b[^0-9-]{0,24}([0-9][0-9,\s]*(?:\.\d{1,2})?)/i,
+  vat: /\b(?:vat(?:\s*amount)?|tax\s*amount)\b[^0-9-]{0,24}([0-9][0-9,\s]*(?:\.\d{1,2})?)/i,
+  discount: /\bdiscount\b[^0-9-]{0,24}([0-9][0-9,\s]*(?:\.\d{1,2})?)/i,
   totalCashCheque: /total\s+in\s+cash\s+and\s+che(?:que|ck)[^0-9-]{0,24}([0-9][0-9,\s]*(?:\.\d{1,2})?)/i,
   cash: /\bcash\b(?!\s*and)[^0-9-]{0,24}([0-9][0-9,\s]*(?:\.\d{1,2})?)/i,
   cheque: /\bche(?:que|ck)\b(?:\s*(?:amount|amt))?[^0-9-]{0,24}([0-9][0-9,\s]*(?:\.\d{1,2})?)/i,
@@ -38,12 +42,17 @@ const MONTHS = {
  * @typedef {object} ParsedReceipt
  * @property {string|null} organization
  * @property {string|null} address
+ * @property {string|null} tin
  * @property {string|null} telephone
  * @property {string|null} receiptNumber
  * @property {string|null} receivedFrom
  * @property {string|null} date ISO yyyy-mm-dd
+ * @property {string|null} time
  * @property {Array<{description: string, amount: number|null}>} particulars
  * @property {number|null} totalAmount
+ * @property {number|null} subtotal
+ * @property {number|null} vatAmount
+ * @property {number|null} discount
  * @property {number|null} cashAmount
  * @property {string|null} bank
  * @property {string|null} chequeNumber
@@ -67,21 +76,29 @@ export function parseReceiptText(rawText, meta = {}) {
     .map(line => line.trim())
     .filter(line => line.length > 0)
 
+  const totalResolution = resolveGrandTotal(lines)
   const result = {
     organization: findOrganization(lines),
     address: cleanValue(matchFirst(lines, LABELS.address)),
+    tin: cleanValue(matchFirst(lines, LABELS.tin)),
     telephone: cleanValue(matchFirst(lines, LABELS.telephone)),
     receiptNumber: cleanValue(findReceiptNumber(lines)),
     receivedFrom: cleanValue(matchFirst(lines, LABELS.receivedFrom)),
     date: parseDate(cleanValue(matchFirst(lines, LABELS.date))),
+    time: cleanValue(matchFirst(lines, LABELS.time)),
     particulars: findParticulars(lines),
-    totalAmount: parseAmount(matchFirst(lines, LABELS.total)),
+    subtotal: parseAmount(matchFirst(lines, LABELS.subtotal)),
+    vatAmount: parseAmount(matchFirst(lines, LABELS.vat)),
+    discount: parseAmount(matchFirst(lines, LABELS.discount)),
+    totalAmount: totalResolution.selected?.amount ?? null,
     cashAmount: parseAmount(matchFirst(lines, LABELS.cash)),
     bank: cleanValue(matchFirst(lines, LABELS.bank)),
     chequeNumber: cleanValue(matchFirst(lines, LABELS.chequeNumber)),
     chequeAmount: parseAmount(matchFirst(lines, LABELS.cheque)),
     totalCashAndCheque: parseAmount(matchFirst(lines, LABELS.totalCashCheque)),
     receiver: cleanValue(matchFirst(lines, LABELS.receiver)),
+    amountCandidates: totalResolution.candidates,
+    selectedTotalCandidate: totalResolution.selected,
     lowConfidenceFields: [],
   }
 
@@ -107,6 +124,9 @@ function flagForReview(parsed, confidence) {
   if (parsed.receivedFrom === null) flagged.push('receivedFrom')
   if (parsed.date === null) flagged.push('date')
   if (parsed.totalAmount === null) flagged.push('totalAmount')
+  if (parsed.selectedTotalCandidate && parsed.selectedTotalCandidate.score < 100) {
+    flagged.push('totalAmount')
+  }
 
   // An arithmetic disagreement is the most useful signal we can surface: it
   // means OCR misread at least one of the two numbers.
@@ -193,6 +213,108 @@ function matchFirst(lines, pattern) {
   return null
 }
 
+const MONEY_CONTEXT = /\b(?:grand\s+total|total|amount\s+due|balance\s+due|payable|cash|tendered|change|sub\s*total|vat|tax|discount|amount)\b/i
+const EXCLUDED_TOTAL_CONTEXT = /\b(?:sub\s*total|cash|tendered|received|change|vat|tax|discount|quantity|qty|unit\s*price|che(?:que|ck))\b/i
+
+/**
+ * Selects only a clearly labelled final payable amount. A largest-number
+ * fallback is intentionally forbidden because cash tendered, change, phone
+ * numbers and TIN values are often larger than the actual receipt total.
+ */
+function resolveGrandTotal(lines) {
+  const candidates = []
+
+  lines.forEach((line, lineIndex) => {
+    if (!MONEY_CONTEXT.test(line)) return
+
+    const classification = classifyTotalLine(line)
+    const matches = monetaryMatches(line)
+    const afterLabel = matches.findIndex(match => (match.index ?? 0) >= classification.labelEnd)
+    const selectedMatchIndex = afterLabel
+
+    matches.forEach((match, amountIndex) => {
+      const amount = parseAmount(match[1])
+      if (amount === null || amount <= 0) return
+
+      const eligible = classification.score > 0 && amountIndex === selectedMatchIndex
+      candidates.push({
+        lineIndex,
+        amountIndex,
+        line: line.slice(0, 240),
+        amount,
+        label: classification.label,
+        score: eligible ? classification.score : 0,
+        eligible,
+      })
+    })
+
+    // OCR engines sometimes split a two-column "GRAND TOTAL | 6,222" row
+    // across adjacent lines. A numeric-only following line is safe to pair
+    // with the label; a labelled CASH/CHANGE/VAT line is deliberately rejected.
+    if (classification.score > 0 && selectedMatchIndex < 0 && lineIndex + 1 < lines.length) {
+      const followingLine = lines[lineIndex + 1]
+      if (!EXCLUDED_TOTAL_CONTEXT.test(followingLine)) {
+        const followingMatches = monetaryMatches(followingLine)
+        const first = followingMatches[0]
+        const amount = parseAmount(first?.[1])
+        const nonAmountText = first
+          ? followingLine.replace(first[0], '').replace(/[^A-Za-z]/g, '')
+          : ''
+        if (amount !== null && amount > 0 && !nonAmountText) {
+          candidates.push({
+            lineIndex: lineIndex + 1,
+            amountIndex: 0,
+            line: `${line.slice(0, 120)} | ${followingLine.slice(0, 120)}`,
+            amount,
+            label: classification.label,
+            score: classification.score - 5,
+            eligible: true,
+          })
+        }
+      }
+    }
+  })
+
+  const selected = candidates
+    .filter(candidate => candidate.eligible)
+    .sort((a, b) => (
+      b.score - a.score
+      || b.lineIndex - a.lineIndex
+      || b.amountIndex - a.amountIndex
+    ))[0] || null
+
+  return { candidates, selected }
+}
+
+function classifyTotalLine(line) {
+  const normalized = String(line || '').trim()
+  const labelled = (pattern, label, score) => {
+    const match = pattern.exec(normalized)
+    return match
+      ? {
+          label,
+          score,
+          labelEnd: (match.index ?? 0) + match[0].length,
+        }
+      : null
+  }
+
+  return labelled(/\bgrand\s+total\b/i, 'grand-total', 130)
+    || labelled(/\b(?:total\s+amount\s+due|total\s+due)\b/i, 'total-due', 125)
+    || labelled(/\b(?:amount\s+due|balance\s+due)\b/i, 'amount-due', 120)
+    || labelled(/\b(?:total\s+(?:amount\s+)?payable|amount\s+payable)\b/i, 'total-payable', 115)
+    || labelled(/\b(?:net\s+total|net\s+amount)\b/i, 'net-total', 110)
+    || (EXCLUDED_TOTAL_CONTEXT.test(normalized)
+      ? { label: 'excluded-context', score: 0, labelEnd: normalized.length }
+      : null)
+    || labelled(/^(?:[^A-Za-z0-9]{0,4})total(?:\s+amount)?\b/i, 'total', 90)
+    || { label: 'unclassified', score: 0, labelEnd: normalized.length }
+}
+
+function monetaryMatches(line) {
+  return [...String(line || '').matchAll(/(?:₱|PHP|P)?\s*([0-9O][0-9O,\s]*(?:\.\s*[0-9O]{1,2})?)/gi)]
+}
+
 /** Strips ruled-line filler and rejects values that are only punctuation. */
 function cleanValue(value) {
   if (value === null || value === undefined) return null
@@ -218,6 +340,7 @@ export function parseAmount(value) {
   const cleaned = String(value)
     .replace(/[₱P]/gi, '')
     .replace(/[,\s]/g, '')
+    .replace(/[Oo]/g, '0')
     .trim()
 
   if (!cleaned || !/^\d+(\.\d{1,2})?$/.test(cleaned)) return null

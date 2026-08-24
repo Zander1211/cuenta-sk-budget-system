@@ -108,7 +108,7 @@ function ReceiptPrintPreview({ expense, receiptUrl, onClose }) {
           {/* Breakdown if available */}
           {expense.breakdown?.length ? (
             <div className="receipt-report-breakdown">
-              <h3 className="receipt-report-subtitle">Budget Breakdown</h3>
+              <h3 className="receipt-report-subtitle">Approved Allocation Breakdown</h3>
               <table className="doc-table">
                 <thead>
                   <tr>

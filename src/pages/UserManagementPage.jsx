@@ -74,12 +74,25 @@ function UserManagementPage() {
 
   useEffect(() => {
     loadAccounts()
+
+    const channel = supabase
+      .channel('created-accounts-profile-sync')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'created_accounts' },
+        () => loadAccounts()
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   async function loadAccounts() {
     const { data, error } = await supabase
       .from('created_accounts')
-      .select('id, full_name, email, role, created_at')
+      .select('id, full_name, email, role, is_active, created_at')
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -95,6 +108,11 @@ function UserManagementPage() {
     }))
 
     setAccounts(normalized)
+    setViewModal((current) => {
+      if (!current.open || !current.user?.id) return current
+      const refreshedUser = normalized.find((account) => account.id === current.user.id)
+      return refreshedUser ? { ...current, user: { ...current.user, ...refreshedUser } } : current
+    })
     setIsLoading(false)
   }
 

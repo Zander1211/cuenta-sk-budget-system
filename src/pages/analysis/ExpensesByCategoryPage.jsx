@@ -18,7 +18,7 @@ import {
   CHART_INK, CHART_COLORS, pesoTick,
   filterExpenses, expenseDate, parseDate, normalizeAmount,
 } from '../../utils/analytics'
-import { exportToCsv } from '../../utils/exportCsv'
+import { materializeActualExpenseRows } from '../../utils/projectEventFinancials'
 
 const BREADCRUMB = [{ label: 'Home', to: '/dashboard' }, { label: 'Analysis', to: '/dashboard/analysis' }, { label: 'Expenses by Category' }]
 
@@ -39,7 +39,7 @@ function Sparkline({ points, color = CHART_COLORS.primaryLine }) {
 
 export default function ExpensesByCategoryPage() {
   const { filters, setFilter } = useAnalysisFilters()
-  const { expenses } = useBudget()
+  const { expenses, verifiedReceiptTotals } = useBudget()
   const cat = useCategoryAnalysis(filters)
   const base = useAnalysisData(filters)
   const [mode, setMode] = useState('amount') // amount | percent
@@ -48,7 +48,8 @@ export default function ExpensesByCategoryPage() {
   // Per-category monthly series (within the selected year) for sparklines.
   const sparklines = useMemo(() => {
     const yearFilters = { view: 'yearly', year: filters.year, month: filters.month }
-    const rows = filterExpenses(expenses, yearFilters)
+    const actualExpenses = materializeActualExpenseRows(expenses, verifiedReceiptTotals)
+    const rows = filterExpenses(actualExpenses, yearFilters)
     const map = new Map()
     rows.forEach((e) => {
       const c = (e.category || 'Uncategorized').toString().trim() || 'Uncategorized'
@@ -59,7 +60,7 @@ export default function ExpensesByCategoryPage() {
       map.set(c, arr)
     })
     return map
-  }, [expenses, filters.year, filters.month])
+  }, [expenses, verifiedReceiptTotals, filters.year, filters.month])
 
   const chartData = cat.categories.map((c, i) => ({
     name: c.name, value: c.value, percent: c.percent, fill: colorForCategory(c.name, i),
@@ -84,9 +85,11 @@ export default function ExpensesByCategoryPage() {
 
   const columns = [
     { key: 'rank', header: '#', render: (r) => r.rank },
-    { key: 'name', header: 'Category', render: (r) => (
-      <span><span className="an-cat-dot" style={{ background: colorForCategory(r.name, r.rank - 1) }} />{r.name}</span>
-    ) },
+    {
+      key: 'name', header: 'Category', render: (r) => (
+        <span><span className="an-cat-dot" style={{ background: colorForCategory(r.name, r.rank - 1) }} />{r.name}</span>
+      )
+    },
     { key: 'value', header: 'Total', align: 'right', render: (r) => formatCurrency(r.value) },
     { key: 'percent', header: '% of Total', align: 'right', render: (r) => formatPercentage(r.percent, 1) },
     { key: 'changePct', header: 'vs Prev.', align: 'right', render: (r) => <PercentageChange value={r.hasPrev ? r.changePct : null} invertColor /> },
@@ -99,7 +102,7 @@ export default function ExpensesByCategoryPage() {
     <AnalysisLayout
       breadcrumb={BREADCRUMB}
       title="Expenses by Category"
-      description="Where approved spending goes, ranked by category, with period-over-period change."
+      description="Where recorded actual expenses go, ranked by category, with period-over-period change."
       filterBar={
         <AnalysisFilterBar
           filters={filters} setFilter={setFilter}

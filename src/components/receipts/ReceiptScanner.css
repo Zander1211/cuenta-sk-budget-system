@@ -458,6 +458,37 @@
 
 .scan-verify-fields { display: grid; gap: 12px; min-width: 0; }
 
+.scan-grand-total {
+	display: grid;
+	gap: 8px;
+	padding: 15px 16px;
+	border: 1px solid color-mix(in srgb, var(--scan-accent) 42%, var(--scan-line));
+	border-radius: 12px;
+	background: var(--scan-accent-soft);
+}
+.scan-grand-total > span {
+	font-size: .78rem;
+	font-weight: 800;
+	letter-spacing: .055em;
+	text-transform: uppercase;
+	color: var(--scan-accent);
+}
+.scan-grand-total input {
+	min-height: 52px;
+	font-size: 1.2rem;
+	font-weight: 750;
+	background: var(--scan-surface);
+}
+.scan-grand-total small {
+	font-size: .78rem;
+	line-height: 1.5;
+	color: var(--scan-ink-3);
+}
+.scan-grand-total[data-flagged='true'] {
+	border-color: var(--scan-warn);
+	background: color-mix(in srgb, var(--scan-warn) 8%, var(--scan-surface));
+}
+
 .scan-field-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

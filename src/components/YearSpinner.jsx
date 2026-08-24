@@ -36,7 +36,7 @@ export default function YearSpinner({ year, onYearChange }) {
   }
 
   return (
-    <div style={{ 
+    <div className="year-spinner" style={{
       display: 'inline-flex', 
       alignItems: 'center', 
       background: 'var(--surface)', 

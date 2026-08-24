@@ -310,7 +310,7 @@ function PayrollForm({ profileName, role, selectedRequest, onPreview }) {
             <input type="date" value={certDateC} onChange={(e) => setCertDateC(e.target.value)} />
           </label>
           <label className="field">
-            <span>D. Noted by (SK Treasurer)</span>
+            <span>D. Paid by (SK Treasurer)</span>
             <input
               type="text"
               value={skTreasurer}

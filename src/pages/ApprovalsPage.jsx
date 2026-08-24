@@ -109,12 +109,13 @@ function ApprovalsPage() {
     setRejectNote('')
   }
   
-  function handleCancelSubmit() {
+  async function handleCancelSubmit() {
     if (!cancelNote.trim()) {
       addNotification({ type: 'error', title: 'Error', message: 'Please add a cancellation reason.' })
       return
     }
-    cancelApproval(cancellingId, cancelNote.trim())
+    const result = await cancelApproval(cancellingId, cancelNote.trim())
+    if (result?.error) return
     setCancellingId(null)
     setCancelNote('')
   }

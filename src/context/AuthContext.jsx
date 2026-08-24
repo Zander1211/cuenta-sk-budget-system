@@ -1,7 +1,55 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabase/supabaseClient'
+import { saveProfileDetails } from '../services/authService'
 
 const AuthContext = createContext(null)
+
+function getMetadataName(user) {
+  const metadata = user?.user_metadata || {}
+  const directName = metadata.full_name || metadata.name
+  if (directName?.trim()) return directName.trim()
+
+  return [metadata.first_name, metadata.middle_name, metadata.last_name]
+    .filter(Boolean)
+    .join(' ')
+    .trim()
+}
+
+function getSurnameFromName(name) {
+  if (!name) return ''
+  return name.split(/\s+/).filter(Boolean).slice(-1)[0] || ''
+}
+
+function getMetadataSurname(user) {
+  const metadata = user?.user_metadata || {}
+  const directSurname = metadata.last_name || metadata.surname
+  return directSurname?.trim() || getSurnameFromName(getMetadataName(user))
+}
+
+function formatNameFromEmail(email) {
+  const localPart = email?.split('@')[0]?.trim()
+  if (!localPart) return ''
+
+  const readable = localPart.replace(/[._-]+/g, ' ').trim()
+  if (!readable) return ''
+
+  return readable
+    .split(' ')
+    .filter(Boolean)
+    .map((segment) => segment[0].toUpperCase() + segment.slice(1))
+    .join(' ')
+}
+
+function getSurnameFromEmail(email) {
+  const localPart = email?.split('@')[0]?.trim()
+  if (!localPart) return ''
+
+  const parts = localPart.split(/[._-]+/).filter(Boolean)
+  if (!parts.length) return ''
+
+  const surname = parts[parts.length - 1]
+  return surname[0].toUpperCase() + surname.slice(1)
+}
 
 function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
@@ -10,68 +58,42 @@ function AuthProvider({ children }) {
   const [profileSurname, setProfileSurname] = useState('')
   const [role, setRole] = useState('SK Chairman')
 
-  async function refreshSession() {
+  const refreshSession = useCallback(async () => {
     const { data, error } = await supabase.auth.getSession()
     if (!error) {
       setSession(data.session ?? null)
     }
     return { data, error }
-  }
+  }, [])
 
-  function getMetadataName(user) {
-    const metadata = user?.user_metadata || {}
-    const directName = metadata.full_name || metadata.name
-    if (directName?.trim()) {
-      return directName.trim()
-    }
+  const updateProfileDetails = useCallback(async (profile) => {
+    const { data, error } = await saveProfileDetails(profile)
+    if (error || !data?.profile) return { data, error }
 
-    const combinedName = [metadata.first_name, metadata.last_name]
-      .filter(Boolean)
-      .join(' ')
-      .trim()
+    const nextProfile = data.profile
+    setProfileName(nextProfile.full_name)
+    setProfileSurname(nextProfile.last_name)
+    setSession((current) => {
+      if (!current?.user) return current
+      return {
+        ...current,
+        user: {
+          ...current.user,
+          user_metadata: data.user_metadata || {
+            ...current.user.user_metadata,
+            ...nextProfile,
+          },
+        },
+      }
+    })
 
-    return combinedName
-  }
+    // Admin metadata writes do not emit a client auth event. Refreshing the
+    // token makes every Auth consumer and JWT-backed database policy current.
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession()
+    if (!refreshError && refreshed?.session) setSession(refreshed.session)
 
-  function getSurnameFromName(name) {
-    if (!name) return ''
-    return name.split(/\s+/).filter(Boolean).slice(-1)[0] || ''
-  }
-
-  function getMetadataSurname(user) {
-    const metadata = user?.user_metadata || {}
-    const directSurname = metadata.last_name || metadata.surname
-    if (directSurname?.trim()) {
-      return directSurname.trim()
-    }
-
-    return getSurnameFromName(getMetadataName(user))
-  }
-
-  function formatNameFromEmail(email) {
-    const localPart = email?.split('@')[0]?.trim()
-    if (!localPart) return ''
-
-    const readable = localPart.replace(/[._-]+/g, ' ').trim()
-    if (!readable) return ''
-
-    return readable
-      .split(' ')
-      .filter(Boolean)
-      .map((segment) => segment[0].toUpperCase() + segment.slice(1))
-      .join(' ')
-  }
-
-  function getSurnameFromEmail(email) {
-    const localPart = email?.split('@')[0]?.trim()
-    if (!localPart) return ''
-
-    const parts = localPart.split(/[._-]+/).filter(Boolean)
-    if (!parts.length) return ''
-
-    const surname = parts[parts.length - 1]
-    return surname[0].toUpperCase() + surname.slice(1)
-  }
+    return { data, error: null, refreshError }
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -116,12 +138,6 @@ function AuthProvider({ children }) {
     const metadataRole =
       session?.user?.app_metadata?.role || session?.user?.user_metadata?.role
 
-    setProfileName(initialName)
-    setProfileSurname(initialSurname)
-    if (metadataRole) {
-      setRole(metadataRole)
-    }
-
     async function loadProfileAndRole() {
       if (!session?.user) {
         if (isMounted) {
@@ -136,6 +152,7 @@ function AuthProvider({ children }) {
       const userEmail = session.user.email
       let resolvedName = metadataName || ''
       let resolvedRole = metadataRole || ''
+      let directoryName = ''
 
       if (userId) {
         const { data, error } = await supabase
@@ -145,12 +162,12 @@ function AuthProvider({ children }) {
           .maybeSingle()
 
         if (!error && data) {
-          if (data.full_name?.trim()) resolvedName = data.full_name.trim()
+          if (data.full_name?.trim()) directoryName = data.full_name.trim()
           if (data.role?.trim()) resolvedRole = data.role.trim()
         }
       }
 
-      if ((!resolvedName || !resolvedRole) && userEmail) {
+      if ((!directoryName || !resolvedRole) && userEmail) {
         const { data, error } = await supabase
           .from('created_accounts')
           .select('full_name, role')
@@ -158,16 +175,40 @@ function AuthProvider({ children }) {
           .maybeSingle()
 
         if (!error && data) {
-          if (!resolvedName && data.full_name?.trim()) resolvedName = data.full_name.trim()
+          if (!directoryName && data.full_name?.trim()) directoryName = data.full_name.trim()
           if (!resolvedRole && data.role?.trim()) resolvedRole = data.role.trim()
         }
+      }
+
+      const metadata = session.user.user_metadata || {}
+      const componentName = [metadata.first_name, metadata.middle_name, metadata.last_name]
+        .map((part) => part?.trim())
+        .filter(Boolean)
+        .join(' ')
+      const hasEditableName = Boolean(metadata.first_name?.trim() && metadata.last_name?.trim())
+
+      // Repair profiles saved by the previous implementation, which updated
+      // Auth metadata but left created_accounts.full_name stale.
+      if (hasEditableName && componentName) {
+        resolvedName = componentName
+        if (directoryName !== componentName) {
+          const { error: repairError } = await saveProfileDetails({
+            firstName: metadata.first_name,
+            middleName: metadata.middle_name || '',
+            lastName: metadata.last_name,
+            nickname: metadata.nickname || '',
+          })
+          if (repairError) console.warn('Could not repair the profile directory name:', repairError.message)
+        }
+      } else {
+        resolvedName = directoryName || resolvedName
       }
 
       if (!isMounted) return
 
       const finalRole = resolvedRole || metadataRole || 'SK Chairman'
       const finalName = resolvedName || initialName
-      const finalSurname = getSurnameFromName(finalName) || initialSurname
+      const finalSurname = metadataSurname || initialSurname || getSurnameFromName(finalName)
 
       setRole(finalRole)
       setProfileName(finalName)
@@ -198,12 +239,7 @@ function AuthProvider({ children }) {
     return () => {
       isMounted = false
     }
-  }, [
-    session?.user?.id,
-    session?.user?.email,
-    session?.user?.user_metadata?.full_name,
-    session?.user?.user_metadata?.role,
-  ])
+  }, [session])
 
   const effectiveRole =
     role ||
@@ -219,10 +255,11 @@ function AuthProvider({ children }) {
       profileName,
       profileSurname,
       refreshSession,
+      updateProfileDetails,
       isLoading,
       isAuthenticated: Boolean(session?.user),
     }),
-    [session, effectiveRole, profileName, profileSurname, refreshSession, isLoading]
+    [session, effectiveRole, profileName, profileSurname, refreshSession, updateProfileDetails, isLoading]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
@@ -236,4 +273,6 @@ function useAuth() {
   return context
 }
 
+// Context hooks intentionally live beside their provider.
+// eslint-disable-next-line react-refresh/only-export-components
 export { AuthProvider, useAuth }

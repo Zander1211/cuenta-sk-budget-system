@@ -73,166 +73,119 @@ function DisbursementVoucherPreview({ data, onClose, onSave }) {
           </button>
         </div>
 
-        <div className="print-page">
-          {/* Letterhead */}
-          <div className="gov-letterhead" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '30px' }}>
-            <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
-              <p className="gov-line" style={{ margin: 0 }}>Republic of the Philippines</p>
-              <p className="gov-line-bold" style={{ margin: 0 }}>BARANGAY UPPER GLAD II</p>
-            </div>
-          </div>
-
-          {/* Title */}
-          <div className="doc-title">Disbursement Voucher</div>
-
-          {/* Header grid */}
-          <div className="dv-header-grid">
-            <div className="dv-header-left">
-              <div className="doc-info-row">
-                <span className="doc-info-label">Office:</span>
-                <span className="doc-info-value">{payeeName}</span>
-              </div>
-              <div className="doc-info-row">
-                <span className="doc-info-label">Address:</span>
-                <span className="doc-info-value">{payeeAddress}</span>
-              </div>
-            </div>
-            <div className="dv-header-right">
-              <div className="doc-info-row">
-                <span className="doc-info-label">Municipality:</span>
-                <span className="doc-info-value">MIDSAYAP</span>
-              </div>
-              <div className="doc-info-row">
-                <span className="doc-info-label">Province:</span>
-                <span className="doc-info-value">COTABATO</span>
-              </div>
-              <div className="doc-info-row" style={{ marginTop: '8px' }}>
-                <span className="doc-info-label">DV No.:</span>
-                <span className="doc-info-value" style={{ fontWeight: 700 }}>
-                  {dvNumber}
-                </span>
-              </div>
-              <div className="doc-info-row">
-                <span className="doc-info-label">Date:</span>
-                <span className="doc-info-value">{formatDateLocal(date)}</span>
-              </div>
-              <div className="doc-info-row">
-                <span className="doc-info-label">Fund:</span>
-                <span className="doc-info-value">{fund}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Particulars */}
-          <div className="dv-particulars">
-            <div className="dv-particulars-title">Particulars</div>
-            <p style={{ margin: 0, fontSize: '12px', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-              {particulars}
-            </p>
-          </div>
-
-          {/* Amount */}
-          <div className="dv-amount-row">
-            <span style={{ fontSize: '11px' }}>Amount:</span>
-            <span style={{ fontWeight: 700 }}>{currency.format(amount)}</span>
-          </div>
-
-          {/* Total */}
-          <div className="dv-total-row">
-            <span>Total Amount Due This Voucher</span>
-            <span>{currency.format(amount)}</span>
-          </div>
-
-          {/* Certification grid (3 columns) */}
-          <div className="dv-cert-grid">
-            <div className="dv-cert-box">
-              <div className="dv-cert-label">A. Certified</div>
-              <div className="dv-cert-text">
-                Existence of available appropriation for the charges/expenses indicated above
-              </div>
-              <div className="dv-cert-sig-line">
-                <div className="dv-cert-name">{skKagawad || '___________'}</div>
-                <div className="dv-cert-position">SK Kagawad</div>
-                <div className="dv-cert-date">Date: {formatDateLocal(certDateA)}</div>
-              </div>
-            </div>
-            <div className="dv-cert-box">
-              <div className="dv-cert-label">B. Certified</div>
-              <div className="dv-cert-text">Fund Cash Available</div>
-              <div className="dv-cert-sig-line">
-                <div className="dv-cert-name">{skTreasurer || '___________'}</div>
-                <div className="dv-cert-position">SK Treasurer</div>
-                <div className="dv-cert-date">Date: {formatDateLocal(certDateB)}</div>
-              </div>
-            </div>
-            <div className="dv-cert-box">
-              <div className="dv-cert-label">C. Certified</div>
-              <div className="dv-cert-text">
-                As to validity, propriety and legality
-                <br />
-                Approved: For Payment
-              </div>
-              <div className="dv-cert-sig-line">
-                <div className="dv-cert-name">{skChairman || '___________'}</div>
-                <div className="dv-cert-position">SK Chairman</div>
-                <div className="dv-cert-date">Date: {formatDateLocal(certDateC)}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Received Payment */}
-          <div className="dv-received">
-            <div>
-              <p style={{ margin: '0 0 20px', fontWeight: 700 }}>Received Payment:</p>
-              <div style={{ borderTop: '1px solid #000', paddingTop: '4px', textAlign: 'center' }}>
-                <span style={{ fontStyle: 'italic', fontSize: '10px' }}>
-                  Signature over Printed Name
-                </span>
-              </div>
-            </div>
-            <div>
-              <div className="doc-info-row">
-                <span className="doc-info-label" style={{ fontSize: '10px' }}>
-                  Check Number:
-                </span>
-                <span>_______________</span>
-              </div>
-              <div className="doc-info-row">
-                <span className="doc-info-label" style={{ fontSize: '10px' }}>
-                  Date:
-                </span>
-                <span>_______________</span>
-              </div>
-              <div className="doc-info-row">
-                <span className="doc-info-label" style={{ fontSize: '10px' }}>
-                  Bank Name:
-                </span>
-                <span className="doc-info-value">{bankName}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Accounting Entries */}
-          <div className="dv-accounting">
-            <div className="dv-accounting-title">Accounting Entries</div>
-            <table className="doc-table" style={{ marginBottom: 0 }}>
-              <thead>
-                <tr>
-                  <th>Account</th>
-                  <th>Account Code</th>
-                  <th style={{ width: '100px' }}>Debit</th>
-                  <th style={{ width: '100px' }}>Credit</th>
-                </tr>
-              </thead>
+        <div className="print-page dv-document">
+          <div className="dv-form-scroll">
+            <table className="dv-form-table">
+              <colgroup>
+                {Array.from({ length: 12 }, (_, index) => <col key={index} />)}
+              </colgroup>
               <tbody>
+                <tr className="dv-form-title-row">
+                  <th colSpan="8">Disbursement Voucher</th>
+                  <td colSpan="4"><span>DV No.:</span> <strong>{dvNumber}</strong></td>
+                </tr>
+                <tr className="dv-form-info-row">
+                  <td colSpan="5"><span>Barangay:</span> <strong>UPPER GLAD II</strong></td>
+                  <td colSpan="3"><span>Municipality:</span> <strong>MIDSAYAP</strong></td>
+                  <td colSpan="4"><span>Date:</span> <strong>{formatDateLocal(date)}</strong></td>
+                </tr>
+                <tr className="dv-form-info-row">
+                  <td colSpan="5"><span>Payee/Office:</span> <strong>{payeeName}</strong></td>
+                  <td colSpan="3"><span>Province:</span> <strong>COTABATO</strong></td>
+                  <td colSpan="4"><span>Fund:</span> <strong>{fund}</strong></td>
+                </tr>
+                <tr className="dv-form-info-row">
+                  <td colSpan="5"><span>Address:</span> <strong>{payeeAddress}</strong></td>
+                  <td colSpan="3"><span>TIN:</span></td>
+                  <td colSpan="4" aria-label="Reserved field">&nbsp;</td>
+                </tr>
+
+                <tr className="dv-form-column-headings">
+                  <th colSpan="8">Particulars</th>
+                  <th colSpan="4">Amount</th>
+                </tr>
+                <tr className="dv-form-particulars-row">
+                  <td colSpan="8"><p>{particulars}</p></td>
+                  <td colSpan="4" className="dv-form-amount">{currency.format(amount)}</td>
+                </tr>
+                <tr className="dv-form-total-row">
+                  <th colSpan="8">Total Amount Due This Voucher</th>
+                  <td colSpan="4">{currency.format(amount)}</td>
+                </tr>
+
+                <tr className="dv-form-certifications">
+                  <td colSpan="5">
+                    <strong className="dv-form-certified">Certified</strong>
+                    <p>Existence of available appropriation for the charges/expenses indicated above</p>
+                    <div className="dv-form-cert-fields">
+                      <div><span>Signature:</span><b className="dv-form-write-line" /></div>
+                      <div><span>Printed Name:</span><b className="dv-form-write-line">{skKagawad}</b></div>
+                      <div><span>Position:</span><b className="dv-form-write-line">Budget Monitoring Officer</b></div>
+                      <div><span>Date:</span><b className="dv-form-write-line">{formatDateLocal(certDateA)}</b></div>
+                    </div>
+                  </td>
+                  <td colSpan="3">
+                    <strong className="dv-form-certified">Certified</strong>
+                    <p>Fund Cash Available</p>
+                    <div className="dv-form-cert-fields">
+                      <div><span>Signature:</span><b className="dv-form-write-line" /></div>
+                      <div><span>Printed Name:</span><b className="dv-form-write-line">{skTreasurer}</b></div>
+                      <div><span>Position:</span><b className="dv-form-write-line">SK Treasurer</b></div>
+                      <div><span>Date:</span><b className="dv-form-write-line">{formatDateLocal(certDateB)}</b></div>
+                    </div>
+                  </td>
+                  <td colSpan="4">
+                    <strong className="dv-form-certified">Certified</strong>
+                    <p>As to validity, propriety and legality<br />Approved: For Payment</p>
+                    <div className="dv-form-cert-fields">
+                      <div><span>Signature:</span><b className="dv-form-write-line" /></div>
+                      <div><span>Printed Name:</span><b className="dv-form-write-line">{skChairman}</b></div>
+                      <div><span>Position:</span><b className="dv-form-write-line">SK Chairman</b></div>
+                      <div><span>Date:</span><b className="dv-form-write-line">{formatDateLocal(certDateC)}</b></div>
+                    </div>
+                  </td>
+                </tr>
+
+                <tr className="dv-form-section-label">
+                  <td colSpan="12">Received Payment</td>
+                </tr>
+                <tr className="dv-form-payment-row">
+                  <td colSpan="5">
+                    <div className="dv-form-signature-space" />
+                    <div className="dv-form-signature-caption">Signature Over Printed Name</div>
+                  </td>
+                  <td colSpan="7">
+                    <div className="dv-form-payment-fields">
+                      <div className="dv-form-payment-pair">
+                        <span>Check Number:</span><b className="dv-form-write-line" />
+                        <span>Date:</span><b className="dv-form-write-line" />
+                      </div>
+                      <div><span>Bank Name:</span><b className="dv-form-write-line">{bankName}</b></div>
+                    </div>
+                  </td>
+                </tr>
+
+                <tr className="dv-form-section-label">
+                  <th colSpan="12">Accounting Entries</th>
+                </tr>
+                <tr className="dv-form-account-headings">
+                  <th colSpan="5">Account</th>
+                  <th colSpan="2">Account Code</th>
+                  <th colSpan="2">Debit</th>
+                  <th colSpan="3">Credit</th>
+                </tr>
                 {accountingRows.map((row, idx) => (
-                  <tr key={idx} className="empty-row">
-                    <td>{row.account}</td>
-                    <td>{row.code}</td>
-                    <td>{row.debit}</td>
-                    <td>{row.credit}</td>
+                  <tr className="dv-form-account-row" key={idx}>
+                    <td colSpan="5">{row.account}</td>
+                    <td colSpan="2">{row.code}</td>
+                    <td colSpan="2">{row.debit}</td>
+                    <td colSpan="3">{row.credit}</td>
                   </tr>
                 ))}
+                <tr className="dv-form-account-space">
+                  <td colSpan="5">&nbsp;</td>
+                  <td colSpan="7">&nbsp;</td>
+                </tr>
               </tbody>
             </table>
           </div>

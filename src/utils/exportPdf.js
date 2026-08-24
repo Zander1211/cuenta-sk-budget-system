@@ -64,12 +64,18 @@ function checkPageBreak(doc, y, needed = 30) {
 
 async function captureChartImage(chartContainerEl) {
   if (!chartContainerEl) return null
-  // Find the recharts wrapper inside
-  const recharts = chartContainerEl.querySelector('.recharts-responsive-container') || chartContainerEl
+  // Allocation exports opt into capturing their detailed HTML legend as well
+  // as the Recharts SVG. Other reports keep capturing only the chart wrapper.
+  const captureFull = chartContainerEl.dataset?.pdfCapture === 'full'
+  const captureTarget = captureFull
+    ? chartContainerEl
+    : chartContainerEl.querySelector('.recharts-responsive-container') || chartContainerEl
+  const requestedScale = Number(chartContainerEl.dataset?.pdfScale)
+  const scale = Number.isFinite(requestedScale) && requestedScale >= 2 ? requestedScale : 2
   try {
-    const canvas = await html2canvas(recharts, {
+    const canvas = await html2canvas(captureTarget, {
       backgroundColor: '#ffffff',
-      scale: 2,
+      scale,
       useCORS: true,
       logging: false,
     })
@@ -82,7 +88,7 @@ async function captureChartImage(chartContainerEl) {
 
 // ── Report Header ──────────────────────────────────────────────────────────────
 
-function drawReportHeader(doc, { title, year, generatedAt }) {
+function drawReportHeader(doc, { title, year, month, view = 'yearly', generatedAt }) {
   let y = MARGIN
 
   // Brand bar
@@ -112,7 +118,8 @@ function drawReportHeader(doc, { title, year, generatedAt }) {
   doc.setFontSize(9)
   doc.setFont('Roboto', 'normal')
   setColor(doc, COLORS.muted)
-  const metaLine = `Year: ${year}  •  Generated: ${generatedAt}`
+  const selectedMonth = view === 'monthly' && month ? MONTHS_FULL[Number(month) - 1] : 'All months'
+  const metaLine = `Month: ${selectedMonth}  •  Year: ${year}  •  Generated: ${generatedAt}`
   doc.text(metaLine, MARGIN, y)
 
   y += 4
@@ -248,8 +255,10 @@ export async function exportBudgetVsActualPdf({ chartRef, bva, filters }) {
 
   // ── Page 1: Header ──
   let y = drawReportHeader(doc, {
-    title: 'Chart for Budget',
+    title: 'Budget vs Actual Spending',
     year: filters.year,
+    month: filters.month,
+    view: filters.view,
     generatedAt,
   })
 
@@ -260,7 +269,7 @@ export async function exportBudgetVsActualPdf({ chartRef, bva, filters }) {
     doc.setFontSize(10)
     doc.setFont('Roboto', 'bold')
     setColor(doc, COLORS.dark)
-    doc.text('Allocated Budget vs Approved Spending', MARGIN, y)
+    doc.text('Approved Budget vs Actual Expenses', MARGIN, y)
     y += 4
 
     // Subtle border around chart
@@ -278,8 +287,8 @@ export async function exportBudgetVsActualPdf({ chartRef, bva, filters }) {
     items: [
       { label: 'X-Axis', value: 'Months' },
       { label: 'Y-Axis', value: 'Amount (₱)' },
-      { label: 'Series 1', value: 'Allocated Budget' },
-      { label: 'Series 2', value: 'Approved Spending' },
+      { label: 'Series 1', value: 'Approved Budget' },
+      { label: 'Series 2', value: 'Actual Expenses' },
     ],
   })
 
@@ -293,7 +302,7 @@ export async function exportBudgetVsActualPdf({ chartRef, bva, filters }) {
 
   const tableColumns = [
     { key: 'label', header: 'Month', width: 36 },
-    { key: 'budget', header: 'Allocated Budget', align: 'right', width: 38, format: (r) => formatCurrency(r.budget, { detailed: true }) },
+    { key: 'budget', header: 'Approved Budget', align: 'right', width: 38, format: (r) => formatCurrency(r.budget, { detailed: true }) },
     { key: 'spending', header: 'Actual Expenses', align: 'right', width: 38, format: (r) => formatCurrency(r.spending, { detailed: true }) },
     { key: 'variance', header: 'Remaining Budget', align: 'right', width: 36, format: (r) => formatCurrency(r.variance, { detailed: true }), highlightNegative: true },
     { key: 'percentUsed', header: 'Utilization', align: 'right', width: 26, format: (r) => formatPercentage(r.percentUsed, 2) },
@@ -311,11 +320,11 @@ export async function exportBudgetVsActualPdf({ chartRef, bva, filters }) {
   const totalVariance = bva.totalVariance
   const overallUtilization = totalBudget > 0 ? (totalSpending / totalBudget) * 100 : 0
 
-  y = drawSummaryBox(doc, {
+  drawSummaryBox(doc, {
     title: 'Budget Summary',
     startY: y,
     items: [
-      { label: 'Total Allocated Budget', value: formatCurrency(totalBudget, { detailed: true }) },
+      { label: 'Total Approved Budget', value: formatCurrency(totalBudget, { detailed: true }) },
       { label: 'Total Actual Expenses', value: formatCurrency(totalSpending, { detailed: true }) },
       { label: 'Total Remaining Budget', value: formatCurrency(totalVariance, { detailed: true }), color: totalVariance < 0 ? COLORS.danger : COLORS.brand },
       { label: 'Overall Utilization', value: formatPercentage(overallUtilization, 2) },
@@ -329,14 +338,15 @@ export async function exportBudgetVsActualPdf({ chartRef, bva, filters }) {
     addFooter(doc, i, totalPages)
   }
 
-  doc.save(`budget-vs-actual-${filters.year}.pdf`)
+  const periodSlug = filters.view === 'monthly' ? `${filters.year}-${String(filters.month).padStart(2, '0')}` : filters.year
+  doc.save(`budget-vs-actual-${periodSlug}.pdf`)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PUBLIC: Export Monthly Spending Trend PDF
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export async function exportMonthlySpendingPdf({ chartRef, trend, tableRows, filters }) {
+export async function exportMonthlySpendingPdf({ chartRef, tableRows, filters }) {
   const doc = initPdfDoc('portrait')
   const now = new Date()
   const generatedAt = now.toLocaleString()
@@ -345,6 +355,8 @@ export async function exportMonthlySpendingPdf({ chartRef, trend, tableRows, fil
   let y = drawReportHeader(doc, {
     title: 'Monthly Spending Trend',
     year: filters.year,
+    month: filters.month,
+    view: filters.view,
     generatedAt,
   })
 
@@ -417,7 +429,7 @@ export async function exportMonthlySpendingPdf({ chartRef, trend, tableRows, fil
   const lowest = nonZeroRows.reduce((min, r) => (r.total < (min?.total || Infinity) ? r : min), null)
   const average = nonZeroRows.length ? totalSpending / nonZeroRows.length : 0
 
-  y = drawSummaryBox(doc, {
+  drawSummaryBox(doc, {
     title: 'Spending Summary',
     startY: y,
     items: [
@@ -436,4 +448,153 @@ export async function exportMonthlySpendingPdf({ chartRef, trend, tableRows, fil
   }
 
   doc.save(`monthly-spending-trend-${filters.year}.pdf`)
+}
+
+// PUBLIC: Export category allocation / spending-distribution PDF.
+export async function exportBudgetAllocationPdf({ chartRef, categories, filters }) {
+  const doc = initPdfDoc('portrait')
+  const generatedAt = new Date().toLocaleString()
+  const rows = (categories || []).filter((row) => Number(row.value) > 0)
+  const total = rows.reduce((sum, row) => sum + Number(row.value || 0), 0)
+  const totalRecords = rows.reduce((sum, row) => sum + Number(row.count || 0), 0)
+
+  let y = drawReportHeader(doc, {
+    title: 'Actual Expenses by Category',
+    year: filters.year,
+    month: filters.month,
+    view: filters.view,
+    generatedAt,
+  })
+
+  const chartImg = await captureChartImage(chartRef)
+  if (chartImg) {
+    y = checkPageBreak(doc, y, 91)
+    doc.setFontSize(10)
+    doc.setFont('Roboto', 'bold')
+    setColor(doc, COLORS.dark)
+    doc.text('Recorded Expense Distribution', MARGIN, y)
+    y += 5
+
+    doc.setDrawColor(...COLORS.line)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(MARGIN, y, CONTENT_W, 78, 2, 2, 'S')
+    doc.addImage(chartImg, 'PNG', MARGIN + 2, y + 2, CONTENT_W - 4, 74)
+    y += 84
+  }
+
+  y = checkPageBreak(doc, y, 20)
+  doc.setFontSize(11)
+  doc.setFont('Roboto', 'bold')
+  setColor(doc, COLORS.dark)
+  doc.text('Expense Table', MARGIN, y)
+  y += 6
+
+  y = drawDataTable(doc, {
+    startY: y,
+    columns: [
+      { key: 'name', header: 'Category', width: 57 },
+      { key: 'count', header: 'Records', align: 'right', width: 25 },
+      { key: 'value', header: 'Actual Expenses', align: 'right', width: 54, format: (row) => formatCurrency(row.value, { detailed: true }) },
+      { key: 'percent', header: 'Share', align: 'right', width: 38, format: (row) => formatPercentage(row.percent, 2) },
+    ],
+    rows,
+  })
+
+  const largest = rows[0] || null
+  drawSummaryBox(doc, {
+    title: 'Financial Summary',
+    startY: y,
+    items: [
+      { label: 'Total Actual Expenses', value: formatCurrency(total, { detailed: true }) },
+      { label: 'Expense Records', value: String(totalRecords) },
+      { label: 'Categories Represented', value: String(rows.length) },
+      { label: 'Largest Category', value: largest ? largest.name : '—' },
+      { label: 'Largest Category Share', value: largest ? formatPercentage(largest.percent, 2) : '0.00%' },
+    ],
+  })
+
+  const totalPages = doc.internal.getNumberOfPages()
+  for (let page = 1; page <= totalPages; page += 1) {
+    doc.setPage(page)
+    addFooter(doc, page, totalPages)
+  }
+
+  const periodSlug = filters.view === 'monthly' ? `${filters.year}-${String(filters.month).padStart(2, '0')}` : filters.year
+  doc.save(`budget-allocation-${periodSlug}.pdf`)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PUBLIC: Export AI Analysis PDF (Approved Budget Distribution)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export async function exportAiAnalysisPdf({ chartRef, distribution, total, aiSummary, filters }) {
+  const doc = initPdfDoc('portrait')
+  const now = new Date()
+  const generatedAt = now.toLocaleString()
+
+  let y = drawReportHeader(doc, {
+    title: 'Approved Budget Distribution',
+    year: filters.year,
+    month: filters.month,
+    view: filters.view,
+    generatedAt,
+  })
+
+  const chartImg = await captureChartImage(chartRef)
+  if (chartImg) {
+    y = checkPageBreak(doc, y, 91)
+    doc.setFontSize(10)
+    doc.setFont('Roboto', 'bold')
+    setColor(doc, COLORS.dark)
+    doc.text('Category Breakdown', MARGIN, y)
+    y += 5
+
+    doc.setDrawColor(...COLORS.line)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(MARGIN, y, CONTENT_W, 78, 2, 2, 'S')
+    doc.addImage(chartImg, 'PNG', MARGIN + 2, y + 2, CONTENT_W - 4, 74)
+    y += 84
+  }
+
+  y = checkPageBreak(doc, y, 20)
+  doc.setFontSize(11)
+  doc.setFont('Roboto', 'bold')
+  setColor(doc, COLORS.dark)
+  doc.text('Distribution Table', MARGIN, y)
+  y += 6
+
+  y = drawDataTable(doc, {
+    startY: y,
+    columns: [
+      { key: 'name', header: 'Category', width: 60 },
+      { key: 'value', header: 'Approved Budget', align: 'right', width: 60, format: (row) => formatCurrency(row.value, { detailed: true }) },
+      { key: 'percent', header: 'Share', align: 'right', width: 40, format: (row) => formatPercentage((row.value / total) * 100, 1) },
+    ],
+    rows: distribution,
+  })
+  
+  if (aiSummary) {
+    y = checkPageBreak(doc, y, 30)
+    doc.setFontSize(11)
+    doc.setFont('Roboto', 'bold')
+    setColor(doc, COLORS.brand)
+    doc.text('AI Interpretation', MARGIN, y)
+    y += 6
+    
+    doc.setFontSize(9)
+    doc.setFont('Roboto', 'normal')
+    setColor(doc, COLORS.text)
+    const lines = doc.splitTextToSize(aiSummary, CONTENT_W)
+    doc.text(lines, MARGIN, y)
+    y += lines.length * 5 + 4
+  }
+
+  const totalPages = doc.internal.getNumberOfPages()
+  for (let page = 1; page <= totalPages; page += 1) {
+    doc.setPage(page)
+    addFooter(doc, page, totalPages)
+  }
+
+  const periodSlug = filters.view === 'monthly' ? `${filters.year}-${String(filters.month).padStart(2, '0')}` : filters.year
+  doc.save(`ai-analysis-distribution-${periodSlug}.pdf`)
 }

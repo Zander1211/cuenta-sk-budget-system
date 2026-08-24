@@ -164,7 +164,10 @@ export async function insertScannedReceiptRecord(supabase, {
     .from('receipt_records')
     .insert({
       record_type: recordType,
-      record_id: String(record.id),
+      record_id: String(record.isAdditional && record.parentProjectId
+        ? record.parentProjectId
+        : record.id),
+      requisition_id: record.isAdditional ? String(record.id) : null,
       file_path: scanPath,
       original_path: originalPath || null,
       file_name: scanFile.name,
@@ -200,7 +203,20 @@ export function formatOcrMetadataNote(metadata) {
     metadata.receiptNumber ? `Receipt no: ${metadata.receiptNumber}` : '',
     metadata.receivedFrom ? `Received from: ${metadata.receivedFrom}` : '',
     metadata.organization ? `Organization: ${metadata.organization}` : '',
+    metadata.address ? `Address: ${metadata.address}` : '',
+    metadata.telephone ? `Telephone: ${metadata.telephone}` : '',
+    metadata.tin ? `TIN: ${metadata.tin}` : '',
     metadata.date ? `Receipt date: ${metadata.date}` : '',
+    metadata.time ? `Receipt time: ${metadata.time}` : '',
+    metadata.subtotal !== null && metadata.subtotal !== undefined
+      ? `Subtotal: ${peso(metadata.subtotal)}`
+      : '',
+    metadata.vatAmount !== null && metadata.vatAmount !== undefined
+      ? `VAT: ${peso(metadata.vatAmount)}`
+      : '',
+    metadata.discount !== null && metadata.discount !== undefined
+      ? `Discount: ${peso(metadata.discount)}`
+      : '',
     metadata.totalAmount !== null && metadata.totalAmount !== undefined
       ? `Receipt total: ${peso(metadata.totalAmount)}`
       : '',
@@ -209,6 +225,9 @@ export function formatOcrMetadataNote(metadata) {
       : '',
     metadata.chequeAmount !== null && metadata.chequeAmount !== undefined
       ? `Cheque: ${peso(metadata.chequeAmount)}`
+      : '',
+    metadata.totalCashAndCheque !== null && metadata.totalCashAndCheque !== undefined
+      ? `Cash and cheque total: ${peso(metadata.totalCashAndCheque)}`
       : '',
     metadata.bank ? `Bank: ${metadata.bank}` : '',
     metadata.chequeNumber ? `Cheque no: ${metadata.chequeNumber}` : '',
@@ -234,7 +253,10 @@ export async function insertReceiptRecord(supabase, record, file, filePath, user
     .from('receipt_records')
     .insert({
       record_type: recordType,
-      record_id: String(record.id),
+      record_id: String(record.isAdditional && record.parentProjectId
+        ? record.parentProjectId
+        : record.id),
+      requisition_id: record.isAdditional ? String(record.id) : null,
       file_path: filePath,
       file_name: file.name,
       file_type: file.type,

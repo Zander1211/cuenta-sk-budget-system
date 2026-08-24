@@ -1,7 +1,5 @@
 import React, { useRef, useState } from 'react'
 import { X, Printer } from 'lucide-react'
-import logo from '../../assets/logo.png'
-import brgyLogo from '../../assets/brgy-logo.png'
 const currency = new Intl.NumberFormat('en-PH', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -91,17 +89,17 @@ function AnnualReportPreview({ data, onClose, onSave }) {
 
   return (
     <div className="print-preview-overlay">
-      <div className="print-preview-toolbar">
-        {saveError && <span style={{ color: '#ef4444', marginRight: '16px', fontSize: '0.9rem' }}>{saveError}</span>}
-        <button type="button" className="close-btn" onClick={onClose} disabled={isSaving}>
-          <X size={16} /> Close
-        </button>
-        <button type="button" className="print-btn" onClick={handlePrint} disabled={isSaving}>
-          <Printer size={16} /> {isSaving ? 'Saving...' : 'Print / Save as PDF'}
-        </button>
-      </div>
+      <div className="print-preview-container" ref={contentRef} style={{ overflowX: 'hidden' }}>
+        <div className="print-preview-toolbar">
+          {saveError && <span style={{ color: '#ef4444', marginRight: '16px', fontSize: '0.9rem' }}>{saveError}</span>}
+          <button type="button" className="close-btn" onClick={onClose} disabled={isSaving}>
+            <X size={16} /> Close
+          </button>
+          <button type="button" className="print-btn" onClick={handlePrint} disabled={isSaving}>
+            <Printer size={16} /> {isSaving ? 'Saving...' : 'Print / Save as PDF'}
+          </button>
+        </div>
 
-      <div className="print-preview-container" ref={contentRef} style={{ overflowX: 'auto' }}>
         <style>{`
           @media print {
             @page { size: portrait; margin: 0.5in; }
@@ -115,7 +113,9 @@ function AnnualReportPreview({ data, onClose, onSave }) {
           
           .abyip-container {
             width: 100%;
-            min-width: 800px;
+            min-width: 0;
+            max-width: 100%;
+            box-sizing: border-box;
             background: white;
             color: black;
             font-family: 'Times New Roman', Times, serif;
@@ -145,6 +145,7 @@ function AnnualReportPreview({ data, onClose, onSave }) {
           .abyip-table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
             font-size: 9.5pt;
             margin-bottom: 30px;
           }
@@ -152,6 +153,7 @@ function AnnualReportPreview({ data, onClose, onSave }) {
             border: 1px solid #000;
             padding: 6px;
             vertical-align: middle;
+            overflow-wrap: anywhere;
           }
           .abyip-table th {
             text-align: center;
@@ -178,13 +180,11 @@ function AnnualReportPreview({ data, onClose, onSave }) {
           }
         `}</style>
         
-        <div className="print-page" style={{ width: '100%', overflowX: 'auto', background: 'white' }}>
+        <div className="print-page" style={{ width: '100%', overflowX: 'hidden', boxSizing: 'border-box', background: 'white' }}>
           <div className="abyip-container">
             
             {/* ABYIP HEADER */}
             <div className="abyip-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '20px' }}>
-              <img src={brgyLogo} alt="Barangay Logo" style={{ width: '100px', height: '100px', position: 'absolute', left: '50px', top: '0', objectFit: 'contain' }} />
-              <img src={logo} alt="SK Logo" style={{ width: '100px', height: '100px', position: 'absolute', right: '50px', top: '0', objectFit: 'contain' }} />
               <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
                 <p style={{ margin: 0 }}>Republic of the Philippines</p>
                 <p style={{ margin: 0 }}>Province of {data.province || 'Cotabato'}</p>
@@ -439,8 +439,6 @@ function AnnualReportPreview({ data, onClose, onSave }) {
             {/* RESOLUTION SECTION - Starts on new page in print */}
             <div className="resolution-section">
               <div className="abyip-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '30px' }}>
-                <img src={brgyLogo} alt="Barangay Logo" style={{ width: '100px', height: '100px', position: 'absolute', left: '50px', top: '0', objectFit: 'contain' }} />
-                <img src={logo} alt="SK Logo" style={{ width: '100px', height: '100px', position: 'absolute', right: '50px', top: '0', objectFit: 'contain' }} />
                 <div style={{ textAlign: 'center', lineHeight: '1.3' }}>
                   <p style={{ margin: 0 }}>Republic of the Philippines</p>
                   <p style={{ margin: 0 }}>REGION XII</p>

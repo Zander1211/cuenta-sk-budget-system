@@ -287,11 +287,14 @@ function BudgetProvider({ children }) {
         setBudgets(() => {
           const currentYear = new Date().getFullYear();
           const mergedBudgets = [];
-          
+
+          // For each month, aggregate ALL budget sources (Regular + Donation + Solicitation etc.)
+          // Previously used .find() which silently discarded all but the first source per month.
           for (let i = 1; i <= 12; i++) {
-            const found = fetchedBudgets.find(b => b.month === i && b.year === currentYear);
-            if (found) {
-              mergedBudgets.push(found);
+            const monthBudgets = fetchedBudgets.filter(b => b.month === i && b.year === currentYear);
+            if (monthBudgets.length > 0) {
+              // Push every individual source so the reducer in useBudgetCalculations sums them all
+              mergedBudgets.push(...monthBudgets);
             } else {
               mergedBudgets.push({
                 id: `default-${currentYear}-${i}`,
@@ -304,12 +307,12 @@ function BudgetProvider({ children }) {
               });
             }
           }
-          
+
           const otherYears = fetchedBudgets.filter(b => b.year !== currentYear);
-          
+
           return [...otherYears, ...mergedBudgets].sort((a, b) => {
-             if (a.year !== b.year) return b.year - a.year;
-             return b.month - a.month;
+            if (a.year !== b.year) return b.year - a.year;
+            return b.month - a.month;
           });
         });
       }
@@ -851,48 +854,119 @@ function BudgetProvider({ children }) {
     })
   }
 
-  function cancelApproval(requestId, reason) {
+  async function cancelApproval(requestId, reason) {
     const request = requests.find((item) => String(item.id) === String(requestId))
-    if (!request) return
+    if (!request) return { error: { message: 'Request not found' } }
 
-    setRequests((prev) =>
-      prev.map((item) =>
-        String(item.id) === String(requestId)
-          ? {
-              ...item,
-              status: 'Cancelled',
-              projectStatus: 'Cancelled',
-              cancelledAt: new Date().toISOString(),
-              cancellationReason: reason,
-            }
-          : item
+    const cancelledAt = new Date().toISOString()
+    const actorName = profileName || user?.user_metadata?.full_name || 'SK Chairman'
+    const actorRole = role || 'SK Chairman'
+
+    try {
+      const { error: reqErr } = await supabase
+        .from('budget_requests')
+        .update({
+          status: 'Cancelled',
+          project_status: 'Cancelled',
+          cancelled_at: cancelledAt,
+          cancellation_reason: reason,
+          updated_at: cancelledAt,
+        })
+        .eq('id', requestId)
+
+      if (reqErr) throw reqErr
+
+      const { error: expErr } = await supabase
+        .from('expenses')
+        .update({
+          status: 'Cancelled',
+          project_status: 'Cancelled',
+          archived_at: cancelledAt,
+          updated_at: cancelledAt,
+        })
+        .eq('request_id', requestId)
+
+      if (expErr) throw expErr
+
+      try {
+        await supabase.from('audit_trail').insert({
+          user_id: user?.id || null,
+          user_name: actorName,
+          user_role: actorRole,
+          action: `Request Cancelled — ${request.event}`,
+          action_type: 'Request Cancelled',
+          module: 'Budget Requests',
+          record_type: 'Budget Request',
+          record_id: String(requestId),
+          description: `Cancelled approval for ${request.event}. Reason: ${reason}`,
+          previous_value: { status: 'Approved', projectStatus: request.projectStatus },
+          new_value: { status: 'Cancelled', projectStatus: 'Cancelled' },
+          remarks: reason,
+          status: 'Success',
+        })
+      } catch (auditErr) {
+        console.warn('Failed to insert audit trail for cancellation:', auditErr)
+      }
+
+      try {
+        await supabase.from('notifications').insert({
+          type: 'rejection',
+          title: 'Approval Cancelled',
+          message: `The approval for "${request.event}" was cancelled. Reason: ${reason}`,
+          actor_id: user?.id || null,
+          actor_role: actorRole,
+          recipient_role: 'SK Treasurer',
+          request_id: requestId,
+        })
+      } catch (notifErr) {
+        console.warn('Failed to insert notification to database:', notifErr)
+      }
+
+      setRequests((prev) =>
+        prev.map((item) =>
+          String(item.id) === String(requestId)
+            ? {
+                ...item,
+                status: 'Cancelled',
+                projectStatus: 'Cancelled',
+                cancelledAt: cancelledAt,
+                cancellationReason: reason,
+              }
+            : item
+        )
       )
-    )
 
-    setExpenses((prev) =>
-      prev.map((expense) =>
-        expense.id === requestId
-          ? { ...expense, status: 'Cancelled', archivedAt: new Date().toISOString() }
-          : expense
+      setExpenses((prev) =>
+        prev.map((expense) =>
+          String(expense.requestId) === String(requestId) || String(expense.request_id) === String(requestId)
+            ? { ...expense, status: 'Cancelled', projectStatus: 'Cancelled', archivedAt: cancelledAt }
+            : expense
+        )
       )
-    )
 
-    addLog({
-      action: `Request Cancelled — ${request.event}`,
-      actionType: 'Request Cancelled',
-      module: 'Budget Requests',
-      recordType: 'Budget Request',
-      recordId: requestId,
-      description: `Cancelled approval for ${request.event}. Reason: ${reason}`,
-      previousValue: { status: 'Approved', projectStatus: request.projectStatus },
-      newValue: { status: 'Cancelled', projectStatus: 'Cancelled' },
-      remarks: reason,
-    })
-    addNotification({
-      type: 'rejection',
-      title: 'Approval Cancelled',
-      message: `The approval for "${request.event}" was cancelled. Reason: ${reason}`,
-    })
+      addLog({
+        action: `Request Cancelled — ${request.event}`,
+        actionType: 'Request Cancelled',
+        module: 'Budget Requests',
+        recordType: 'Budget Request',
+        recordId: requestId,
+        description: `Cancelled approval for ${request.event}. Reason: ${reason}`,
+        previousValue: { status: 'Approved', projectStatus: request.projectStatus },
+        newValue: { status: 'Cancelled', projectStatus: 'Cancelled' },
+        remarks: reason,
+      })
+
+      addNotification({
+        type: 'rejection',
+        title: 'Approval Cancelled',
+        message: `The approval for "${request.event}" was cancelled. Reason: ${reason}`,
+      })
+
+      return { error: null }
+    } catch (err) {
+      console.error('Exception in cancelApproval:', err)
+      return { error: err }
+    }
   }
 
   function archiveRequest(requestId, archivedBy = 'System') {
@@ -1077,36 +1151,70 @@ function BudgetProvider({ children }) {
     return { data: savedRequest, error: null }
   }
 
-  function resubmitRequest(requestId, updatedData) {
-    const request = requests.find((item) => item.id === requestId)
-    if (!request) return
+  async function resubmitRequest(requestId, updatedData) {
+    const request = requests.find((item) => String(item.id) === String(requestId))
+    if (!request) return { error: { message: 'Request not found' } }
 
+    const revisionEntry = {
+      rejectedAt: request.rejectedAt,
+      rejectionReason: request.rejectionReason,
+      resubmittedAt: new Date().toISOString(),
+    }
+
+    const breakdown = Array.isArray(updatedData.breakdown) ? updatedData.breakdown.map((entry) => ({
+      ...entry,
+      quantity: Number(entry.quantity) || 0,
+      unitCost: Number(entry.unitCost) || 0,
+    })) : []
+
+    const expensesBreakdown = Array.isArray(updatedData.expensesBreakdown) ? updatedData.expensesBreakdown.map((entry) => ({
+      ...entry,
+      quantity: Number(entry.quantity) || 0,
+      unitCost: Number(entry.unitCost) || 0,
+    })) : []
+
+    const revisionHistory = [...(request.revisionHistory || []), revisionEntry]
+    const amount = Number(updatedData.amount) || 0
+    const now = new Date().toISOString()
+    const eventDate = updatedData.eventDate !== undefined ? updatedData.eventDate : request.eventDate
+
+    const { data, error } = await supabase
+      .from('budget_requests')
+      .update({
+        type: updatedData.type !== undefined ? updatedData.type : request.type,
+        event: updatedData.event !== undefined ? updatedData.event : request.event,
+        category: updatedData.category !== undefined ? updatedData.category : request.category,
+        amount: amount,
+        event_date: eventDate || null,
+        venue: updatedData.venue !== undefined ? updatedData.venue : request.venue,
+        description: updatedData.description !== undefined ? updatedData.description : request.description,
+        notes: updatedData.notes !== undefined ? updatedData.notes : request.notes,
+        breakdown: breakdown,
+        expenses_breakdown: expensesBreakdown,
+        status: 'Pending',
+        project_status: 'Pending',
+        rejected_at: null,
+        rejection_reason: null,
+        resubmitted_at: revisionEntry.resubmittedAt,
+        revision_history: revisionHistory,
+        updated_at: now
+      })
+      .eq('id', requestId)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Failed to update resubmitted budget request:', error)
+      return { error }
+    }
+    
     setRequests((prev) =>
       prev.map((item) => {
-        if (item.id !== requestId) return item
-        
-        const revisionEntry = {
-          rejectedAt: item.rejectedAt,
-          rejectionReason: item.rejectionReason,
-          resubmittedAt: new Date().toISOString(),
-        }
-
-        const breakdown = Array.isArray(updatedData.breakdown) ? updatedData.breakdown.map((entry) => ({
-          ...entry,
-          quantity: Number(entry.quantity) || 0,
-          unitCost: Number(entry.unitCost) || 0,
-        })) : []
-
-        const expensesBreakdown = Array.isArray(updatedData.expensesBreakdown) ? updatedData.expensesBreakdown.map((entry) => ({
-          ...entry,
-          quantity: Number(entry.quantity) || 0,
-          unitCost: Number(entry.unitCost) || 0,
-        })) : []
-
+        if (String(item.id) !== String(requestId)) return item
         return {
           ...item,
           ...updatedData,
-          amount: Number(updatedData.amount) || 0,
+          amount: amount,
           breakdown,
           expensesBreakdown,
           status: 'Pending',
@@ -1114,7 +1222,7 @@ function BudgetProvider({ children }) {
           rejectedAt: null,
           rejectionReason: null,
           resubmittedAt: revisionEntry.resubmittedAt,
-          revisionHistory: [...(item.revisionHistory || []), revisionEntry]
+          revisionHistory: revisionHistory
         }
       })
     )
@@ -1127,13 +1235,16 @@ function BudgetProvider({ children }) {
       recordId: requestId,
       description: `Resubmitted budget request for ${updatedData.event || request.event}`,
       previousValue: { status: 'Rejected', amount: request.amount },
-      newValue: { status: 'Pending', amount: Number(updatedData.amount) || 0, event: updatedData.event || request.event },
+      newValue: { status: 'Pending', amount: amount, event: updatedData.event || request.event },
     })
+    
     addNotification({
       type: 'system',
       title: 'Budget Request Resubmitted',
       message: `Project: ${updatedData.event || request.event}\nResubmitted on: ${new Date().toLocaleDateString()}`,
     })
+    
+    return { error: null }
   }
 
   async function updateProjectStatus(requestId, newStatus) {
@@ -1422,10 +1533,14 @@ export function useBudgetCalculations(month, year) {
     const totalBudgetAmount = filteredBudgets.reduce((sum, b) => sum + Number(b.amount || 0), 0)
 
     const validExpenses = expenses.filter(e => {
-       if (e.archivedAt || e.status === 'Cancelled') return false
+       // Only count expenses that are explicitly Approved budget allocations.
+       // Excludes: Cancelled, Pending, Rejected, and direct 'Recorded' cash expenses
+       // that are not tied to an approved budget request.
+       if (e.status !== 'Approved') return false
+       if (e.archivedAt) return false
        const eDate = new Date(e.eventDate || e.date || e.approvedAt || e.createdAt)
        if (isNaN(eDate.getTime())) return false
-       
+
        if (month !== null && month !== undefined) {
          return eDate.getMonth() + 1 === month && eDate.getFullYear() === year
        }

@@ -18,8 +18,10 @@ function buildSystemPrompt(ctx) {
   } = ctx
 
   const totalBudget = totals.totalBudget ?? ctx.totalBudget ?? 0
+  const totalApprovedAllocations = totals.totalApprovedAllocations ?? ctx.totalApprovedAllocations ?? 0
   const totalExpenses = totals.totalExpenses ?? ctx.totalExpenses ?? 0
   const remaining = totals.remaining ?? ctx.remaining ?? 0
+  const remainingMonthlyAllocation = totals.remainingMonthlyAllocation ?? ctx.remainingMonthlyAllocation ?? 0
   const budgetUtilization = totals.budgetUtilization ?? ctx.budgetUtilization ?? 0
 
   const monthlySummariesText = (monthlySummaries && monthlySummaries.length > 0)
@@ -31,12 +33,12 @@ function buildSystemPrompt(ctx) {
     : (ctx.recentBudgets || []).map(b => `- Month: ${b.month} ${b.year} | Amount: ₱${Number(b.amount).toLocaleString('en-PH')}`).join('\n') || '- No individual budget entries.'
 
   const expensesText = (allExpenses && allExpenses.length > 0)
-    ? allExpenses.map(e => `- "${e.project}" | Month: ${e.month || 'Unspecified'} ${e.year} | Amount: ₱${Number(e.amount).toLocaleString('en-PH')} | Category: ${e.category} | Status: ${e.status}`).join('\n')
-    : (ctx.recentExpenses || []).map(e => `- "${e.project}" | Amount: ₱${Number(e.amount).toLocaleString('en-PH')} | Category: ${e.category}`).join('\n') || '- No expense records.'
+    ? allExpenses.map(e => `- "${e.project}" | Month: ${e.month || 'Unspecified'} ${e.year} | Approved Budget: ₱${Number(e.amount).toLocaleString('en-PH')} | Actual Expense: ₱${Number(e.actualExpense || 0).toLocaleString('en-PH')} | Category: ${e.category} | Status: ${e.status} | Progress: ${e.projectStatus || 'N/A'} | Venue: ${e.venue || 'N/A'} | Description: ${e.description || 'N/A'}`).join('\n')
+    : (ctx.recentExpenses || []).map(e => `- "${e.project}" | Approved Budget: ₱${Number(e.amount).toLocaleString('en-PH')} | Category: ${e.category}`).join('\n') || '- No expense records.'
 
   const requestsText = (allRequests && allRequests.length > 0)
-    ? allRequests.map(r => `- "${r.event}" | Month: ${r.month || 'Unspecified'} ${r.year} | Amount: ₱${Number(r.amount).toLocaleString('en-PH')} | Status: ${r.status} | Category: ${r.category}`).join('\n')
-    : (ctx.recentRequests || []).map(r => `- "${r.event}" | Amount: ₱${Number(r.amount).toLocaleString('en-PH')} | Status: ${r.status}`).join('\n') || '- No pending requests.'
+    ? allRequests.map(r => `- "${r.event}" | Month: ${r.month || 'Unspecified'} ${r.year} | Requested Amount: ₱${Number(r.amount).toLocaleString('en-PH')} | Status: ${r.status} | Category: ${r.category}`).join('\n')
+    : (ctx.recentRequests || []).map(r => `- "${r.event}" | Requested Amount: ₱${Number(r.amount).toLocaleString('en-PH')} | Status: ${r.status}`).join('\n') || '- No pending requests.'
 
   const categoriesText = (topCategories && topCategories.length > 0)
     ? topCategories.map(c => `- ${c.name}: ₱${Number(c.total).toLocaleString('en-PH')}`).join('\n')
@@ -65,8 +67,9 @@ YOU MAY ONLY ANSWER QUESTIONS ABOUT:
 - Audit Trail: User Activities, Approvals, Budget Modifications, System Actions
 - User Guidance: How to create a budget request, upload receipts, generate reports, update a profile, use AI Analysis, manage projects/events/payroll/documents
 
-IF THE USER ASKS ANYTHING UNRELATED TO THE CUENTA SYSTEM (e.g., general knowledge, trivia, math problems, weather, sports, entertainment, programming tutorials, jokes, poems, science, history, politics, or any topic not listed above), YOU MUST RESPOND WITH EXACTLY:
-"I'm Cue, the AI assistant for the Cuenta: SK Budget Monitoring and Document Tracking with AI Analysis system. I can only assist with questions related to this system, such as budgets, expenses, projects, events, payroll, documents, reports, AI Analysis, and system features. Please ask a question related to the Cuenta system."
+IF THE USER ASKS ANYTHING UNRELATED TO THE CUENTA SYSTEM (e.g., general knowledge, trivia, math problems, weather, sports, entertainment, programming tutorials, jokes, poems, science, history, politics, or any topic not listed above), respond with the out-of-scope message in the SAME LANGUAGE the user used:
+- English: "I'm Cue, the AI assistant for the Cuenta: SK Budget Monitoring and Document Tracking with AI Analysis system. I can only assist with questions related to this system, such as budgets, expenses, projects, events, payroll, documents, reports, AI Analysis, and system features. Please ask a question related to the Cuenta system."
+- Tagalog: "Ako si Cue, ang AI assistant ng Cuenta: SK Budget Monitoring and Document Tracking with AI Analysis system. Maaari lamang akong sumagot sa mga tanong na may kinalaman sa sistemang ito, tulad ng mga badyet, gastos, proyekto, events, payroll, dokumento, ulat, AI Analysis, at mga feature ng sistema. Mangyaring magtanong ng may kaugnayan sa Cuenta system."
 
 DO NOT attempt to answer unrelated questions under any circumstances. DO NOT provide general knowledge answers even if you know them.
 
@@ -86,11 +89,12 @@ ${expensesText}
 4. BUDGET REQUESTS:
 ${requestsText}
 
-5. OVERALL ANNUAL / TOTAL SYSTEM SUMMARY (USE ONLY WHEN ASKED FOR TOTAL / ANNUAL / OVERALL BUDGET):
-- Overall Total Budget (All Months Combined): ₱${Number(totalBudget).toLocaleString('en-PH')}
-- Overall Total Expenses: ₱${Number(totalExpenses).toLocaleString('en-PH')}
-- Overall Remaining Balance: ₱${Number(remaining).toLocaleString('en-PH')}
-- Overall Budget Utilization: ${budgetUtilization}%
+5. OVERALL ANNUAL / TOTAL SYSTEM SUMMARY (USE ONLY WHEN ASKED FOR TOTAL / ANNUAL / OVERALL):
+- Overall Total Budget (Sum of ALL Monthly Budgets entered by SK Treasurer): ₱${Number(totalBudget).toLocaleString('en-PH')}
+- Overall Total Approved Budget Allocations (Sum of ALL Approved Budget Requests — Projects, Events, Payroll): ₱${Number(totalApprovedAllocations).toLocaleString('en-PH')}
+- Overall Remaining Unallocated Budget (Total Budget minus Approved Allocations): ₱${Number(remainingMonthlyAllocation).toLocaleString('en-PH')}
+- Overall Recorded Expenses (Actual expenses from requisitions and receipts): ₱${Number(totalExpenses).toLocaleString('en-PH')}
+- Overall Budget Utilization (Approved Allocations ÷ Total Budget): ${budgetUtilization}%
 
 ================================================================
 STRICT FILTERING & RESPONSE ACCURACY RULES:
@@ -120,6 +124,19 @@ STRICT FILTERING & RESPONSE ACCURACY RULES:
    - If the user specifies a YEAR (e.g., "2025", "What is the budget for 2025?"), FILTER BY THAT EXACT YEAR.
    - If ZERO budget entries exist for that requested year (e.g. 2025), YOU MUST RESPOND: "No monthly budget has been recorded for 2025."
    - NEVER return 2026 data, ₱100,000, or overall totals from another year when a specific year (like 2025) is asked!
+
+5b. **CRITICAL: NEVER CONFUSE TOTAL BUDGET WITH APPROVED ALLOCATIONS**:
+   These are COMPLETELY DIFFERENT values. Mixing them up is a serious financial error.
+   - **Total Budget** = the sum of all Monthly Budgets entered by the SK Treasurer (e.g., July ₱50,000 + August ₱70,000 + September ₱50,000 = ₱170,000). Use the value labeled "Overall Total Budget" above.
+   - **Approved Budget Allocations** = the sum of all approved budget requests for Projects, Events, and Payroll (e.g., ₱91,000). Use the value labeled "Overall Total Approved Budget Allocations" above.
+   - **Remaining Unallocated Budget** = Total Budget MINUS Approved Allocations (e.g., ₱170,000 − ₱91,000 = ₱79,000). Use the value labeled "Overall Remaining Unallocated Budget" above.
+   - **Recorded Expenses** = the actual expenses filed under requisitions and receipts. This is separate from approved allocations.
+   - ALWAYS use the CORRECT value for the user's question:
+     * "What is the total budget?" → Use Total Budget (sum of monthly budgets).
+     * "How much has been approved / allocated?" → Use Total Approved Budget Allocations.
+     * "How much budget is remaining / available?" → Use Remaining Unallocated Budget.
+     * "How much has been spent / recorded expenses?" → Use Recorded Expenses.
+   - NEVER answer a "total budget" question with the approved allocations amount.
 
 7. **INTELLIGENT BUDGET ALLOCATION & PROJECT RECOMMENDATIONS (AI FINANCIAL ADVISOR MODE)**:
    When the user asks for suggestions, recommendations, allocation advice, project ideas, or how to spend/use the budget:
@@ -161,10 +178,24 @@ STRICT FILTERING & RESPONSE ACCURACY RULES:
 
    D. NEVER give generic advice like "spend wisely" or "manage your budget carefully." Every recommendation must reference actual numbers from the data.
 
-8. **TONE & FORMAT**:
+8. **LANGUAGE DETECTION & RESPONSE LANGUAGE (MANDATORY)**:
+   - BEFORE writing any response, detect the primary language of the user's message.
+   - If the message is primarily **English**: respond entirely in English.
+   - If the message is primarily **Tagalog/Filipino**: respond entirely in Tagalog.
+   - If the message is **Taglish** (a natural mix of both): respond in the same natural Taglish style.
+   - If the user switches languages mid-conversation, immediately adapt to the new language.
+   - NEVER respond in a different language than the one the user is currently using.
+   - Financial and system terms (e.g., "Approved Budget", "Budget Utilization", "Payroll", "Remaining Balance", "AI Analysis") may remain in English within Tagalog or Taglish responses, as these are official system terms. Everything else must follow the detected language.
+   - Example (English): "There are 4 approved projects for August 2026."
+   - Example (Tagalog): "Mayroong 4 na approved na proyekto para sa Agosto 2026."
+   - Example (Taglish): "May 4 approved projects para sa August 2026."
+   - ALL responses including insights, recommendations, errors, and empty-state messages must follow this language rule.
+
+9. **TONE & FORMAT**:
    - Plain text only. Always use Philippine Peso symbol (₱) with formatted commas (e.g., ₱50,000.00).
    - Keep replies concise, friendly, warm, and accurate to the requested period.
    - When providing recommendations, organize them clearly with sections but keep the overall length reasonable.
+   - Regardless of language, maintain a professional, polite, and respectful tone at all times.
 `
 }
 

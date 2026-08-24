@@ -3,6 +3,9 @@ import { useAuth } from '../context/AuthContext'
 import { useBudget } from '../context/BudgetContext'
 import CurrencyInput from '../components/CurrencyInput'
 import YearSpinner from '../components/YearSpinner'
+import PaginationControls from '../components/PaginationControls'
+
+const BUDGETS_PAGE_SIZE = 2
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -44,13 +47,15 @@ function BudgetsPage() {
   const [amount, setAmount] = useState('')
   const [sourceOption, setSourceOption] = useState('')
   const [customSource, setCustomSource] = useState('')
+  const [description, setDescription] = useState('')
   const [viewMode, setViewMode] = useState('monthly')
   const [filterMonth, setFilterMonth] = useState(initialMonth)
   const [filterQuarter, setFilterQuarter] = useState(Math.floor((initialMonth - 1) / 3) + 1)
   const [filterYear, setFilterYear] = useState(now.getFullYear())
+  const [budgetPage, setBudgetPage] = useState(1)
   const canEdit = role === 'SK Treasurer'
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
 
     if (!canEdit) {
@@ -64,54 +69,50 @@ function BudgetsPage() {
 
     const finalSource = sourceOption === 'Other' ? customSource : sourceOption
 
-    addMonthlyBudget({
+    const result = await addMonthlyBudget({
       month,
       year,
       amount: cleanedAmount,
       source: finalSource || '',
+      description: description.trim(),
     })
+
+    if (result?.error) return
 
     setAmount('')
     setSourceOption('')
     setCustomSource('')
+    setDescription('')
+    setBudgetPage(1)
   }
 
   const displayedBudgets = useMemo(() => {
-    let filtered = budgets.filter(b => b.year === filterYear);
+    let filtered = budgets.filter(b => Number(b.year) === Number(filterYear));
     
     if (viewMode === 'monthly') {
-      filtered = filtered.filter(b => b.month === filterMonth);
-      return filtered.map(b => ({
+      filtered = filtered.filter(b => Number(b.month) === Number(filterMonth));
+    } else {
+      filtered = filtered.filter(b => Number(b.quarter) === Number(filterQuarter));
+    }
+
+    return filtered
+      .map(b => ({
         ...b,
         periodLabel: monthOptions.find(m => m.value === b.month)?.label || `Month ${b.month}`
       }))
-    } else {
-      filtered = filtered.filter(b => b.quarter === filterQuarter);
-      // Aggregate by quarter and year
-      const aggregated = {};
-      filtered.forEach(b => {
-        const key = `${b.year}-Q${b.quarter}`;
-        if (!aggregated[key]) {
-          aggregated[key] = {
-            id: key,
-            quarter: b.quarter,
-            year: b.year,
-            amount: 0,
-            createdAt: b.createdAt,
-            periodLabel: quarterOptions.find(q => q.value === b.quarter)?.label || `Q${b.quarter}`
-          }
-        }
-        aggregated[key].amount += b.amount;
-        if (new Date(b.createdAt) > new Date(aggregated[key].createdAt)) {
-          aggregated[key].createdAt = b.createdAt;
-        }
-      });
-      return Object.values(aggregated).sort((a, b) => {
-        if (a.year !== b.year) return b.year - a.year;
-        return b.quarter - a.quarter;
-      });
-    }
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
   }, [budgets, viewMode, filterMonth, filterQuarter, filterYear])
+
+  const displayedTotal = useMemo(
+    () => displayedBudgets.reduce((sum, budget) => sum + (Number(budget.amount) || 0), 0),
+    [displayedBudgets],
+  )
+  const budgetTotalPages = Math.max(1, Math.ceil(displayedBudgets.length / BUDGETS_PAGE_SIZE))
+  const safeBudgetPage = Math.min(budgetPage, budgetTotalPages)
+  const paginatedBudgets = useMemo(() => {
+    const start = (safeBudgetPage - 1) * BUDGETS_PAGE_SIZE
+    return displayedBudgets.slice(start, start + BUDGETS_PAGE_SIZE)
+  }, [displayedBudgets, safeBudgetPage])
 
   return (
     <>
@@ -154,7 +155,7 @@ function BudgetsPage() {
                   </div>
                 </label>
                 <label className="field">
-                  <span>Total budget (PHP)</span>
+                  <span>Allocation amount (PHP)</span>
                   <CurrencyInput
                     value={amount}
                     onValueChange={(val) => setAmount(val)}
@@ -189,6 +190,15 @@ function BudgetsPage() {
                     />
                   </label>
                 )}
+                <label className="field">
+                  <span>Description (Optional)</span>
+                  <textarea
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    placeholder="Purpose or notes for this allocation"
+                    rows={3}
+                  />
+                </label>
               </div>
               <button type="submit" className="primary-button" style={{ alignSelf: 'flex-start', padding: '10px 24px' }}>
                 Save Budget
@@ -211,6 +221,9 @@ function BudgetsPage() {
             <div>
               <p className="eyebrow">History</p>
               <h2 style={{ margin: 0 }}>Recorded budgets</h2>
+              <p className="form-note" style={{ margin: '6px 0 0' }}>
+                {displayedBudgets.length} allocation{displayedBudgets.length === 1 ? '' : 's'} · {currency.format(displayedTotal)} total
+              </p>
             </div>
             <div className="card-header-controls">
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -223,6 +236,7 @@ function BudgetsPage() {
                     } else {
                       setFilterQuarter(val);
                     }
+                    setBudgetPage(1)
                   }}
                   className="filter-select panel-select"
                 >
@@ -232,7 +246,13 @@ function BudgetsPage() {
                     <option key={q.value} value={q.value}>{q.label}</option>
                   ))}
                 </select>
-                <YearSpinner year={filterYear} onYearChange={setFilterYear} />
+                <YearSpinner
+                  year={filterYear}
+                  onYearChange={(nextYear) => {
+                    setFilterYear(nextYear)
+                    setBudgetPage(1)
+                  }}
+                />
               </div>
               <div className="page-tabs" role="tablist">
                 <button
@@ -240,7 +260,10 @@ function BudgetsPage() {
                   type="button"
                   role="tab"
                   aria-selected={viewMode === 'monthly'}
-                  onClick={() => setViewMode('monthly')}
+                  onClick={() => {
+                    setViewMode('monthly')
+                    setBudgetPage(1)
+                  }}
                 >
                   Monthly
                 </button>
@@ -249,7 +272,10 @@ function BudgetsPage() {
                   type="button"
                   role="tab"
                   aria-selected={viewMode === 'quarterly'}
-                  onClick={() => setViewMode('quarterly')}
+                  onClick={() => {
+                    setViewMode('quarterly')
+                    setBudgetPage(1)
+                  }}
                 >
                   Quarterly
                 </button>
@@ -258,7 +284,7 @@ function BudgetsPage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
             {displayedBudgets.length ? (
-              displayedBudgets.map((budget) => (
+              paginatedBudgets.map((budget) => (
                 <div key={budget.id} style={{ border: '1px solid var(--line)', borderRadius: 'var(--radius-surface)', padding: '24px', backgroundColor: 'var(--surface)', boxShadow: 'var(--shadow)', display: 'flex', flexDirection: 'column' }}>
                   
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
@@ -275,20 +301,22 @@ function BudgetsPage() {
                       <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Budget Amount</p>
                       <p style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: 'var(--positive)' }}>{currency.format(budget.amount)}</p>
                     </div>
-                    {viewMode === 'monthly' && (
-                      <div>
-                        <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Budget Source</p>
-                        <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{budget.source || 'Not Specified'}</p>
-                      </div>
-                    )}
                     <div>
-                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>{viewMode === 'monthly' ? 'Date Recorded' : 'Last Updated'}</p>
-                      <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{new Date(budget.createdAt).toLocaleDateString()}</p>
+                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Budget Source</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{budget.source || 'Not Specified'}</p>
                     </div>
                     <div>
-                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Recorded By</p>
-                      <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>SK Treasurer</p>
+                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Date Added</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{new Date(budget.createdAt).toLocaleString()}</p>
                     </div>
+                    <div>
+                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Added By</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{budget.addedBy || 'SK Treasurer'}</p>
+                    </div>
+                  </div>
+                  <div style={{ borderTop: '1px solid var(--line)', paddingTop: '12px' }}>
+                    <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Description</p>
+                    <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{budget.description || 'No description provided'}</p>
                   </div>
                 </div>
               ))
@@ -298,6 +326,14 @@ function BudgetsPage() {
               </div>
             )}
           </div>
+          <PaginationControls
+            currentPage={safeBudgetPage}
+            totalPages={budgetTotalPages}
+            totalItems={displayedBudgets.length}
+            pageSize={BUDGETS_PAGE_SIZE}
+            onPageChange={setBudgetPage}
+            idPrefix="budgets"
+          />
         </div>
       </section>
     </>

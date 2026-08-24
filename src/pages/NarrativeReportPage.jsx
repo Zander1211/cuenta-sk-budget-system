@@ -315,12 +315,20 @@ function NarrativeReportPage() {
 
   async function handleSaveDocument(previewData) {
     if (!previewData) return
+    const documentType = previewData.printMode === 'photos'
+      ? 'Photo Documentation'
+      : previewData.printMode === 'both'
+        ? 'Narrative Report & Photo Documentation'
+        : 'Narrative Report'
+
     await addDocument({
-      name: `Narrative Report - ${projectTitle || 'Untitled'}`,
+      name: `${documentType} - ${projectTitle || 'Untitled'}`,
       project: projectTitle || '',
       generatedBy: profileName || role,
-      type: 'Narrative Report',
-      data: previewData,
+      type: documentType,
+      data: { type: 'narrative', data: previewData },
+      relatedEntityType: selectedRequest ? 'request' : null,
+      relatedEntityId: selectedRequest?.id || null,
     })
   }
 

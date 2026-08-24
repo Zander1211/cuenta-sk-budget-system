@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
+  ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from 'recharts'
 import {
   Wallet,
@@ -27,6 +27,7 @@ import {
   useCategoryAnalysis,
   useMonthlyTrend,
   useBudgetVsActual,
+  useApprovedBudgetDistribution,
 } from '../../hooks/useAnalysisData'
 import { useAnalysisAI } from '../../hooks/useAnalysisAI'
 import { AnalysisLayout, AnalysisFilterBar } from '../../components/analysis/AnalysisLayout'
@@ -39,7 +40,9 @@ import {
   CHART_COLORS,
   CHART_INK,
   pesoTick,
+  colorForCategory,
 } from '../../utils/analytics'
+import { exportAiAnalysisPdf } from '../../utils/exportPdf'
 
 
 const BREADCRUMB = [{ label: 'Home', to: '/dashboard' }, { label: 'Financial Analysis' }]
@@ -57,8 +60,12 @@ export default function AnalysisOverviewPage() {
   const summary = useFinancialSummary(filters)
   const category = useCategoryAnalysis(filters)
   const trend = useMonthlyTrend(filters)
+  const dist = useApprovedBudgetDistribution(filters)
   const yearFilters = useMemo(() => ({ ...filters, view: 'yearly' }), [filters])
   const bva = useBudgetVsActual(yearFilters)
+
+  const [exporting, setExporting] = useState(false)
+  const distChartRef = useRef(null)
 
   const label = periodLabel(filters)
   const hasData = summary.hasAnyData
@@ -86,8 +93,9 @@ export default function AnalysisOverviewPage() {
         name: c.name,
         total: Math.round(c.value),
       })),
+      budgetDistribution: dist.distribution.map(d => ({ name: d.name, value: d.value }))
     }),
-    [summary, category.categories, trend.trend.direction, label]
+    [summary, category.categories, trend.trend.direction, label, dist.distribution]
   )
 
   const ai = useAnalysisAI(aiPayload, { fallback: fallbackInsights, enabled: hasData })
@@ -164,11 +172,11 @@ export default function AnalysisOverviewPage() {
   }, [bva.monthly])
 
   const trendData = useMemo(() => {
-    return trend.activeRows.map((r) => ({
+    return trend.rows.map((r) => ({
       month: r.month,
       Spending: r.total,
     }))
-  }, [trend.activeRows])
+  }, [trend.rows])
 
   // Spending Highlights 4 compact cards
   const spendingHighlights = useMemo(() => {
@@ -310,11 +318,112 @@ export default function AnalysisOverviewPage() {
     })
   }, [ai.recommendations, summary, category])
 
+  const distPieData = useMemo(() =>
+    dist.distribution.map((d, index) => ({
+      name: d.name,
+      value: d.value,
+      color: colorForCategory(d.name, index)
+    })),
+    [dist.distribution]
+  )
+
+  const distAiSummary = useMemo(() => {
+    if (!dist.distribution.length) return null;
+    const highest = dist.distribution[0];
+    const lowest = dist.distribution[dist.distribution.length - 1];
+    const highPct = ((highest.value / dist.total) * 100).toFixed(0);
+    const lowPct = ((lowest.value / dist.total) * 100).toFixed(0);
+    
+    if (dist.distribution.length === 1) {
+      return `${highest.name} received the entire approved budget allocation for this period, accounting for 100% of the total approved budget.`
+    }
+    
+    return `${highest.name} received the highest approved budget allocation for this period, accounting for ${highPct}% of the total approved budget. ${lowest.name} has the lowest allocation, representing ${lowPct}% of the total approved budget.`
+  }, [dist.distribution, dist.total])
+
+  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+    if (percent < 0.05) return null; // Hide label for very small slices
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
+    const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight="bold">
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
+
+  const CustomPieTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const percent = ((data.value / dist.total) * 100).toFixed(1);
+      return (
+        <div className="an-tooltip" style={{ background: '#fff', border: '1px solid var(--cuenta-border)', padding: '12px', borderRadius: '8px', boxShadow: 'var(--cuenta-shadow)' }}>
+          <p style={{ margin: '0 0 8px 0', fontWeight: 'bold', color: 'var(--cuenta-text-heading)' }}>{data.name}</p>
+          <p style={{ margin: '4px 0', fontSize: '13px', color: 'var(--cuenta-text-secondary)' }}>Approved Budget: <strong style={{ color: 'var(--cuenta-text-heading)' }}>{formatCurrency(data.value)}</strong></p>
+          <p style={{ margin: '4px 0', fontSize: '13px', color: 'var(--cuenta-text-secondary)' }}>Percentage: <strong style={{ color: 'var(--cuenta-text-heading)' }}>{percent}%</strong></p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const renderDetailedLegend = (props) => {
+    const { payload } = props;
+    return (
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {payload.map((entry, index) => {
+          const d = distPieData.find(x => x.name === entry.value);
+          if (!d) return null;
+          const percent = ((d.value / dist.total) * 100).toFixed(0);
+          return (
+            <li key={`item-${index}`} style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: 'var(--cuenta-text-secondary)' }}>
+              <span style={{ backgroundColor: entry.color, width: 12, height: 12, borderRadius: '50%', display: 'inline-block', marginRight: 10, flexShrink: 0 }}></span>
+              <span style={{ flexGrow: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginRight: '8px' }}>{entry.value}</span>
+              <span style={{ fontWeight: '500', color: 'var(--cuenta-text-heading)', whiteSpace: 'nowrap' }}>{formatCurrency(d.value)} ({percent}%)</span>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
+
+  async function handleExportPdf() {
+    if (exporting || !dist.hasData) return
+    setExporting(true)
+    try {
+      await exportAiAnalysisPdf({
+        chartRef: distChartRef.current,
+        distribution: dist.distribution,
+        total: dist.total,
+        aiSummary: distAiSummary,
+        filters,
+      })
+    } catch (err) {
+      console.error('PDF export failed:', err)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <AnalysisLayout
       breadcrumb={BREADCRUMB}
       title="Financial Analysis & AI Insights"
       description="Consolidated intelligence on budgets, spending velocity, category concentrations, and AI-driven risk detection."
+      headerActions={
+        hasData && dist.hasData && (
+          <button
+            type="button"
+            className="an-btn an-btn-outline"
+            onClick={handleExportPdf}
+            disabled={exporting}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            {exporting ? 'Exporting...' : 'Export AI Analysis PDF'}
+          </button>
+        )
+      }
       filterBar={
         <AnalysisFilterBar
           filters={filters}
@@ -423,7 +532,7 @@ export default function AnalysisOverviewPage() {
 
                 <div className="an-chart-body">
                   {bvaData.length ? (
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height={250}>
                       <BarChart data={bvaData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }} barGap={4}>
                         <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
                         <XAxis dataKey="month" tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />
@@ -453,8 +562,62 @@ export default function AnalysisOverviewPage() {
                 </div>
               </div>
 
-              {/* Card 2: Monthly Spending Trend */}
-              <div className="an-chart-card">
+              {/* Card 2: Approved Budget Distribution (Pie Chart) */}
+              <div className="an-chart-card" ref={distChartRef} data-pdf-capture="full">
+                <div className="an-chart-head">
+                  <div>
+                    <h3 className="an-chart-title">Approved Budget Distribution</h3>
+                    <p className="an-chart-desc">Breakdown by category for the selected period</p>
+                  </div>
+                </div>
+                <div className="an-chart-body" style={{ padding: '0 12px' }}>
+                  {distPieData.length ? (
+                    <div className="an-pie-inner">
+                      <div style={{ height: '260px' }}>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <PieChart>
+                            <Pie
+                              data={distPieData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={65}
+                              outerRadius={105}
+                              paddingAngle={2}
+                              dataKey="value"
+                              nameKey="name"
+                              label={renderCustomizedLabel}
+                              labelLine={false}
+                            >
+                              {distPieData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip content={<CustomPieTooltip />} cursor={{ fill: CHART_INK.cursor }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div style={{ maxHeight: '260px', overflowY: 'auto', paddingRight: '8px' }}>
+                        {renderDetailedLegend({ payload: distPieData.map(d => ({ value: d.name, color: d.color })) })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', fontSize: '0.9rem' }}>
+                      No approved budget data available
+                    </div>
+                  )}
+                </div>
+                <div className="an-chart-footer" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '16px', background: 'var(--surface-50)' }}>
+                  {distAiSummary && (
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--ink-2)', lineHeight: 1.5 }}>
+                      <strong>AI Summary:</strong> {distAiSummary}
+                    </p>
+                  )}
+                  <span style={{ fontSize: '0.75rem', color: 'var(--ink-4)', marginTop: '4px' }}>Updated for {label}</span>
+                </div>
+              </div>
+
+              {/* Card 3: Monthly Spending Trend */}
+              <div className="an-chart-card an-chart-card--wide">
                 <div className="an-chart-head">
                   <div>
                     <h3 className="an-chart-title">Monthly Spending Trend</h3>
@@ -464,7 +627,7 @@ export default function AnalysisOverviewPage() {
 
                 <div className="an-chart-body">
                   {trendData.length ? (
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height={250}>
                       <LineChart data={trendData} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
                         <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
                         <XAxis dataKey="month" tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />

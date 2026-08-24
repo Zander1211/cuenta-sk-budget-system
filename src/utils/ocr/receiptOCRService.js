@@ -10,6 +10,8 @@
  * receipts never downloads it.
  */
 
+import { parseReceiptText } from './receiptParser'
+
 let workerPromise = null
 
 /**
@@ -76,9 +78,12 @@ export async function recognizeWithFallback({ enhanced, fallback }, options = {}
   const { onProgress, confidenceFloor = 55 } = options
 
   const primary = await recognizeReceipt(enhanced, { onProgress })
+  const primaryQuality = scoreRecognition(primary)
 
   const looksWeak =
-    primary.confidence < confidenceFloor || primary.text.replace(/\s/g, '').length < 12
+    primary.confidence < confidenceFloor
+    || primary.text.replace(/\s/g, '').length < 12
+    || primaryQuality.totalLabelScore < 100
 
   if (!looksWeak || !fallback) {
     return { ...primary, usedFallback: false }
@@ -86,7 +91,8 @@ export async function recognizeWithFallback({ enhanced, fallback }, options = {}
 
   try {
     const secondary = await recognizeReceipt(fallback, { onProgress })
-    if (secondary.confidence > primary.confidence) {
+    const secondaryQuality = scoreRecognition(secondary)
+    if (secondaryQuality.score > primaryQuality.score) {
       return { ...secondary, usedFallback: true }
     }
   } catch (error) {
@@ -94,6 +100,31 @@ export async function recognizeWithFallback({ enhanced, fallback }, options = {}
   }
 
   return { ...primary, usedFallback: false }
+}
+
+/**
+ * OCR confidence alone can prefer beautifully recognised cash/change text
+ * over a noisier pass that actually found GRAND TOTAL. Parsing both passes
+ * lets the financially relevant fields decide first, with raw confidence used
+ * only as a supporting signal.
+ */
+function scoreRecognition(result) {
+  const parsed = parseReceiptText(result?.text || '', { confidence: result?.confidence })
+  const totalLabelScore = Number(parsed.selectedTotalCandidate?.score || 0)
+  const populatedCoreFields = [
+    parsed.organization,
+    parsed.receiptNumber,
+    parsed.date,
+    parsed.totalAmount,
+  ].filter(value => value !== null && value !== '').length
+
+  return {
+    totalLabelScore,
+    score: (totalLabelScore * 5)
+      + (parsed.totalAmount !== null ? 50 : 0)
+      + (populatedCoreFields * 8)
+      + Number(result?.confidence || 0),
+  }
 }
 
 /**

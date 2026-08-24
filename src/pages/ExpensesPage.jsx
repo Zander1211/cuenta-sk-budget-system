@@ -9,8 +9,12 @@ import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUpl
 import ReceiptPrintPreview from '../components/ReceiptPrintPreview'
 import CurrencyInput from '../components/CurrencyInput'
 import YearSpinner from '../components/YearSpinner'
-import { getBreakdownTotal } from '../utils/budgetUtils'
+import { getBreakdownTotal, getRecordPeriod } from '../utils/budgetUtils'
 import BudgetBreakdownTable from '../components/BudgetBreakdownTable'
+import PaginationControls from '../components/PaginationControls'
+import { calculateProjectEventFinancials, formatUtilization, summarizeApprovedBudgetFinancials } from '../utils/projectEventFinancials'
+
+const EXPENSES_PAGE_SIZE = 10
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -23,13 +27,23 @@ const monthLabels = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
+// eventDate is the date picked on the original budget request; date falls
+// back to it (or the approval timestamp) for older requests with no date.
+function formatScheduledDate(expense) {
+  const raw = expense.eventDate || expense.date
+  if (!raw) return 'Not scheduled'
+  const d = new Date(raw)
+  if (isNaN(d.getTime())) return 'Not scheduled'
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
 
 
 function ExpensesPage() {
   const {
     expenses,
-    budgets,
     expensesSyncStatus,
+    verifiedReceiptTotals,
     refreshExpensesFromSupabase,
     archiveExpense,
     restoreExpense,
@@ -47,16 +61,34 @@ function ExpensesPage() {
   const [dateFilter, setDateFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState('All')
+  const [expensePage, setExpensePage] = useState(1)
   const [expanded, setExpanded] = useState({})
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [isAddingExpense, setIsAddingExpense] = useState(false)
   const [addExpenseForm, setAddExpenseForm] = useState({
     parentProjectId: '',
+    category: 'Other',
     description: '',
     amount: '',
     date: '',
     remarks: '',
   })
+
+  const recordableProjectEvents = useMemo(() => (
+    expenses
+      .filter((expense) => {
+        const type = String(expense.type || 'Project').toLowerCase()
+        const status = String(expense.status || 'Approved').toLowerCase()
+        return !expense.isAdditional
+          && !expense.archivedAt
+          && ['project', 'event', 'payroll'].includes(type)
+          && ['approved', 'released'].includes(status)
+      })
+      .sort((a, b) => (
+        String(a.event || a.project || '').localeCompare(String(b.event || b.project || ''))
+      ))
+  ), [expenses])
 
   // Receipt upload state
   const [filesById, setFilesById] = useState({})
@@ -93,31 +125,82 @@ function ExpensesPage() {
     'Other',
   ]
 
-  function handleAddExpenseSubmit(e) {
+  async function handleAddExpenseSubmit(e) {
     e.preventDefault()
-    
-    const parentExpense = expenses.find(ex => ex.id === addExpenseForm.parentProjectId)
-    if (!parentExpense) return
-    
-    addExpense({
-      isAdditional: true,
-      parentProjectId: parentExpense.id,
-      project: parentExpense.project || parentExpense.event,
-      category: parentExpense.category || 'Other',
-      description: addExpenseForm.description,
-      amount: Number(addExpenseForm.amount) || 0,
-      date: addExpenseForm.date,
-      remarks: addExpenseForm.remarks,
-    })
-    
-    setIsAddModalOpen(false)
-    setAddExpenseForm({
-      parentProjectId: '',
-      description: '',
-      amount: '',
-      date: '',
-      remarks: '',
-    })
+    if (isAddingExpense) return
+
+    const parentExpense = recordableProjectEvents.find(
+      (expense) => String(expense.id) === String(addExpenseForm.parentProjectId),
+    )
+    const description = addExpenseForm.description.trim()
+    const remarks = addExpenseForm.remarks.trim()
+    const amount = Number(addExpenseForm.amount) || 0
+
+    if (!parentExpense) {
+      addNotification({
+        type: 'error',
+        title: 'Select an approved record',
+        message: 'Choose the approved Project, Event, or Payroll that owns this requisition.',
+      })
+      return
+    }
+
+    if (!description || !addExpenseForm.date || amount <= 0) {
+      addNotification({
+        type: 'error',
+        title: 'Complete the Expense Details',
+        message: 'Enter a description, an amount greater than zero, and the date incurred.',
+      })
+      return
+    }
+
+    setIsAddingExpense(true)
+
+    try {
+      const result = await addExpense({
+        isAdditional: true,
+        parentProjectId: parentExpense.id,
+        type: parentExpense.type,
+        category: addExpenseForm.category || 'Other',
+        description,
+        amount,
+        date: addExpenseForm.date,
+        remarks,
+      })
+
+      if (result?.error) {
+        addNotification({
+          type: 'error',
+          title: 'Expense Not Recorded',
+          message: result.error.message || 'The expense could not be saved.',
+        })
+        return
+      }
+
+      await refreshExpensesFromSupabase()
+      setIsAddModalOpen(false)
+      setAddExpenseForm({
+        parentProjectId: '',
+        category: 'Other',
+        description: '',
+        amount: '',
+        date: '',
+        remarks: '',
+      })
+      addNotification({
+        type: 'system',
+        title: 'Requisition recorded',
+        message: `The requisition was added under ${parentExpense.event || parentExpense.project}; its receipts and utilization remain consolidated there.`,
+      })
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        title: 'Expense Not Recorded',
+        message: error?.message || 'The expense could not be saved.',
+      })
+    } finally {
+      setIsAddingExpense(false)
+    }
   }
 
   // Fetch receipt counts from receipt_records
@@ -127,16 +210,37 @@ function ExpensesPage() {
     if (!expenseIds.length) return
 
     ;(async () => {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('receipt_records')
-        .select('record_id')
+        .select('record_id, requisition_id')
         .in('record_id', expenseIds)
+
+      if (error) {
+        const legacy = await supabase
+          .from('receipt_records')
+          .select('record_id')
+          .in('record_id', expenseIds)
+        data = legacy.data
+        error = legacy.error
+      }
 
       if (!error && data && mounted) {
         const counts = {}
         data.forEach(row => {
           const key = String(row.record_id)
           counts[key] = (counts[key] || 0) + 1
+          if (row.requisition_id) {
+            const requisitionKey = String(row.requisition_id)
+            counts[requisitionKey] = (counts[requisitionKey] || 0) + 1
+          } else {
+            const legacyRequisition = expenses.find(expense => (
+              expense.isAdditional && String(expense.id) === key
+            ))
+            if (legacyRequisition?.parentProjectId) {
+              const parentKey = String(legacyRequisition.parentProjectId)
+              counts[parentKey] = (counts[parentKey] || 0) + 1
+            }
+          }
         })
         setReceiptLinks(counts)
       }
@@ -176,8 +280,22 @@ function ExpensesPage() {
       const matchesStatus =
         statusFilter === 'All' || resolvedStatus === statusFilter
       return matchesProject && matchesDate && matchesCategory && matchesStatus
+    }).sort((a, b) => {
+      const newest = new Date(b.createdAt || b.approvedAt || b.date || 0).getTime()
+      const oldest = new Date(a.createdAt || a.approvedAt || a.date || 0).getTime()
+      return newest - oldest
     })
   }, [expenses, projectFilter, dateFilter, categoryFilter, statusFilter])
+
+  const expenseTotalPages = Math.max(1, Math.ceil(activeExpenses.length / EXPENSES_PAGE_SIZE))
+  const safeExpensePage = Math.min(expensePage, expenseTotalPages)
+  const paginatedActiveExpenses = useMemo(() => {
+    const start = (safeExpensePage - 1) * EXPENSES_PAGE_SIZE
+    return activeExpenses.slice(start, start + EXPENSES_PAGE_SIZE)
+  }, [activeExpenses, safeExpensePage])
+  const hasExpenseFilters = Boolean(
+    projectFilter || dateFilter || categoryFilter !== 'All' || statusFilter !== 'All'
+  )
 
   const archivedExpenses = useMemo(() => {
     return expenses.filter((expense) => {
@@ -215,14 +333,19 @@ function ExpensesPage() {
 
   // Budget breakdown data for selected quarter
   const breakdownData = useMemo(() => {
-    const quarterExpenses = expenses.filter((expense) => {
-      if (expense.archivedAt) return false
-      const dateStr = expense.eventDate || expense.date || expense.approvedAt
-      if (!dateStr) return false
-      const d = new Date(dateStr)
-      const q = Math.floor(d.getMonth() / 3) + 1
-      return d.getFullYear() === breakdownYear && q === breakdownQuarter
-    })
+    const yearlyFinancials = summarizeApprovedBudgetFinancials(
+      expenses,
+      verifiedReceiptTotals,
+      { view: 'yearly', year: breakdownYear },
+    )
+    const quarterRecords = yearlyFinancials.records
+      .filter((expense) => {
+        const period = getRecordPeriod(expense)
+        return period && Math.floor((period.month - 1) / 3) + 1 === breakdownQuarter
+      })
+    const quarterExpenses = quarterRecords
+      .map((record) => ({ ...record, amount: record.totalExpenses }))
+      .filter((expense) => Number(expense.amount) > 0)
 
     const totalSpent = quarterExpenses.reduce(
       (sum, e) => sum + (Number(e.amount) || 0), 0
@@ -241,15 +364,16 @@ function ExpensesPage() {
     const byMonth = {}
     const startMonth = (breakdownQuarter - 1) * 3
     for (let i = 0; i < 3; i++) {
-        byMonth[startMonth + i] = { total: 0, items: [], categories: {} }
+        byMonth[startMonth + i] = { total: 0, budget: 0, remaining: 0, items: [], categories: {} }
     }
     quarterExpenses.forEach((e) => {
-      const dateStr = e.eventDate || e.date || e.approvedAt
-      if (!dateStr) return
-      const d = new Date(dateStr)
-      const m = d.getMonth()
+      const period = getRecordPeriod(e)
+      if (!period) return
+      const m = period.month - 1
       if (byMonth[m]) {
           byMonth[m].total += Number(e.amount) || 0
+          byMonth[m].budget += Number(e.approvedBudget) || 0
+          byMonth[m].remaining += Number(e.remainingBudget) || 0
           byMonth[m].items.push(e)
           const cat = e.category || 'Uncategorized'
           if (!byMonth[m].categories[cat]) byMonth[m].categories[cat] = 0
@@ -258,11 +382,9 @@ function ExpensesPage() {
     })
 
     // Get budget for this quarter
-    const quarterBudgets = budgets.filter(
-      (b) => b.quarter === breakdownQuarter && b.year === breakdownYear
-    )
-    const totalBudget = quarterBudgets.reduce(
-      (sum, b) => sum + (Number(b.amount) || 0), 0
+    const totalBudget = quarterRecords.reduce(
+      (sum, record) => sum + Number(record.approvedBudget || 0),
+      0,
     )
 
     return {
@@ -274,7 +396,7 @@ function ExpensesPage() {
       remaining: totalBudget - totalSpent,
       utilization: totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0,
     }
-  }, [expenses, budgets, breakdownQuarter, breakdownYear])
+  }, [expenses, verifiedReceiptTotals, breakdownQuarter, breakdownYear])
 
   function toggleDetails(expenseId) {
     setExpanded((prev) => ({
@@ -287,9 +409,9 @@ function ExpensesPage() {
     setActiveTab(nextTab)
   }
 
-  function handleArchive(expenseId) {
-    archiveExpense(expenseId)
-    setActiveTab('archive')
+  async function handleArchive(expenseId) {
+    const result = await archiveExpense(expenseId)
+    if (!result?.error) setActiveTab('archive')
   }
 
   // Receipt upload handlers
@@ -351,7 +473,17 @@ function ExpensesPage() {
       .createSignedUrl(filePath, 60 * 60)
 
     if (data?.signedUrl) {
-      setReceiptLinks((prev) => ({ ...prev, [expense.id]: data.signedUrl }))
+      const ownerId = expense.isAdditional && expense.parentProjectId
+        ? String(expense.parentProjectId)
+        : String(expense.id)
+      const requisitionId = String(expense.id)
+      setReceiptLinks((prev) => ({
+        ...prev,
+        [ownerId]: (Number(prev[ownerId]) || 0) + 1,
+        ...(ownerId !== requisitionId
+          ? { [requisitionId]: (Number(prev[requisitionId]) || 0) + 1 }
+          : {}),
+      }))
     }
 
     setFilesById((prev) => ({ ...prev, [expense.id]: null }))
@@ -386,11 +518,10 @@ function ExpensesPage() {
     const totalAmount = requestedAmount > 0 ? requestedAmount : breakdownTotal
     const hasReceipt = receiptLinks[expense.id] && receiptLinks[expense.id] > 0
     const receiptCount = receiptLinks[expense.id] || 0
-
-    const additionalExpenses = expenses.filter(e => e.parentProjectId === expense.id)
-    const additionalTotal = additionalExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
-
-    const totalExpense = totalAmount + additionalTotal
+    const financials = calculateProjectEventFinancials(expense, expenses, verifiedReceiptTotals)
+    const additionalExpenses = financials.linkedExpenses
+    const additionalTotal = financials.recordedExpenseTotal
+    const totalExpense = financials.totalExpenses
 
     return (
       <tr className="details-row">
@@ -406,11 +537,14 @@ function ExpensesPage() {
                 gap: '16px'
               }}>
                 {[
-                  { label: 'Description', value: expense.description || expense.project || expense.event || '—' },
+                  { label: 'Title', value: expense.project || expense.event || 'Untitled' },
+                  { label: 'Description', value: expense.description || 'No description provided.' },
                   { label: 'Category', value: expense.category || '—' },
-                  { label: 'Date', value: expense.date || expense.approvedAt ? new Date(expense.date || expense.approvedAt).toLocaleDateString() : '—' },
                   { label: 'Related Project / Event / Payroll', value: expense.event || expense.project || expense.payrollNumber || '—' },
-                  { label: 'Requested By', value: expense.requestedBy || '—' },
+                  { label: 'Scheduled Date', value: expense.type === 'Payroll' ? 'Not applicable' : formatScheduledDate(expense) },
+                  { label: 'Expense Date', value: expense.date || expense.approvedAt ? new Date(expense.date || expense.approvedAt).toLocaleDateString() : '—' },
+                  { label: 'Status', value: expense.status || 'Approved' },
+                  { label: 'Created By', value: expense.requestedBy || '—' },
                 ].map((stat, i) => (
                   <div key={i} style={{ 
                     backgroundColor: 'var(--background-color, #ffffff)', 
@@ -423,7 +557,7 @@ function ExpensesPage() {
                     gap: '12px'
                   }}>
                     <p className="details-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink-3)', margin: 0, letterSpacing: '0.5px' }}>{stat.label}</p>
-                    <p className="details-value" style={{ fontSize: '1.05rem', margin: 0, color: 'var(--ink)', lineHeight: '1.4' }}>{stat.value}</p>
+                    <p className="details-value" style={{ fontSize: '1.05rem', margin: 0, color: 'var(--ink)', lineHeight: '1.4', overflowWrap: 'break-word', wordBreak: 'break-word' }}>{stat.value}</p>
                   </div>
                 ))}
                 
@@ -466,9 +600,14 @@ function ExpensesPage() {
                 gap: '16px'
               }}>
                 {[
-                  { label: 'Amount', value: currency.format(totalAmount), highlight: false },
-                  { label: 'Additional Expenses', value: currency.format(additionalTotal), highlight: false },
-                  { label: 'Total Expense', value: currency.format(totalExpense), highlight: true },
+                  { label: 'Approved Budget', value: currency.format(financials.approvedBudget || totalAmount), highlight: false },
+                  { label: 'Total Requisitions', value: currency.format(additionalTotal), highlight: false },
+                  ...(financials.verifiedReceiptTotal > 0
+                    ? [{ label: 'Verified Receipt Total', value: currency.format(financials.verifiedReceiptTotal), highlight: false }]
+                    : []),
+                  { label: 'Total Recorded Expenses', value: currency.format(totalExpense), highlight: true },
+                  { label: 'Remaining Budget', value: currency.format(financials.remainingBudget), highlight: financials.remainingBudget < 0 },
+                  { label: 'Budget Utilization', value: `${formatUtilization(financials.utilization)}%`, highlight: financials.utilization > 100 },
                 ].map((stat, i) => (
                   <div key={i} style={{ 
                     backgroundColor: 'var(--background-color, #ffffff)', 
@@ -488,56 +627,53 @@ function ExpensesPage() {
             </div>
 
             <div className="details-breakdown">
-              <BudgetBreakdownTable request={expense} breakdownItems={breakdownItems} currency={currency} title="BUDGET BREAKDOWN" />
+              <BudgetBreakdownTable request={expense} breakdownItems={breakdownItems} currency={currency} title="APPROVED ALLOCATION BREAKDOWN" />
             </div>
 
             <div className="details-breakdown" style={{ marginTop: '16px' }}>
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th className="table-band" colSpan="6">ADDITIONAL EXPENSES</th>
+                    <th className="table-band" colSpan="6">ADDITIONAL REQUISITION</th>
                   </tr>
                   <tr>
-                    <th style={{ textTransform: 'uppercase' }}>DATE</th>
                     <th style={{ textTransform: 'uppercase' }}>CATEGORY</th>
+                    <th style={{ textTransform: 'uppercase' }}>REQUISITION</th>
                     <th style={{ textTransform: 'uppercase' }}>DESCRIPTION</th>
-                    <th style={{ textTransform: 'uppercase' }}>REMARKS</th>
+                    <th style={{ textTransform: 'uppercase' }}>EXPENSE DATE</th>
                     <th style={{ textTransform: 'uppercase' }}>AMOUNT</th>
-                    <th style={{ textTransform: 'uppercase' }}>RECEIPT</th>
+                    <th style={{ textTransform: 'uppercase' }}>RECORDED BY</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {additionalExpenses.length ? additionalExpenses.map((addEx, index) => {
-                    const addReceiptCount = receiptLinks[addEx.id] || 0
-                    const hasAddReceipt = addReceiptCount > 0
-                    return (
+                  {additionalExpenses.length ? additionalExpenses.map((addEx, index) => (
                     <tr key={`${expense.id}-add-${index}`}>
-                      <td data-label="Date">{addEx.date ? new Date(addEx.date).toLocaleDateString() : '—'}</td>
                       <td data-label="Category">{addEx.category || '—'}</td>
-                      <td data-label="Description">{addEx.description || '—'}</td>
-                      <td data-label="Remarks">{addEx.remarks || '—'}</td>
+                      <td data-label="Requisition">{addEx.description || addEx.category || '—'}</td>
+                      <td data-label="Description">{addEx.remarks || '—'}</td>
+                      <td data-label="Expense Date">{addEx.date ? new Date(addEx.date).toLocaleDateString() : '—'}</td>
                       <td data-label="Amount">{currency.format(Number(addEx.amount) || 0)}</td>
-                      <td data-label="Receipt">
-                        {hasAddReceipt ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 600, backgroundColor: 'var(--positive-soft)', color: 'var(--positive)' }}>
-                            ✅ Uploaded ({addReceiptCount})
-                          </span>
-                        ) : (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 600, backgroundColor: 'var(--negative-soft)', color: 'var(--negative)' }}>
-                            ❌ Missing
-                          </span>
-                        )}
-                      </td>
+                      <td data-label="Recorded By">{addEx.requestedBy || '—'}</td>
                     </tr>
-                    )
-                  }) : (
+                  )) : (
                     <tr>
                       <td colSpan="6" style={{ textAlign: 'center', fontStyle: 'italic', color: 'var(--ink-3)' }}>
-                        No additional expenses recorded.
+                        {financials.verifiedReceiptTotal > 0
+                          ? `Actual spending is based on ${currency.format(financials.verifiedReceiptTotal)} in verified receipts.`
+                          : 'No requisitions recorded under this approved budget.'}
                       </td>
                     </tr>
                   )}
                 </tbody>
+                {additionalExpenses.length ? (
+                  <tfoot>
+                    <tr>
+                      <th colSpan="4">Total Requisition</th>
+                      <th>{currency.format(additionalTotal)}</th>
+                      <th />
+                    </tr>
+                  </tfoot>
+                ) : null}
               </table>
             </div>
 
@@ -546,20 +682,20 @@ function ExpensesPage() {
                 <tbody>
                   <tr>
                     <td style={{ fontWeight: 600 }}>Approved Budget Amount</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{currency.format(totalAmount)}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{currency.format(financials.approvedBudget || totalAmount)}</td>
                   </tr>
                   <tr>
-                    <td>Original Requisition Total</td>
-                    <td style={{ textAlign: 'right', color: 'var(--ink-2)' }}>- {currency.format(breakdownTotal)}</td>
+                    <td>Total Recorded Expenses</td>
+                    <td style={{ textAlign: 'right', color: 'var(--ink-2)' }}>- {currency.format(totalExpense)}</td>
                   </tr>
                   <tr>
-                    <td>Additional Expenses Total</td>
-                    <td style={{ textAlign: 'right', color: 'var(--ink-2)' }}>- {currency.format(additionalTotal)}</td>
+                    <td>Budget Utilization</td>
+                    <td style={{ textAlign: 'right', color: 'var(--ink-2)' }}>{formatUtilization(financials.utilization)}%</td>
                   </tr>
                   <tr style={{ backgroundColor: 'var(--surface-2)' }}>
                     <td style={{ fontWeight: 700, fontSize: '1.1em' }}>Remaining Balance</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '1.1em', color: (totalAmount - breakdownTotal - additionalTotal) < 0 ? '#ef4444' : '#10b981' }}>
-                      {currency.format(totalAmount - breakdownTotal - additionalTotal)}
+                    <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '1.1em', color: financials.remainingBudget < 0 ? '#ef4444' : '#10b981' }}>
+                      {currency.format(financials.remainingBudget)}
                     </td>
                   </tr>
                 </tbody>
@@ -616,7 +752,7 @@ function ExpensesPage() {
               className="primary-button" 
               onClick={() => setIsAddModalOpen(true)}
             >
-              Record Additional Expense
+              Record Requisition
             </button>
           )}
         </div>
@@ -626,71 +762,115 @@ function ExpensesPage() {
 
       {isAddModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '500px' }}>
-            <h2>Record Additional Expense</h2>
-            <p>Log extra costs for an approved project.</p>
-            <form onSubmit={handleAddExpenseSubmit} className="overview-form" style={{ marginTop: '20px' }}>
-              <div className="field-row">
-                <label className="field">
-                  <span>Approved Project</span>
+          <div
+            className="modal-content additional-expense-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="additional-expense-title"
+          >
+            <div className="additional-expense-header">
+              <h2 id="additional-expense-title">Record additional expense requisition</h2>
+              <p>Add an actual cost under one approved Project, Event, or Payroll. This does not create another budget record.</p>
+            </div>
+            <form onSubmit={handleAddExpenseSubmit} className="additional-expense-form">
+              <div className="additional-expense-grid">
+                <label className="field additional-expense-field">
+                  <span>Approved Project, Event, or Payroll</span>
                   <select 
                     value={addExpenseForm.parentProjectId} 
                     onChange={e => setAddExpenseForm({...addExpenseForm, parentProjectId: e.target.value})}
+                    disabled={isAddingExpense || recordableProjectEvents.length === 0}
                     required
                   >
-                    <option value="">Select a project...</option>
-                    {expenses
-                      .filter(ex => !ex.isAdditional && !ex.archivedAt)
+                    <option value="">
+                      {recordableProjectEvents.length === 0
+                        ? 'No approved records available'
+                        : 'Select the parent record...'}
+                    </option>
+                    {recordableProjectEvents
                       .map(ex => (
-                        <option key={ex.id} value={ex.id}>{ex.project || ex.event || 'Untitled Project'}</option>
+                        <option key={ex.id} value={ex.id}>
+                          {ex.event || ex.project || 'Untitled Project'} ({ex.type || 'Project'})
+                        </option>
                       ))}
                   </select>
                 </label>
-              </div>
-              <div className="field-row">
-                <label className="field">
-                  <span>Additional Expense Description</span>
+
+                <label className="field additional-expense-field">
+                  <span>Requisition Category</span>
+                  <select
+                    value={addExpenseForm.category}
+                    onChange={e => setAddExpenseForm({...addExpenseForm, category: e.target.value})}
+                    disabled={isAddingExpense}
+                    required
+                  >
+                    {categories.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field additional-expense-field">
+                  <span>Amount (₱)</span>
+                  <CurrencyInput
+                    value={addExpenseForm.amount}
+                    onValueChange={(val) => setAddExpenseForm({...addExpenseForm, amount: Number(val)})}
+                    disabled={isAddingExpense}
+                    required
+                  />
+                </label>
+
+                <label className="field additional-expense-field">
+                  <span>Requisition Title / Description</span>
                   <input 
                     type="text" 
                     value={addExpenseForm.description} 
                     onChange={e => setAddExpenseForm({...addExpenseForm, description: e.target.value})}
+                    disabled={isAddingExpense}
                     required 
-                    placeholder="e.g. Extra transportation, fuel, emergency purchase"
+                    placeholder="e.g. Fuel, printing, decoration"
                   />
                 </label>
-                <label className="field">
-                  <span>Amount (₱)</span>
-                  <CurrencyInput 
-                    value={addExpenseForm.amount} 
-                    onValueChange={(val) => setAddExpenseForm({...addExpenseForm, amount: Number(val)})}
-                    required 
-                  />
-                </label>
-              </div>
-              <div className="field-row">
-                <label className="field">
+
+                <label className="field additional-expense-field">
                   <span>Date Incurred</span>
                   <input 
                     type="date" 
                     value={addExpenseForm.date} 
                     onChange={e => setAddExpenseForm({...addExpenseForm, date: e.target.value})}
+                    disabled={isAddingExpense}
                     required 
                   />
                 </label>
-              </div>
-              <div className="field-row">
-                <label className="field">
+
+                <label className="field additional-expense-field additional-expense-field--wide">
                   <span>Remarks (Optional)</span>
-                  <input 
-                    type="text" 
+                  <textarea
                     value={addExpenseForm.remarks} 
                     onChange={e => setAddExpenseForm({...addExpenseForm, remarks: e.target.value})}
+                    disabled={isAddingExpense}
+                    rows={3}
+                    placeholder="Add context or notes about this expense"
                   />
                 </label>
               </div>
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
-                <button type="button" className="secondary-button" onClick={() => setIsAddModalOpen(false)}>Cancel</button>
-                <button type="submit" className="primary-button">Add Expense</button>
+
+              <div className="additional-expense-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  disabled={isAddingExpense}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={isAddingExpense || recordableProjectEvents.length === 0}
+                >
+                  {isAddingExpense ? 'Saving requisition...' : 'Add requisition'}
+                </button>
               </div>
             </form>
           </div>
@@ -705,7 +885,10 @@ function ExpensesPage() {
               <input
                 type="text"
                 value={projectFilter}
-                onChange={(event) => setProjectFilter(event.target.value)}
+                onChange={(event) => {
+                  setProjectFilter(event.target.value)
+                  setExpensePage(1)
+                }}
                 placeholder="Search by project..."
               />
             </label>
@@ -714,14 +897,20 @@ function ExpensesPage() {
               <input
                 type="date"
                 value={dateFilter}
-                onChange={(event) => setDateFilter(event.target.value)}
+                onChange={(event) => {
+                  setDateFilter(event.target.value)
+                  setExpensePage(1)
+                }}
               />
             </label>
             <label className="field">
               <span>Category</span>
               <select
                 value={categoryFilter}
-                onChange={(event) => setCategoryFilter(event.target.value)}
+                onChange={(event) => {
+                  setCategoryFilter(event.target.value)
+                  setExpensePage(1)
+                }}
               >
                 <option value="All">All categories</option>
                 {categories.map((item) => (
@@ -735,7 +924,10 @@ function ExpensesPage() {
               <span>Status</span>
               <select
                 value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value)
+                  setExpensePage(1)
+                }}
               >
                 <option value="All">All statuses</option>
                 <option value="Pending">Pending</option>
@@ -755,14 +947,14 @@ function ExpensesPage() {
                 <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: 'var(--ink)' }}>Latest expenses</h2>
               </div>
               <span className="items-found-badge" style={{ padding: '4px 12px', backgroundColor: 'var(--surface-2)', borderRadius: '999px', fontSize: '0.85rem', fontWeight: 500, color: 'var(--ink)' }}>
-                {activeExpenses.length} items found
+                Page {safeExpensePage} of {expenseTotalPages} &nbsp;·&nbsp; {paginatedActiveExpenses.length} entries shown
               </span>
             </div>
             <table className="data-table data-table--ledger">
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Description</th>
+                  <th>Title</th>
                   <th>Category</th>
                   <th className="num">Amount</th>
                   <th>Receipt</th>
@@ -771,7 +963,7 @@ function ExpensesPage() {
               </thead>
               <tbody>
                 {activeExpenses.length ? (
-                  activeExpenses.map((expense) => {
+                  paginatedActiveExpenses.map((expense) => {
                     const hasReceipt = expense.receiptUrl || expense.receipt_url || receiptLinks[expense.id]
                     return (
                       <Fragment key={expense.id}>
@@ -783,8 +975,8 @@ function ExpensesPage() {
                                 ).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                               : '—'}
                           </td>
-                          <td data-label="Description" style={{ color: 'var(--ink)' }}>
-                            {expense.description || expense.project || expense.event || '—'}
+                          <td data-label="Title" style={{ color: 'var(--ink)' }}>
+                            {expense.event || expense.project || expense.payrollNumber || 'Untitled'}
                           </td>
                           <td data-label="Category" style={{ color: 'var(--ink-2)' }}>{expense.category || '—'}</td>
                           <td className="num" data-label="Amount" style={{ fontWeight: 600, color: 'var(--positive)' }}>
@@ -835,6 +1027,15 @@ function ExpensesPage() {
                 )}
               </tbody>
             </table>
+            <PaginationControls
+              currentPage={safeExpensePage}
+              totalPages={expenseTotalPages}
+              totalItems={activeExpenses.length}
+              pageSize={EXPENSES_PAGE_SIZE}
+              onPageChange={setExpensePage}
+              isFiltered={hasExpenseFilters}
+              idPrefix="expenses"
+            />
           </div>
         ) : (
           <div className="overview-card" style={{ padding: '24px' }}>
@@ -844,7 +1045,7 @@ function ExpensesPage() {
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Description</th>
+                  <th>Title</th>
                   <th>Category</th>
                   <th className="num">Amount</th>
                   <th>Archived</th>
@@ -863,8 +1064,8 @@ function ExpensesPage() {
                               ).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                             : '—'}
                         </td>
-                        <td data-label="Description" style={{ color: 'var(--ink)' }}>
-                          {expense.description || expense.project || expense.event || 'Untitled'}
+                        <td data-label="Title" style={{ color: 'var(--ink)' }}>
+                          {expense.event || expense.project || expense.payrollNumber || 'Untitled'}
                         </td>
                         <td data-label="Category" style={{ color: 'var(--ink-2)' }}>
                           {expense.category || 'Uncategorized'}
@@ -913,7 +1114,15 @@ function ExpensesPage() {
           </div>
         )}
 
-        {/* Budget Breakdown Section */}
+        <div style={{ margin: '32px 0 16px' }}>
+          <p className="eyebrow">Requisition Breakdown</p>
+          <h2 style={{ margin: '4px 0 6px' }}>Consolidated actual spending</h2>
+          <p style={{ margin: 0, color: 'var(--ink-3)' }}>
+            Requisitions remain included in their approved parent record and its utilization totals.
+          </p>
+        </div>
+
+        {/* Requisition and utilization overview */}
         <div className="expenses-breakdown-grid">
           <div className="overview-card">
             <div className="card-header-row">
@@ -938,7 +1147,7 @@ function ExpensesPage() {
             </div>
             <p style={{ color: 'var(--ink-soft)', fontSize: '0.9rem', margin: '4px 0 16px' }}>
               You have utilized {currency.format(breakdownData.totalSpent)} out of the{' '}
-              {currency.format(breakdownData.totalBudget)} allocated for{' '}
+              {currency.format(breakdownData.totalBudget)} in approved working budgets for{' '}
               Quarter {breakdownQuarter} {breakdownYear}.
             </p>
             <div className="allocation-bar">
@@ -997,7 +1206,7 @@ function ExpensesPage() {
                 {Object.entries(breakdownData.byMonth).map(([mStr, mData]) => {
                   const m = Number(mStr)
                   const isExpanded = expandedMonths[m]
-                  const utilization = breakdownData.totalBudget > 0 ? Math.round((mData.total / breakdownData.totalBudget) * 100) : 0
+                  const utilization = mData.budget > 0 ? Math.round((mData.total / mData.budget) * 100) : 0
                   
                   // Calculate month aggregates
                   const addItems = mData.items.filter(e => e.isAdditional)
@@ -1021,7 +1230,7 @@ function ExpensesPage() {
                             </div>
                             {additionalAmount > 0 && (
                               <div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--ink-soft)', fontWeight: 500, marginBottom: '2px' }}>Additional Expenses</div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--ink-soft)', fontWeight: 500, marginBottom: '2px' }}>Requisitions</div>
                                 <div style={{ fontSize: '1.1rem', fontWeight: 600 }}>{currency.format(additionalAmount)}</div>
                               </div>
                             )}
@@ -1124,17 +1333,15 @@ function ExpensesPage() {
                                 {mData.items
                                   .sort((a, b) => new Date(b.approvedAt || b.date || 0) - new Date(a.approvedAt || a.date || 0))
                                   .map((e) => {
-                                    const approvedBudget = Number(e.amount) || 0;
-                                    const additionalExps = expenses.filter(ex => ex.parentProjectId === e.id);
-                                    const addTotal = additionalExps.reduce((sum, ex) => sum + (Number(ex.amount) || 0), 0);
-                                    const expensesTotal = getBreakdownTotal(e.breakdown) + addTotal;
-                                    const remaining = approvedBudget - expensesTotal;
+                                    const approvedBudget = Number(e.approvedBudget) || 0;
+                                    const expensesTotal = Number(e.totalExpenses) || 0;
+                                    const remaining = Number(e.remainingBudget) || 0;
                                     return (
                                       <div key={e.id} className="p-4 border border-[var(--line)] rounded-xl bg-[var(--surface)] flex flex-col gap-3">
                                         <div className="min-w-0">
                                           <div className="font-semibold text-[var(--ink)] break-words">{e.event || e.project || 'Untitled'}</div>
                                           <div className="text-sm text-[var(--ink-2)] mt-1">
-                                            {e.isAdditional ? 'Additional Expense' : (e.date || e.approvedAt ? new Date(e.date || e.approvedAt).toLocaleDateString() : '')}
+                                            {e.isAdditional ? 'Requisition' : (e.date || e.approvedAt ? new Date(e.date || e.approvedAt).toLocaleDateString() : '')}
                                           </div>
                                         </div>
 

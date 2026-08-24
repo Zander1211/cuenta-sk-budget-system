@@ -47,13 +47,21 @@ const EMPTY_VALUES = {
   receiptNumber: '',
   receivedFrom: '',
   organization: '',
+  address: '',
+  telephone: '',
+  tin: '',
+  time: '',
   receiver: '',
   bank: '',
   chequeNumber: '',
   date: '',
   totalAmount: '',
+  subtotal: '',
+  vatAmount: '',
+  discount: '',
   cashAmount: '',
   chequeAmount: '',
+  totalCashAndCheque: '',
   particularsText: '',
 }
 
@@ -78,6 +86,7 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
   const [ocrFlags, setOcrFlags] = useState([])
   const [ocrConfidence, setOcrConfidence] = useState(null)
   const [rawText, setRawText] = useState('')
+  const [ocrDiagnostics, setOcrDiagnostics] = useState(null)
 
   const bitmapRef = useRef(null)
   const correctedRef = useRef(null)
@@ -349,13 +358,21 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
         receiptNumber: parsed.receiptNumber ?? '',
         receivedFrom: parsed.receivedFrom ?? '',
         organization: parsed.organization ?? '',
+        address: parsed.address ?? '',
+        telephone: parsed.telephone ?? '',
+        tin: parsed.tin ?? '',
+        time: parsed.time ?? '',
         receiver: parsed.receiver ?? '',
         bank: parsed.bank ?? '',
         chequeNumber: parsed.chequeNumber ?? '',
         date: parsed.date ?? '',
         totalAmount: parsed.totalAmount ?? '',
+        subtotal: parsed.subtotal ?? '',
+        vatAmount: parsed.vatAmount ?? '',
+        discount: parsed.discount ?? '',
         cashAmount: parsed.cashAmount ?? '',
         chequeAmount: parsed.chequeAmount ?? '',
+        totalCashAndCheque: parsed.totalCashAndCheque ?? '',
         particularsText: parsed.particulars
           .map(row => (row.amount === null ? row.description : `${row.description} - ${row.amount}`))
           .join('\n'),
@@ -366,6 +383,13 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
       // parser recognises nothing, empty fields alone give them no way to tell
       // a bad scan from an unreadable receipt.
       setRawText(result.text || '')
+      setOcrDiagnostics({
+        rawText: String(result.text || '').slice(0, 12000),
+        monetaryCandidates: parsed.amountCandidates || [],
+        selectedGrandTotal: parsed.selectedTotalCandidate || null,
+        recognitionConfidence: result.confidence,
+        usedFallbackPass: Boolean(result.usedFallback),
+      })
       setStep(STEPS.VERIFY)
     } catch (cause) {
       console.error('OCR failed', cause)
@@ -375,7 +399,8 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
       setOcrFlags(['all'])
       setOcrConfidence(null)
       setRawText('')
-      setError('Text could not be read from this receipt. Enter the details manually, or save the scan without them.')
+      setOcrDiagnostics(null)
+      setError('Text could not be read from this receipt. Enter and confirm the Grand Total from the scan before saving.')
       setStep(STEPS.VERIFY)
     }
   }
@@ -384,8 +409,15 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
   async function handleSave() {
     if (!filteredRef.current || !originalFile) return
 
-    setStep(STEPS.SAVING)
     setError('')
+
+    const confirmedTotal = Number(values.totalAmount)
+    if (!Number.isFinite(confirmedTotal) || confirmedTotal <= 0) {
+      setError('Confirm or correct the detected Grand Total before saving this receipt.')
+      return
+    }
+
+    setStep(STEPS.SAVING)
 
     try {
       const scanBlob = await imageDataToBlob(filteredRef.current, { type: 'image/jpeg', quality: 0.92 })
@@ -400,6 +432,14 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
           corners,
           rotation: sourceRotation,
           ocrConfidence,
+          ocrDiagnostics: {
+            ...(ocrDiagnostics || {}),
+            confirmedTotal,
+            correctedByReviewer: ocrDiagnostics?.selectedGrandTotal?.amount != null
+              ? Math.abs(Number(ocrDiagnostics.selectedGrandTotal.amount) - confirmedTotal) > 0.01
+              : true,
+            confirmedAt: new Date().toISOString(),
+          },
           enhancementFailed,
           scannerVersion: 1,
         },
@@ -561,7 +601,7 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
 
           {step === STEPS.VERIFY && (
             <button type="button" className="scan-btn-primary" onClick={handleSave}>
-              Verify and save
+              Confirm total and save
             </button>
           )}
 
@@ -599,13 +639,21 @@ function normaliseMetadata(values) {
     receiptNumber: text('receiptNumber'),
     receivedFrom: text('receivedFrom'),
     organization: text('organization'),
+    address: text('address'),
+    telephone: text('telephone'),
+    tin: text('tin'),
+    time: text('time'),
     receiver: text('receiver'),
     bank: text('bank'),
     chequeNumber: text('chequeNumber'),
     date: text('date'),
     totalAmount: amount('totalAmount'),
+    subtotal: amount('subtotal'),
+    vatAmount: amount('vatAmount'),
+    discount: amount('discount'),
     cashAmount: amount('cashAmount'),
     chequeAmount: amount('chequeAmount'),
+    totalCashAndCheque: amount('totalCashAndCheque'),
     particulars: text('particularsText'),
     verifiedAt: new Date().toISOString(),
   }

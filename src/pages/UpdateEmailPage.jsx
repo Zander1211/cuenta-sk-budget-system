@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
-import { updateEmail, verifyEmailUpdateOtp } from '../services/authService'
+import { sendEmailUpdateOtp, verifyEmailUpdateOtp } from '../services/authService'
 import { supabase } from '../supabase/supabaseClient'
 
 function normalizeEmail(value) {
@@ -14,7 +14,7 @@ function UpdateEmailPage() {
   const { addLog } = useAuditLog()
   const navigate = useNavigate()
 
-  const [newEmail, setNewEmail] = useState('')
+  const [newEmail, setNewEmail] = useState(() => localStorage.getItem('cuenta_pending_email') || '')
   const [otp, setOtp] = useState('')
   const [emailStatus, setEmailStatus] = useState('')
   const [emailError, setEmailError] = useState('')
@@ -43,7 +43,7 @@ function UpdateEmailPage() {
     setEmailStatus('')
     setEmailError('')
 
-    const currentEmail = user?.email
+    const currentEmail = normalizeEmail(user?.email)
     if (!currentEmail) {
       setEmailError('No user email found. Please log in again.')
       return
@@ -58,15 +58,16 @@ function UpdateEmailPage() {
     setIsUpdatingEmail(true)
 
     // Send OTP to new email
-    const { error: updateError } = await updateEmail(normalizedNewEmail)
-    if (updateError) {
-      setEmailError(updateError.message)
+    const { error: sendError } = await sendEmailUpdateOtp(normalizedNewEmail)
+    if (sendError) {
+      setEmailError(sendError.message || 'Unable to send the verification code. Please try again.')
       setIsUpdatingEmail(false)
       return
     }
 
     setIsOtpSent(true)
     localStorage.setItem('cuenta_otp_email_sent', Date.now().toString())
+    localStorage.setItem('cuenta_pending_email', normalizedNewEmail)
     setCountdown(60)
     setEmailStatus(`An OTP has been sent to ${normalizedNewEmail}. Please check your inbox.`)
     setIsUpdatingEmail(false)
@@ -94,7 +95,7 @@ function UpdateEmailPage() {
     const normalizedNewEmail = normalizeEmail(newEmail)
     
     // Verify OTP
-    const { data, error } = await verifyEmailUpdateOtp(normalizedNewEmail, otp.trim())
+    const { error } = await verifyEmailUpdateOtp(normalizedNewEmail, otp.trim())
     
     if (error) {
       setEmailError(error.message || 'Invalid or expired OTP.')
@@ -118,6 +119,7 @@ function UpdateEmailPage() {
     setNewEmail('')
     setOtp('')
     localStorage.removeItem('cuenta_otp_email_sent')
+    localStorage.removeItem('cuenta_pending_email')
     setCountdown(0)
     
     setTimeout(() => {
@@ -204,6 +206,7 @@ function UpdateEmailPage() {
                     setEmailStatus('')
                     setCountdown(0)
                     localStorage.removeItem('cuenta_otp_email_sent')
+                    localStorage.removeItem('cuenta_pending_email')
                   }}
                   disabled={isUpdatingEmail}
                 >

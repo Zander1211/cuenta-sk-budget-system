@@ -36,7 +36,8 @@ function TrendTooltip({ active, payload, label }) {
 
 export default function MonthlySpendingPage() {
   const { filters, setFilter } = useAnalysisFilters()
-  const trend = useMonthlyTrend(filters)
+  const yearFilters = useMemo(() => ({ ...filters, view: 'yearly' }), [filters])
+  const trend = useMonthlyTrend(yearFilters)
   const [showPrevYear, setShowPrevYear] = useState(false)
   const chartRef = useRef(null)
   const [exporting, setExporting] = useState(false)
@@ -97,7 +98,7 @@ export default function MonthlySpendingPage() {
     if (exporting || !trend.hasData) return
     setExporting(true)
     try {
-      await exportMonthlySpendingPdf({ chartRef: chartRef.current, trend, tableRows, filters })
+      await exportMonthlySpendingPdf({ chartRef: chartRef.current, tableRows, filters: yearFilters })
     } catch (err) {
       console.error('PDF export failed:', err)
     } finally {
@@ -108,7 +109,7 @@ export default function MonthlySpendingPage() {
     <AnalysisLayout
       breadcrumb={BREADCRUMB}
       title="Monthly Spending Trend"
-      description="How approved spending moves month to month across the selected year, against the 12-month average."
+      description="How recorded actual expenses move month to month across the selected year, against the 12-month average."
       filterBar={<AnalysisFilterBar filters={filters} setFilter={setFilter} showView={false} />}
     >
       <section className="an-metric-grid">
@@ -137,22 +138,22 @@ export default function MonthlySpendingPage() {
               }
             >
               <div ref={chartRef}>
-              <ResponsiveContainer width="100%" height={340}>
-                <LineChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
-                  <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
-                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />
-                  <YAxis tickFormatter={pesoTick} tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} width={64} />
-                  <Tooltip content={<TrendTooltip />} />
-                  <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 13, paddingTop: 12 }} />
-                  {trend.average > 0 ? (
-                    <ReferenceLine y={trend.average} stroke={CHART_COLORS.averageLine} strokeDasharray="5 4" label={{ value: '12-mo avg', position: 'right', fontSize: 12, fill: CHART_INK.tick }} />
-                  ) : null}
-                  <Line type="monotone" dataKey="Spending" stroke={CHART_COLORS.primaryLine} strokeWidth={2.5} dot={{ r: 4, fill: CHART_INK.surface, stroke: CHART_COLORS.primaryLine, strokeWidth: 2 }} activeDot={{ r: 6, stroke: CHART_INK.surface, strokeWidth: 2, fill: CHART_COLORS.primaryLine }} />
-                  {showPrevYear && hasPrevYear ? (
-                    <Line type="monotone" dataKey="Previous Year" stroke={CHART_INK.muted} strokeWidth={2} strokeDasharray="5 4" dot={false} />
-                  ) : null}
-                </LineChart>
-              </ResponsiveContainer>
+                <ResponsiveContainer width="100%" height={340}>
+                  <LineChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
+                    <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
+                    <XAxis dataKey="month" tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={pesoTick} tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} width={64} />
+                    <Tooltip content={<TrendTooltip />} />
+                    <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 13, paddingTop: 12 }} />
+                    {trend.average > 0 ? (
+                      <ReferenceLine y={trend.average} stroke={CHART_COLORS.averageLine} strokeDasharray="5 4" label={{ value: '12-mo avg', position: 'right', fontSize: 12, fill: CHART_INK.tick }} />
+                    ) : null}
+                    <Line type="monotone" dataKey="Spending" stroke={CHART_COLORS.primaryLine} strokeWidth={2.5} dot={{ r: 4, fill: CHART_INK.surface, stroke: CHART_COLORS.primaryLine, strokeWidth: 2 }} activeDot={{ r: 6, stroke: CHART_INK.surface, strokeWidth: 2, fill: CHART_COLORS.primaryLine }} />
+                    {showPrevYear && hasPrevYear ? (
+                      <Line type="monotone" dataKey="Previous Year" stroke={CHART_INK.muted} strokeWidth={2} strokeDasharray="5 4" dot={false} />
+                    ) : null}
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             </ChartCard>
 

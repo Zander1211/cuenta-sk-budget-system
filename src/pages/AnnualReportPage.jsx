@@ -4,16 +4,18 @@ import { useNavigate } from 'react-router-dom'
 import { FileText, Printer, ArrowLeft } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
+import { getBudgetTotalForPeriod } from '../utils/budgetUtils'
 import AnnualReportPreview from '../components/documents/AnnualReportPreview'
 import { useAuth } from '../context/AuthContext'
 import { useDocuments } from '../context/DocumentContext'
 import YearSpinner from '../components/YearSpinner'
 import { supabase } from '../supabase/supabaseClient'
+import { summarizeApprovedBudgetFinancials } from '../utils/projectEventFinancials'
 
 const currentYear = new Date().getFullYear()
 
 function AnnualReportPage() {
-  const { budgets, expenses } = useBudget()
+  const { budgets, expenses, verifiedReceiptTotals } = useBudget()
   const { addDocument } = useDocuments()
   const { profileName, role, profileSurname } = useAuth()
   const navigate = useNavigate()
@@ -46,23 +48,21 @@ function AnnualReportPage() {
   
   // Calculate system totals for the selected year
   const systemTotals = useMemo(() => {
-    const yearBudgets = budgets.filter((b) => b.year === selectedYear)
-    const totalBudget = yearBudgets.reduce((sum, b) => sum + (Number(b.amount) || 0), 0)
-    
-    const yearExpenses = expenses.filter((e) => {
-      if (e.archivedAt) return false
-      const dateStr = e.eventDate || e.date || e.approvedAt
-      if (!dateStr) return false
-      return new Date(dateStr).getFullYear() === selectedYear
-    })
-    const totalExpenses = yearExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+    const totalBudget = getBudgetTotalForPeriod(budgets, null, selectedYear)
+    const financials = summarizeApprovedBudgetFinancials(
+      expenses,
+      verifiedReceiptTotals,
+      { view: 'yearly', year: selectedYear },
+    )
     
     return {
       totalBudget,
-      totalExpenses,
-      projects: yearExpenses.filter((e) => ['Approved', 'Released'].includes(e.status || 'Approved')),
+      totalApprovedBudget: financials.totalApprovedBudget,
+      totalExpenses: financials.totalExpenses,
+      remainingBudget: financials.remainingBudget,
+      projects: financials.records,
     }
-  }, [budgets, expenses, selectedYear])
+  }, [budgets, expenses, verifiedReceiptTotals, selectedYear])
 
   // --- Form State ---
   
@@ -217,7 +217,9 @@ function AnnualReportPage() {
       project: '',
       generatedBy: profileName || role,
       type: 'Annual Report',
-      data: previewData,
+      data: { type: 'annual', data: previewData },
+      relatedEntityType: 'reporting_year',
+      relatedEntityId: String(selectedYear),
     })
   }
 
@@ -235,10 +237,6 @@ function AnnualReportPage() {
           <button type="button" className="secondary-button" onClick={() => navigate(-1)}>
             <ArrowLeft size={16} />
             Back
-          </button>
-          <button type="button" className="primary-button" onClick={handlePreview}>
-            <Printer size={16} />
-            Preview Document
           </button>
         </div>
       </header>
@@ -264,6 +262,16 @@ function AnnualReportPage() {
               <span className="breakdown-summary-label">Total System Expenses</span>
               <span className="breakdown-summary-value">PHP {systemTotals.totalExpenses.toLocaleString()}</span>
               <p style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Auto-filled into Other MOOE</p>
+            </div>
+            <div>
+              <span className="breakdown-summary-label">Approved Working Budgets</span>
+              <span className="breakdown-summary-value">PHP {systemTotals.totalApprovedBudget.toLocaleString()}</span>
+              <p style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Approved Project, Event, and Payroll requests</p>
+            </div>
+            <div>
+              <span className="breakdown-summary-label">Remaining Approved Budget</span>
+              <span className="breakdown-summary-value">PHP {systemTotals.remainingBudget.toLocaleString()}</span>
+              <p style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>Approved budgets minus recorded expenses</p>
             </div>
             <div>
               <span className="breakdown-summary-label">Approved Projects</span>
@@ -552,13 +560,13 @@ function AnnualReportPage() {
               </label>
             </div>
           </div>
-          
-          <div style={{ paddingBottom: '32px' }}>
-            <button type="submit" className="primary-button" onClick={handlePreview}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBottom: '32px' }}>
+            <button type="submit" className="primary-button">
               <Printer size={16} />
               Preview Document
             </button>
           </div>
+
         </form>
       </section>
 

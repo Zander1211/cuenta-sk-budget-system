@@ -2,15 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ClipboardCheck,
-  PieChart,
   Receipt,
   Search,
   Settings,
   TriangleAlert,
   UserRound,
-  X,
   Wallet,
+  Folder,
+  Calendar,
+  PieChart as PieChartIcon,
 } from 'lucide-react'
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
 import NotificationBell from '../components/NotificationBell'
 import { useAuth } from '../context/AuthContext'
 import { useBudget, useBudgetCalculations } from '../context/BudgetContext'
@@ -145,6 +147,42 @@ function MainDashboardPage() {
   )
   const pendingCount = pendingRequests.length
   
+  // Projects and Events stats
+  const projects = expenses.filter(
+    (exp) =>
+      exp.type === 'Project' &&
+      !exp.archivedAt &&
+      exp.status !== 'Cancelled' &&
+      isInPeriod(exp.eventDate || exp.date || exp.approvedAt || exp.createdAt)
+  )
+  
+  const events = expenses.filter(
+    (exp) =>
+      exp.type === 'Event' &&
+      !exp.archivedAt &&
+      exp.status !== 'Cancelled' &&
+      isInPeriod(exp.eventDate || exp.date || exp.approvedAt || exp.createdAt)
+  )
+
+  const getStats = (items) => {
+    let completed = 0
+    let ongoing = 0
+    let pending = 0
+    items.forEach(item => {
+      if (item.projectStatus === 'Completed') completed++
+      else if (item.projectStatus === 'Ongoing') ongoing++
+      else pending++
+    })
+    return [
+      { name: 'Completed', value: completed, color: 'var(--cuenta-mint)' },
+      { name: 'Ongoing', value: ongoing, color: 'var(--cuenta-blue)' },
+      { name: 'Pending', value: pending, color: 'var(--ink-4)' }
+    ].filter(d => d.value > 0)
+  }
+
+  const projectStats = getStats(projects)
+  const eventStats = getStats(events)
+  
   // To replace filteredExpenses, we can filter directly on validExpenses from useBudgetCalculations, 
   // but since useBudgetCalculations doesn't export validExpenses, we can just filter from expenses directly.
   const missingDocsCount = expenses.filter((expense) => {
@@ -169,11 +207,11 @@ function MainDashboardPage() {
       icon: Wallet,
     },
     {
-      label: 'Total Expenses',
+      label: 'Approved Allocations',
       value: currency.format(totalExpenses),
       meta: totalExpenses
         ? `Approved requests in ${periodLabel}`
-        : 'No expenses recorded',
+        : 'No approved requests yet',
       chip: hasBudgetData ? `${usedPercent}% used` : 'Awaiting data',
       tone: usedPercent > 80 ? 'warning' : 'positive',
       icon: Receipt,
@@ -181,10 +219,12 @@ function MainDashboardPage() {
     {
       label: 'Remaining Budget',
       value: currency.format(remainingBudget),
-      meta: hasBudgetData ? 'Updated from approvals' : 'Add a budget to start',
-      chip: hasBudgetData ? `${remainingPercent}% left` : 'Not started',
-      tone: remainingPercent < 20 ? 'warning' : 'neutral',
-      icon: PieChart,
+      meta: remainingBudget < 0
+        ? 'Approved allocations exceed monthly budget'
+        : hasBudgetData ? 'Monthly budget minus approved allocations' : 'Add a budget to start',
+      chip: remainingBudget < 0 ? 'Over-allocated' : hasBudgetData ? `${remainingPercent}% available` : 'Not started',
+      tone: remainingBudget < 0 ? 'danger' : remainingPercent < 20 ? 'warning' : 'neutral',
+      icon: PieChartIcon,
     },
     {
       label: 'Pending Approvals',
@@ -294,11 +334,11 @@ function MainDashboardPage() {
             </button>
             <button
               type="button"
-              className="an-btn an-btn-icon an-btn-ghost"
+              className="an-btn an-btn-icon biodata-banner-dismiss"
               onClick={dismissBiodataBanner}
               aria-label="Dismiss reminder"
             >
-              <X size={16} />
+              <span className="biodata-banner-dismiss-mark">×</span>
             </button>
           </div>
         </div>
@@ -368,6 +408,90 @@ function MainDashboardPage() {
             </div>
           )
         })}
+      </section>
+
+      {/* Project and Event Progress Section */}
+      <section style={{ marginTop: '40px' }}>
+        <div style={{ marginBottom: '20px' }}>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: '700', color: 'var(--ink-1)', marginBottom: '6px' }}>Project and event progress</h2>
+          <p style={{ color: 'var(--ink-3)', fontSize: '0.95rem' }}>Current status of all approved projects and events.</p>
+        </div>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
+          
+          {/* Projects Card */}
+          <div className="summary-card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '24px' }}>
+            <div>
+              <div className="summary-header" style={{ marginBottom: '32px' }}>
+                <div className="summary-icon">
+                  <Folder size={18} />
+                </div>
+                <span style={{ fontWeight: '600', color: 'var(--ink-1)', fontSize: '1.1rem' }}>Projects Overview</span>
+              </div>
+              <div className="summary-body" style={{ marginTop: 'auto' }}>
+                <span className="summary-label">TOTAL PROJECTS</span>
+                <span className="summary-value" style={{ fontSize: '2.5rem' }}>{projects.length}</span>
+              </div>
+            </div>
+            
+            <div style={{ width: '140px', height: '140px', position: 'relative' }}>
+              {projectStats.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={projectStats} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={2} dataKey="value">
+                      {projectStats.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value, name) => [value, name]} 
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-4)', fontSize: '0.85rem' }}>No data</div>
+              )}
+            </div>
+          </div>
+
+          {/* Events Card */}
+          <div className="summary-card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '24px' }}>
+            <div>
+              <div className="summary-header" style={{ marginBottom: '32px' }}>
+                <div className="summary-icon">
+                  <Calendar size={18} />
+                </div>
+                <span style={{ fontWeight: '600', color: 'var(--ink-1)', fontSize: '1.1rem' }}>Events Overview</span>
+              </div>
+              <div className="summary-body" style={{ marginTop: 'auto' }}>
+                <span className="summary-label">TOTAL EVENTS</span>
+                <span className="summary-value" style={{ fontSize: '2.5rem' }}>{events.length}</span>
+              </div>
+            </div>
+            
+            <div style={{ width: '140px', height: '140px', position: 'relative' }}>
+              {eventStats.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={eventStats} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={2} dataKey="value">
+                      {eventStats.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value, name) => [value, name]}
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-4)', fontSize: '0.85rem' }}>No data</div>
+              )}
+            </div>
+          </div>
+
+        </div>
       </section>
 
       <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />

@@ -1,114 +1,74 @@
-Please replace all Year Dropdown filters throughout the system with the same Year Numeric Spinner used on the Main Dashboard.
+-- ================================================================
+-- Cuenta: Reset Database Data (Non-User Tables Only)
+-- ================================================================
+-- WARNING: This script deletes ALL operational data including budgets,
+-- expenses, projects, events, documents, receipts, audit logs, etc.
+--
+-- SAFE: Does NOT touch auth.users, profiles, member_biodata,
+--       verification_codes, or any user account / identity tables.
+--
+-- Run this in the Supabase Dashboard → SQL Editor.
+-- ================================================================
 
-Objective
+-- ── Step 1: Child tables first (FK-safe reverse dependency order) ──
 
-Standardize the Year Filter across the entire system by using one reusable Year Numeric Spinner component instead of different dropdowns.
+-- Recorded expense lines that belong to an approved Project/Event parent
+DO $$ BEGIN
+  DELETE FROM public.expenses WHERE is_additional = true;
+EXCEPTION WHEN undefined_table THEN NULL;
+         WHEN undefined_column THEN
+           -- is_additional column missing; skip this targeted step
+           NULL;
+END $$;
 
-This will provide a more professional, consistent, and scalable user interface.
+-- Project photos
+DO $$ BEGIN DELETE FROM public.project_photos; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
-Reusable Component
+-- Receipt records
+DO $$ BEGIN DELETE FROM public.receipt_records; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
-Use the same Year Numeric Spinner component that is already implemented on the Main Dashboard.
+-- Report summaries
+DO $$ BEGIN DELETE FROM public.report_summaries; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
-Do not create separate versions for different pages.
+-- ── Step 2: Core operational tables ───────────────────────────────
 
-All pages should reuse the exact same component so that future updates only need to be made once.
+-- Remaining expenses (approved Project/Event/Payroll parent rows)
+DO $$ BEGIN DELETE FROM public.expenses; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
-Replace Year Filters
+-- Budget requests
+DO $$ BEGIN DELETE FROM public.budget_requests; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
-Replace the existing Year Dropdown with the Year Numeric Spinner on every page that currently has a Year Filter, including but not limited to:
+-- Budgets (allocation history)
+DO $$ BEGIN DELETE FROM public.budgets; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
-Budget Page
+-- Projects (if stored separately from expenses)
+DO $$ BEGIN DELETE FROM public.projects; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
-Replace the Year Dropdown with the Year Numeric Spinner.
+-- ── Step 3: Documents and counters ────────────────────────────────
 
-Changing the year should immediately refresh:
+-- Documents
+DO $$ BEGIN DELETE FROM public.documents; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
-Monthly Budgets
-Budget Summary
-Budget Tables
-Budget Charts (if any)
-AI Analysis
+-- Reset document serial counter back to zero
+DO $$ BEGIN
+  UPDATE public.document_counters SET last_number = 0;
+EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
-Replace the existing Year Filter with the shared Year Numeric Spinner (if not already using the shared component).
+-- ── Step 4: System logs, history, AI chat, and notifications ──────
 
-Expense Summary
+-- Chat history (AI conversations)
+DO $$ BEGIN DELETE FROM public.chat_history; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
-For:
+-- Audit trail
+DO $$ BEGIN DELETE FROM public.audit_trail; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
-SK Chairman
-SK Treasurer
-SK Kagawad
-Barangay Treasurer
+-- Backup and restore history
+DO $$ BEGIN DELETE FROM public.restore_history; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN DELETE FROM public.backups; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
-Replace the Year Dropdown with the Year Numeric Spinner.
+-- Notifications
+DO $$ BEGIN DELETE FROM public.notifications; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
-Dashboard
-
-Ensure it continues using the shared Year Numeric Spinner component.
-
-Any Other Page
-
-Search the entire application for any page that uses a Year Filter.
-
-Replace every Year Dropdown with the shared Year Numeric Spinner.
-
-Examples include:
-
-Reports
-Financial Reports
-Analytics
-Documents
-Audit Trail
-Backup History
-Restore History
-Any future page that filters by year
-Year Range
-
-Support years from:
-
-Minimum: 2000
-Maximum: 2100
-
-Users should be able to:
-
-Click Previous Year
-Click Next Year
-Type a year manually
-Use keyboard arrow keys
-Default Value
-
-The default year should always be the current year unless a previously selected year has been saved for that specific page.
-
-Synchronization
-
-Whenever the year changes:
-
-Refresh the current page automatically.
-Update all tables.
-Update all charts.
-Update all summary cards.
-Update all statistics.
-Filter every query using the selected year.
-
-No page refresh should be required.
-
-Empty Data Handling
-
-If there are no records for the selected year:
-
-Display ₱0 where appropriate.
-Show professional "No data available" messages.
-Do not display records from another year.
-UI/UX Requirements
-
-The Year Numeric Spinner should:
-
-Match the Main Dashboard exactly.
-Have consistent spacing, typography, and styling.
-Be responsive on desktop, tablet, and mobile devices.
-Be compact and professional.
-Align properly with Month selectors and other filter controls.
-Expected Result
-
-Every page in the system that uses a Year Filter should use the same reusable Year Numeric Spinner. The interface should be consistent across the application, automatically update data when the year changes, and provide a clean, professional user experience on all devices.
+-- ── Done ──────────────────────────────────────────────────────────
+-- All operational data has been cleared.
+-- Users (auth.users, profiles, member_biodata) are untouched.

@@ -22,7 +22,7 @@ export default defineConfig([
     // Maintenance scripts and serverless handlers run on Node, not in a
     // browser. Without this they are linted against browser globals and every
     // use of `process` is reported as undefined.
-    files: ['scripts/**/*.{js,mjs,cjs}', 'api/**/*.{js,mjs,cjs}'],
+    files: ['scripts/**/*.{js,mjs,cjs}', 'api/**/*.{js,mjs,cjs}', 'vite.config.js'],
     languageOptions: {
       globals: { ...globals.node },
     },

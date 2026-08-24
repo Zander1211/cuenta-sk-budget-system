@@ -1,53 +1,68 @@
 import { useMemo } from 'react'
 import { useBudget } from '../context/BudgetContext'
+import { getBudgetTotalForPeriod } from '../utils/budgetUtils'
 import {
   filterBudgets,
-  filterExpenses,
-  sumAmount,
   safeDivide,
   getPerformance,
   groupExpensesByCategory,
-  groupExpensesByProject,
   groupExpensesByMonth,
-  budgetByMonth,
   calculateTrend,
   calculateVariance,
   previousPeriod,
   isMissingReceipt,
   MONTHS_SHORT,
 } from '../utils/analytics'
-
-// Apply the optional project/category cross-filters on top of a period-filtered list.
-function applyCrossFilters(expenses, filters) {
-  return expenses.filter((e) => {
-    if (filters.project && filters.project !== 'all') {
-      const p = (e.project || e.event || 'Unlabeled').toString()
-      if (p !== filters.project) return false
-    }
-    if (filters.category && filters.category !== 'all') {
-      const c = (e.category || 'Uncategorized').toString()
-      if (c !== filters.category) return false
-    }
-    return true
-  })
-}
+import {
+  getActualExpenseRowsForApprovedRecords,
+  materializeActualExpenseRows,
+  summarizeApprovedBudgetFinancials,
+} from '../utils/projectEventFinancials'
 
 // Base hook: normalizes the dataset once for the selected period.
 export function useAnalysisData(filters) {
-  const { budgets, expenses, requests } = useBudget()
+  const { budgets, expenses, requests, verifiedReceiptTotals } = useBudget()
 
   return useMemo(() => {
     const periodBudgets = filterBudgets(budgets, filters)
-    const periodExpensesRaw = filterExpenses(expenses, filters)
-    const periodExpenses = applyCrossFilters(periodExpensesRaw, filters)
+    const approvedFinancials = summarizeApprovedBudgetFinancials(
+      expenses,
+      verifiedReceiptTotals,
+      filters,
+    )
+    const periodExpenses = getActualExpenseRowsForApprovedRecords(
+      expenses,
+      verifiedReceiptTotals,
+      approvedFinancials.records,
+    )
 
-    const prev = previousPeriod(filters)
-    const prevExpenses = applyCrossFilters(filterExpenses(expenses, prev), prev)
+    const prev = {
+      ...previousPeriod(filters),
+      project: filters.project,
+      category: filters.category,
+    }
+    const previousFinancials = summarizeApprovedBudgetFinancials(
+      expenses,
+      verifiedReceiptTotals,
+      prev,
+    )
+    const prevExpenses = getActualExpenseRowsForApprovedRecords(
+      expenses,
+      verifiedReceiptTotals,
+      previousFinancials.records,
+    )
     const prevBudgets = filterBudgets(budgets, prev)
+
+    const optionFilters = { ...filters, project: 'all', category: 'all' }
+    const optionRecords = summarizeApprovedBudgetFinancials(
+      expenses,
+      verifiedReceiptTotals,
+      optionFilters,
+    ).records
 
     const projectOptions = Array.from(
       new Set(
-        filterExpenses(expenses, filters).map((e) =>
+        optionRecords.map((e) =>
           (e.project || e.event || 'Unlabeled').toString().trim() || 'Unlabeled'
         )
       )
@@ -55,7 +70,7 @@ export function useAnalysisData(filters) {
 
     const categoryOptions = Array.from(
       new Set(
-        filterExpenses(expenses, filters).map((e) =>
+        optionRecords.map((e) =>
           (e.category || 'Uncategorized').toString().trim() || 'Uncategorized'
         )
       )
@@ -69,46 +84,64 @@ export function useAnalysisData(filters) {
 
     return {
       periodBudgets,
+      approvedBudgetRecords: approvedFinancials.records,
+      approvedFinancials,
       periodExpenses,
       prevExpenses,
       prevBudgets,
+      previousFinancials,
       projectOptions,
       categoryOptions,
       pendingRequests,
       missingReceipts,
       hasAnyData:
-        periodBudgets.some((b) => Number(b.amount) > 0) || periodExpenses.length > 0,
+        approvedFinancials.records.length > 0
+        || pendingRequests.length > 0,
     }
-  }, [budgets, expenses, requests, filters])
+  }, [budgets, expenses, requests, verifiedReceiptTotals, filters])
 }
 
 // ---------- Summary metrics (overview + reused everywhere) ----------
 export function useFinancialSummary(filters) {
+  const { budgets } = useBudget()
   const data = useAnalysisData(filters)
   return useMemo(() => {
-    const totalBudget = sumAmount(data.periodBudgets)
-    const totalExpenses = sumAmount(data.periodExpenses)
-    const remainingBalance = totalBudget - totalExpenses
-    const utilizationRate = safeDivide(totalExpenses, totalBudget) * 100
+    const totalApprovedAllocations = data.approvedFinancials.totalApprovedBudget
+    // Receipt/OCR-based actual expenses — kept separate for project-level pages
+    const actualExpenses = data.approvedFinancials.totalExpenses
+    // Monthly Budget for the selected period
+    const targetMonth = filters?.view === 'yearly' ? null : (filters?.month ?? null)
+    const targetYear = filters?.year ?? null
+    const monthlyBudget = getBudgetTotalForPeriod(budgets, targetMonth, targetYear)
+    // Monthly Remaining Balance = Monthly Budget − Total Approved Allocations
+    const remainingBalance = monthlyBudget - totalApprovedAllocations
+    // totalBudget = monthlyBudget for consistent budget comparisons
+    const totalBudget = monthlyBudget
+    // totalExpenses = approved allocations (what's been officially committed)
+    const totalExpenses = totalApprovedAllocations
+    // utilizationRate = how much of the monthly budget has been allocated
+    const utilizationRate = monthlyBudget > 0 ? safeDivide(totalApprovedAllocations, monthlyBudget) * 100 : 0
     const performance = getPerformance(utilizationRate)
 
-    const prevTotalExpenses = sumAmount(data.prevExpenses)
-    const expensesChangePct = data.prevExpenses.length
+    const prevTotalExpenses = data.previousFinancials.totalApprovedBudget
+    const expensesChangePct = data.previousFinancials.records.length
       ? safeDivide(totalExpenses - prevTotalExpenses, prevTotalExpenses) * 100
       : null
 
     return {
       ...data,
+      monthlyBudget,
       totalBudget,
       totalExpenses,
+      actualExpenses,
       remainingBalance,
       utilizationRate,
       performance,
       prevTotalExpenses,
       expensesChangePct,
-      hasBudgetData: totalBudget > 0,
+      hasBudgetData: monthlyBudget > 0,
     }
-  }, [data])
+  }, [data, budgets, filters])
 }
 
 // ---------- Category analysis ----------
@@ -139,34 +172,92 @@ export function useCategoryAnalysis(filters) {
   }, [data])
 }
 
+// ---------- Budget distribution by category ----------
+export function useApprovedBudgetDistribution(filters) {
+  const data = useAnalysisData(filters)
+  return useMemo(() => {
+    const categoryMap = new Map()
+
+    ;(data.approvedBudgetRecords || []).forEach((r) => {
+      const amount = Number(r.approvedBudget) || 0
+      if (amount <= 0) return
+      
+      const category = String(r.category || 'Uncategorized').trim()
+      categoryMap.set(category, (categoryMap.get(category) || 0) + amount)
+    })
+
+    const distribution = Array.from(categoryMap.entries())
+      .map(([name, value]) => ({ name, value }))
+      .filter((c) => c.value > 0)
+
+    // Sort descending
+    distribution.sort((a, b) => b.value - a.value)
+    
+    const total = distribution.reduce((sum, c) => sum + c.value, 0)
+
+    return { distribution, total, hasData: total > 0 }
+  }, [data.approvedBudgetRecords])
+}
+
 // ---------- Monthly trend ----------
 export function useMonthlyTrend(filters) {
-  const { budgets, expenses } = useBudget()
+  const { expenses, verifiedReceiptTotals } = useBudget()
   return useMemo(() => {
     const year = filters.year
-    const rows = groupExpensesByMonth(expenses, year)
-    const budgetRow = budgetByMonth(budgets, year)
-    const prevYearRows = groupExpensesByMonth(expenses, year - 1)
+    const actualExpenses = materializeActualExpenseRows(expenses, verifiedReceiptTotals)
+    const rows = groupExpensesByMonth(actualExpenses, year)
+    
+    const budgetStats = MONTHS_SHORT.map((_, index) => (
+      summarizeApprovedBudgetFinancials(
+        expenses,
+        verifiedReceiptTotals,
+        { ...filters, view: 'monthly', month: index + 1, year },
+      )
+    ))
+    
+    const prevYearBudgetStats = MONTHS_SHORT.map((_, index) => (
+      summarizeApprovedBudgetFinancials(
+        expenses,
+        verifiedReceiptTotals,
+        { ...filters, view: 'monthly', month: index + 1, year: year - 1 },
+      )
+    ))
 
-    const merged = rows.map((r, i) => ({
-      ...r,
-      budget: budgetRow[i],
-      prevYear: prevYearRows[i].total,
-    }))
+    const merged = rows.map((r, i) => {
+      const budgetTotal = budgetStats[i].totalApprovedBudget
+      const prevBudgetTotal = prevYearBudgetStats[i].totalApprovedBudget
+      const budgetCount = budgetStats[i].records.length
 
-    // Only months up to and including any month that has data (avoid misleading future zeros).
-    const lastActive = merged.reduce((acc, r, i) => (r.total > 0 || r.count > 0 ? i : acc), -1)
-    const activeRows = lastActive >= 0 ? merged.slice(0, lastActive + 1) : merged
+      return {
+        ...r,
+        total: budgetTotal,
+        budget: budgetTotal,
+        prevYear: prevBudgetTotal,
+        count: budgetCount,
+        actualReceiptsTotal: r.total,
+        actualReceiptsCount: r.count,
+      }
+    })
+
+    // A monthly selection shows the year-to-date trajectory through that month;
+    // yearly mode shows the complete active trajectory. This keeps the trend
+    // meaningful while ensuring a month change actually refreshes the series.
+    const lastActive = merged.reduce((acc, r, i) => (r.total > 0 || r.count > 0 || r.actualReceiptsTotal > 0 ? i : acc), -1)
+    const activeRows = filters.view === 'monthly'
+      ? merged.slice(0, filters.month)
+      : lastActive >= 0 ? merged.slice(0, lastActive + 1) : merged
 
     const totals = activeRows.map((r) => r.total)
     const trend = calculateTrend(totals)
     const nonZero = totals.filter((t) => t > 0)
     const average = nonZero.length ? nonZero.reduce((a, b) => a + b, 0) / nonZero.length : 0
 
-    const currentMonthIndex = new Date().getMonth()
+    const currentMonthIndex = filters.view === 'monthly' ? filters.month - 1 : new Date().getMonth()
     const currentMonth =
-      year === new Date().getFullYear() ? merged[currentMonthIndex] : merged[lastActive] || merged[0]
-    const highestMonth = merged.reduce((max, r) => (r.total > (max?.total || 0) ? r : max), null)
+      filters.view === 'monthly' || year === new Date().getFullYear()
+        ? merged[currentMonthIndex]
+        : merged[lastActive] || merged[0]
+    const highestMonth = activeRows.reduce((max, r) => (r.total > (max?.total || 0) ? r : max), null)
 
     const average12 = merged.reduce((a, r) => a + r.total, 0) / 12
 
@@ -180,7 +271,7 @@ export function useMonthlyTrend(filters) {
       highestMonth,
       hasData: nonZero.length > 0,
     }
-  }, [budgets, expenses, filters.year])
+  }, [expenses, verifiedReceiptTotals, filters])
 }
 
 // ---------- Budget utilization ----------
@@ -189,20 +280,16 @@ export function useBudgetUtilization(filters) {
   return useMemo(() => {
     const { totalBudget, totalExpenses, remainingBalance, utilizationRate, performance } = summary
 
-    // Project-level utilization. In this data model an approved request's allocation
-    // equals its recorded expense, so we surface category-level utilization against
-    // an even share of the period budget when project budgets aren't separable.
-    const byProject = groupExpensesByProject(summary.periodExpenses)
-    const rows = byProject.map((p) => {
-      // Allocation is not separately stored per project; treat the period as the pool.
-      const utilized = p.value
-      const share = safeDivide(utilized, totalExpenses) * 100
-      return {
-        name: p.name,
-        utilized,
-        share,
-      }
-    })
+    const rows = summary.approvedBudgetRecords.map((record) => ({
+      id: record.id,
+      name: record.event || record.project || 'Unlabeled',
+      type: record.type || 'Project',
+      category: record.category || 'Uncategorized',
+      allocation: record.approvedBudget,
+      utilized: record.totalExpenses,
+      remaining: record.remainingBudget,
+      rate: record.budgetUtilization,
+    }))
 
     return {
       ...summary,
@@ -216,23 +303,29 @@ export function useBudgetUtilization(filters) {
   }, [summary])
 }
 
-// ---------- Budget vs Actual (allocated vs approved spending) ----------
+// ---------- Budget vs Actual (Monthly Budget vs Approved Budgets) ----------
 export function useBudgetVsActual(filters) {
-  const { budgets, expenses } = useBudget()
+  const { budgets, expenses, verifiedReceiptTotals } = useBudget()
   return useMemo(() => {
     const year = filters.year
-    const budgetRow = budgetByMonth(budgets, year)
-    const expenseRows = groupExpensesByMonth(expenses, year)
 
     const monthly = MONTHS_SHORT.map((label, i) => {
-      const budget = budgetRow[i]
-      const spending = expenseRows[i].total
-      const v = calculateVariance(budget, spending)
+      const targetMonth = i + 1
+      const monthlyBudget = getBudgetTotalForPeriod(budgets, targetMonth, year)
+
+      const financials = summarizeApprovedBudgetFinancials(
+        expenses,
+        verifiedReceiptTotals,
+        { ...filters, view: 'monthly', year, month: targetMonth },
+      )
+      
+      const approvedBudgets = financials.totalApprovedBudget
+      const v = calculateVariance(monthlyBudget, approvedBudgets)
       return {
         key: label,
-        label: expenseRows[i].monthFull,
-        budget,
-        spending,
+        label: new Date(year, i, 1).toLocaleString('en-US', { month: 'long' }),
+        budget: monthlyBudget,
+        spending: approvedBudgets,
         variance: v.amount,
         percentUsed: v.percentUsed,
         status: v.status,
@@ -271,5 +364,5 @@ export function useBudgetVsActual(filters) {
       highestUtilization,
       hasData: rowsWithData.length > 0,
     }
-  }, [budgets, expenses, filters.year, filters.view, filters.month])
+  }, [expenses, verifiedReceiptTotals, filters])
 }

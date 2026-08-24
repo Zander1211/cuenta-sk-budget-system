@@ -11,7 +11,7 @@ function push(list, cond, insight) {
 // Keeps the "Why" line deterministic and consistent with the severity rules.
 function budgetWhy(severity) {
   if (severity === 'high') return 'Spending has exceeded the selected budget threshold.'
-  if (severity === 'medium') return 'Spending is approaching the allocated budget limit.'
+  if (severity === 'medium') return 'Spending is approaching the approved budget limit.'
   return 'Budget usage is within a healthy range.'
 }
 
@@ -24,7 +24,7 @@ export function buildOverviewInsights(summary) {
     severity: perfSeverity,
     title: `Budget performance: ${performance.label}`,
     why: budgetWhy(perfSeverity),
-    detail: `${formatPercentage(utilizationRate)} of the allocated budget has been used. ${performance.message}`,
+    detail: `${formatPercentage(utilizationRate)} of approved working budgets has been used. ${performance.message}`,
   })
   push(out, remainingBalance < 0, {
     type: 'budget', severity: 'high', title: 'Spending exceeds allocation',

@@ -2,6 +2,8 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createClient } from '@supabase/supabase-js'
+import { verifyOtpRequest } from './api/verify-otp.js'
+import { updateProfileRequest } from './api/update-profile.js'
 
 // Local middleware to serve /api/chat using Gemini API
 // instead of proxying to the deployed Vercel function
@@ -308,49 +310,45 @@ function localOtpHandler(env) {
           req.on('end', async () => {
             res.setHeader('Content-Type', 'application/json')
             try {
-              const { email, code } = JSON.parse(body)
+              const payload = JSON.parse(body)
+              const result = await verifyOtpRequest({
+                ...payload,
+                authorization: req.headers.authorization,
+                supabaseUrl,
+                serviceKey: supabaseServiceKey,
+              })
 
-              if (!email || !code) {
-                res.statusCode = 400
-                res.end(JSON.stringify({ error: 'Email and code are required.' }))
-                return
-              }
-
-              const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-              const { data, error: dbError } = await supabase
-                .from('verification_codes')
-                .select('*')
-                .eq('email', email)
-                .eq('code', code.trim())
-                .eq('verified', false)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .single()
-
-              if (dbError || !data) {
-                res.statusCode = 400
-                res.end(JSON.stringify({ error: 'Invalid verification code. Please try again.' }))
-                return
-              }
-
-              if (new Date(data.expires_at) < new Date()) {
-                res.statusCode = 400
-                res.end(JSON.stringify({ error: 'Verification code has expired. Please request a new one.' }))
-                return
-              }
-
-              await supabase
-                .from('verification_codes')
-                .update({ verified: true })
-                .eq('id', data.id)
-
-              res.statusCode = 200
-              res.end(JSON.stringify({ success: true, message: 'Verification successful.' }))
+              res.statusCode = result.status
+              res.end(JSON.stringify(result.body))
             } catch (err) {
               console.error('[OTP] Verify error:', err)
               res.statusCode = 500
               res.end(JSON.stringify({ error: 'Verification failed: ' + err.message }))
+            }
+          })
+          return
+        }
+
+        // ── UPDATE PROFILE ──────────────────────────────────────
+        if (req.url === '/api/update-profile' && req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => { body += chunk.toString() })
+          req.on('end', async () => {
+            res.setHeader('Content-Type', 'application/json')
+            try {
+              const payload = JSON.parse(body)
+              const result = await updateProfileRequest({
+                ...payload,
+                authorization: req.headers.authorization,
+                supabaseUrl,
+                serviceKey: supabaseServiceKey,
+              })
+              res.statusCode = result.status
+              res.end(JSON.stringify(result.body))
+            } catch (error) {
+              console.error('[Profile] Local update error:', error)
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: 'Profile update failed. Please try again.' }))
             }
           })
           return
@@ -414,7 +412,6 @@ function localOtpHandler(env) {
 }
 
 export default defineConfig(({ mode }) => {
-  // eslint-disable-next-line no-undef
   const env = loadEnv(mode, process.cwd(), '')
 
   return {
