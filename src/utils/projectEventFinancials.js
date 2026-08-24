@@ -59,9 +59,24 @@ export function buildVerifiedReceiptTotals(receiptRows = []) {
  * amount, while children without receipts retain their saved amount.
  */
 export function calculateProjectEventFinancials(projectEvent, expenses = [], verifiedReceiptTotals = {}) {
-  const linkedExpenses = (expenses || []).filter((expense) =>
+  // 1. Get old standalone additional expenses
+  const legacyLinkedExpenses = (expenses || []).filter((expense) =>
     isExpenseLinkedToProjectEvent(expense, projectEvent)
   )
+
+  // 2. Get new breakdown-based additional expenses
+  const breakdown = Array.isArray(projectEvent?.breakdown) ? projectEvent.breakdown : []
+  const breakdownLinkedExpenses = breakdown
+    .filter(item => item.isAdditional)
+    .map((item, idx) => ({
+       ...item,
+       amount: positiveAmount(item.quantity) * positiveAmount(item.unitCost),
+       id: item.id || `${projectEvent?.id}-add-${idx}`,
+       parentProjectId: projectEvent?.id,
+    }))
+
+  // 3. Combine them
+  const linkedExpenses = [...legacyLinkedExpenses, ...breakdownLinkedExpenses]
   const recordedExpenseTotal = linkedExpenses.reduce(
     (sum, expense) => sum + positiveAmount(expense.amount),
     0,
@@ -106,7 +121,9 @@ export function calculateProjectEventFinancials(projectEvent, expenses = [], ver
   const approvedBudget = positiveAmount(
     projectEvent?.approvedBudget ?? projectEvent?.amount,
   )
-  const totalExpenses = directVerifiedReceiptTotal + resolvedLinkedExpenseTotal
+  // Additional Requisitions are purely for documentation and do not inherently deduct from the budget.
+  // Their costs are only counted when actual verified receipts are uploaded.
+  const totalExpenses = verifiedReceiptTotal
   const remainingBudget = approvedBudget - totalExpenses
   const utilization = approvedBudget > 0
     ? (totalExpenses / approvedBudget) * 100
@@ -123,15 +140,9 @@ export function calculateProjectEventFinancials(projectEvent, expenses = [], ver
     totalExpenses,
     remainingBudget,
     utilization,
-    source: directVerifiedReceiptTotal > 0 && linkedVerifiedReceiptTotal > 0
-      ? 'verified-receipts-and-recorded-expenses'
-      : directVerifiedReceiptTotal > 0
-        ? 'verified-receipts'
-        : linkedVerifiedReceiptTotal > 0
-        ? 'verified-receipts-and-recorded-expenses'
-        : recordedExpenseTotal > 0
-          ? 'recorded-expenses'
-          : 'none',
+    source: verifiedReceiptTotal > 0
+      ? 'verified-receipts'
+      : 'none',
   }
 }
 

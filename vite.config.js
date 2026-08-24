@@ -118,18 +118,36 @@ function localRecaptchaMock(env) {
 
               const supabaseUrl = env.VITE_SUPABASE_URL
               const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY
-              if (!supabaseUrl || !supabaseAnonKey) {
+              const supabaseServiceKey = env.SUPABASE_SERVICE_ROLE_KEY
+              if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
                 res.statusCode = 500
                 res.end(JSON.stringify({ error: 'Supabase configuration is missing locally' }))
                 return
               }
 
               const supabase = createClient(supabaseUrl, supabaseAnonKey)
+              const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 
               const { data, error } = await supabase.auth.signInWithPassword({ email, password })
               if (error) {
                 res.statusCode = 401
                 res.end(JSON.stringify({ error: error.message }))
+                return
+              }
+
+              // Check if account is disabled (bypassing RLS with service key for reliability)
+              const { data: accountRow } = await supabaseAdmin
+                .from('created_accounts')
+                .select('is_active')
+                .eq('id', data.session.user.id)
+                .maybeSingle()
+
+              if (accountRow && accountRow.is_active === false) {
+                await supabase.auth.signOut()
+                res.statusCode = 403
+                res.end(JSON.stringify({
+                  error: 'Your account has been disabled by the SK Chairman. Please contact the administrator for assistance.'
+                }))
                 return
               }
 

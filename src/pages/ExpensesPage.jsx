@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState, lazy, Suspense, useCallback } from 'react'
 import { AlertCircle, FileText, CheckCircle, ChevronDown, Plus, CreditCard, ChevronRight, Calculator, Archive, ArchiveRestore } from 'lucide-react'
 import { useBudget } from '../context/BudgetContext'
 import { useAuditLog } from '../context/AuditLogContext'
@@ -13,6 +13,8 @@ import { getBreakdownTotal, getRecordPeriod } from '../utils/budgetUtils'
 import BudgetBreakdownTable from '../components/BudgetBreakdownTable'
 import PaginationControls from '../components/PaginationControls'
 import { calculateProjectEventFinancials, formatUtilization, summarizeApprovedBudgetFinancials } from '../utils/projectEventFinancials'
+
+const ReceiptScanModal = lazy(() => import('../components/receipts/ReceiptScanModal'))
 
 const EXPENSES_PAGE_SIZE = 10
 
@@ -91,9 +93,11 @@ function ExpensesPage() {
   ), [expenses])
 
   // Receipt upload state
-  const [filesById, setFilesById] = useState({})
-  const [errorsById, setErrorsById] = useState({})
-  const [uploadingId, setUploadingId] = useState(null)
+  const [scanModalExpense, setScanModalExpense] = useState(null)
+  const handleScanSave = useCallback(async () => {
+    setScanModalExpense(null)
+    await refreshExpensesFromSupabase()
+  }, [refreshExpensesFromSupabase])
   const [receiptLinks, setReceiptLinks] = useState({})
   const RECEIPTS_BUCKET = 'receipts'
 
@@ -1394,6 +1398,16 @@ function ExpensesPage() {
           onClose={() => setPrintPreview(null)}
         />
       ) : null}
+
+      <Suspense fallback={null}>
+        {scanModalExpense && (
+          <ReceiptScanModal
+            expense={scanModalExpense}
+            onClose={() => setScanModalExpense(null)}
+            onSave={handleScanSave}
+          />
+        )}
+      </Suspense>
     </>
   )
 }

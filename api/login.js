@@ -66,12 +66,14 @@ export default async function handler(req, res) {
   // CAPTCHA verified, now authenticate with Supabase
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
     return res.status(500).json({ error: 'Supabase configuration is missing on the server' })
   }
 
   const supabase = createClient(supabaseUrl, supabaseAnonKey)
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
@@ -80,6 +82,24 @@ export default async function handler(req, res) {
 
   if (error) {
     return res.status(401).json({ error: error.message })
+  }
+
+  // Check whether this account has been disabled by the SK Chairman.
+  // We query created_accounts bypassing RLS using the admin client to guarantee
+  // the check succeeds even if the anon client's session isn't immediately attached.
+  const { data: accountRow } = await supabaseAdmin
+    .from('created_accounts')
+    .select('is_active')
+    .eq('id', data.session.user.id)
+    .maybeSingle()
+
+  if (accountRow && accountRow.is_active === false) {
+    // Sign the user back out immediately so no session token is left active.
+    await supabase.auth.signOut()
+    return res.status(403).json({
+      error:
+        'Your account has been disabled by the SK Chairman. Please contact the administrator for assistance.',
+    })
   }
 
   res.status(200).json({ session: data.session })

@@ -217,6 +217,7 @@ function BudgetProvider({ children }) {
   const [requests, setRequests] = useState(() => getInitialState().requests)
   const [expenses, setExpenses] = useState(() => getInitialState().expenses)
   const [expensesSyncStatus, setExpensesSyncStatus] = useState('idle')
+  const [verifiedReceiptTotals, setVerifiedReceiptTotals] = useState({})
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -337,7 +338,42 @@ function BudgetProvider({ children }) {
     }
   }
 
+  async function loadVerifiedReceiptTotalsFromSupabase() {
+    if (typeof window === 'undefined') return
+
+    try {
+      const { data, error } = await supabase
+        .from('receipt_records')
+        .select('record_id, requisition_id, ocr_metadata, ocr_verified_at')
+        .not('ocr_verified_at', 'is', null)
+
+      if (error) {
+        throw error
+      }
+
+      if (Array.isArray(data)) {
+        const totals = {}
+        data.forEach((receipt) => {
+          const amount = Number(receipt.ocr_metadata?.totalAmount) || 0
+          if (amount > 0) {
+             const rId = String(receipt.record_id)
+             totals[rId] = (totals[rId] || 0) + amount
+             if (receipt.requisition_id) {
+               const reqId = String(receipt.requisition_id)
+               totals[reqId] = (totals[reqId] || 0) + amount
+               totals[`requisition:${reqId}`] = totals[reqId]
+             }
+          }
+        })
+        setVerifiedReceiptTotals(totals)
+      }
+    } catch (error) {
+      console.warn('Supabase verified receipts sync failed', error?.message || error)
+    }
+  }
+
   function refreshExpensesFromSupabase() {
+    loadVerifiedReceiptTotalsFromSupabase()
     return loadExpensesFromSupabase()
   }
 
@@ -360,6 +396,7 @@ function BudgetProvider({ children }) {
         loadExpensesFromSupabase(),
         loadBudgetsFromSupabase(),
         loadRequestsFromSupabase(),
+        loadVerifiedReceiptTotalsFromSupabase(),
       ])
     }
   }
@@ -370,6 +407,7 @@ function BudgetProvider({ children }) {
     loadExpensesFromSupabase()
     loadBudgetsFromSupabase()
     loadRequestsFromSupabase()
+    loadVerifiedReceiptTotalsFromSupabase()
 
     const refreshRequests = () => {
       if (document.visibilityState === 'visible') {
@@ -862,6 +900,29 @@ function BudgetProvider({ children }) {
     const actorName = profileName || user?.user_metadata?.full_name || 'SK Chairman'
     const actorRole = role || 'SK Chairman'
 
+    // Optimistic UI update
+    setRequests((prev) =>
+      prev.map((item) =>
+        String(item.id) === String(requestId)
+          ? {
+              ...item,
+              status: 'Cancelled',
+              projectStatus: 'Cancelled',
+              cancelledAt: cancelledAt,
+              cancellationReason: reason,
+            }
+          : item
+      )
+    )
+
+    setExpenses((prev) =>
+      prev.map((expense) =>
+        String(expense.requestId) === String(requestId) || String(expense.request_id) === String(requestId)
+          ? { ...expense, status: 'Cancelled', projectStatus: 'Cancelled', archivedAt: cancelledAt }
+          : expense
+      )
+    )
+
     try {
       const { error: reqErr } = await supabase
         .from('budget_requests')
@@ -874,7 +935,7 @@ function BudgetProvider({ children }) {
         })
         .eq('id', requestId)
 
-      if (reqErr) throw reqErr
+      if (reqErr) console.warn('Failed to update request cancellation in Supabase:', reqErr)
 
       const { error: expErr } = await supabase
         .from('expenses')
@@ -886,7 +947,7 @@ function BudgetProvider({ children }) {
         })
         .eq('request_id', requestId)
 
-      if (expErr) throw expErr
+      if (expErr) console.warn('Failed to update expense cancellation in Supabase:', expErr)
 
       try {
         await supabase.from('audit_trail').insert({
@@ -921,28 +982,6 @@ function BudgetProvider({ children }) {
       } catch (notifErr) {
         console.warn('Failed to insert notification to database:', notifErr)
       }
-
-      setRequests((prev) =>
-        prev.map((item) =>
-          String(item.id) === String(requestId)
-            ? {
-                ...item,
-                status: 'Cancelled',
-                projectStatus: 'Cancelled',
-                cancelledAt: cancelledAt,
-                cancellationReason: reason,
-              }
-            : item
-        )
-      )
-
-      setExpenses((prev) =>
-        prev.map((expense) =>
-          String(expense.requestId) === String(requestId) || String(expense.request_id) === String(requestId)
-            ? { ...expense, status: 'Cancelled', projectStatus: 'Cancelled', archivedAt: cancelledAt }
-            : expense
-        )
-      )
 
       addLog({
         action: `Request Cancelled — ${request.event}`,
@@ -1400,8 +1439,56 @@ function BudgetProvider({ children }) {
       recordType: 'Expense',
       recordId: id,
       description: `Added expense: ${entry.event || entry.project} (₱${Number(entry.amount || 0).toLocaleString()})`,
-      newValue: { event: entry.event || entry.project, amount: Number(entry.amount || 0), category: entry.category },
+      newValue: { event: entry.event || entry.project, amount: Number(entry.amount || 0), category: entry.category, quantity: entry.quantity, unitCost: entry.unitCost },
     })
+  }
+
+  async function addAdditionalRequisition(parentProjectId, items) {
+    const parentExpense = expenses.find(e => String(e.id) === String(parentProjectId))
+    if (!parentExpense) {
+      return { error: new Error("Parent record not found") }
+    }
+
+    const currentBreakdown = Array.isArray(parentExpense.breakdown) ? parentExpense.breakdown : []
+    const newItems = items.map(item => ({ 
+      ...item, 
+      isAdditional: true, 
+      addedAt: new Date().toISOString(),
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+    }))
+    const updatedBreakdown = [...currentBreakdown, ...newItems]
+
+    const { error } = await supabase
+      .from('expenses')
+      .update({ breakdown: updatedBreakdown })
+      .eq('id', parentProjectId)
+
+    if (error) {
+      console.error('Failed to update additional requisition in Supabase:', error)
+      return { error }
+    }
+
+    setExpenses(prev => 
+      prev.map(exp => 
+        String(exp.id) === String(parentProjectId) 
+          ? { ...exp, breakdown: updatedBreakdown } 
+          : exp
+      )
+    )
+
+    const totalNewCost = newItems.reduce((sum, item) => sum + ((Number(item.quantity)||0) * (Number(item.unitCost)||0)), 0)
+
+    addLog({
+      action: `Additional Requisition Added — ${parentExpense.event || parentExpense.project}`,
+      actionType: 'Record Updated',
+      module: 'Expenses',
+      recordType: 'Expense',
+      recordId: parentProjectId,
+      description: `Appended ${items.length} additional item(s) totaling ₱${totalNewCost.toLocaleString()} to ${parentExpense.event || parentExpense.project}`,
+      newValue: { newItemsCount: items.length, totalNewCost },
+    })
+
+    return { error: null }
   }
 
   /**
@@ -1487,6 +1574,7 @@ function BudgetProvider({ children }) {
       expenses,
       expensesSyncStatus,
       totals,
+      verifiedReceiptTotals,
       addMonthlyBudget,
       approveRequest,
       rejectRequest,
@@ -1495,6 +1583,7 @@ function BudgetProvider({ children }) {
       archiveRequest,
       restoreRequest,
       addExpense,
+      addAdditionalRequisition,
       archiveExpense,
       restoreExpense,
       addRequest,
@@ -1506,7 +1595,7 @@ function BudgetProvider({ children }) {
       refreshExpensesFromSupabase,
       refreshAllBudgetData,
     }),
-    [budgets, requests, expenses, expensesSyncStatus, totals]
+    [budgets, requests, expenses, expensesSyncStatus, totals, verifiedReceiptTotals]
   )
 
   return <BudgetContext.Provider value={value}>{children}</BudgetContext.Provider>

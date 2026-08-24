@@ -180,29 +180,28 @@ export default function AnalysisOverviewPage() {
 
   // Spending Highlights 4 compact cards
   const spendingHighlights = useMemo(() => {
-    const highest = category.highest
-    const lowest = category.lowest && category.lowest.name !== highest?.name
-      ? category.lowest
-      : category.categories.length > 1
-        ? category.categories[category.categories.length - 1]
-        : null
+    const highestDist = dist.distribution.length > 0 ? dist.distribution[0] : null
+    const lowestDist = dist.distribution.length > 1 ? dist.distribution[dist.distribution.length - 1] : null
+
+    const highest = highestDist ? { name: highestDist.name, value: highestDist.value, percent: (highestDist.value / dist.total) * 100 } : null
+    const lowest = lowestDist ? { name: lowestDist.name, value: lowestDist.value, percent: (lowestDist.value / dist.total) * 100 } : null
 
     return [
       {
         icon: TrendingUp,
-        label: 'Highest Spending Category',
+        label: 'Highest Allocation Category',
         value: highest ? highest.name : 'None',
         sub: highest
           ? `${formatCurrency(highest.value)} (${formatPercentage(highest.percent, 0)})`
-          : 'No expenses recorded',
+          : 'No budget allocated',
       },
       {
         icon: TrendingDown,
-        label: 'Lowest Spending Category',
-        value: lowest ? lowest.name : (category.categories.length === 1 ? 'Only 1 Category' : 'None'),
+        label: 'Lowest Allocation Category',
+        value: lowest ? lowest.name : (dist.distribution.length === 1 ? 'Only 1 Category' : 'None'),
         sub: lowest
           ? `${formatCurrency(lowest.value)} (${formatPercentage(lowest.percent, 0)})`
-          : 'No secondary expenses',
+          : 'No secondary allocations',
       },
       {
         icon: Layers,

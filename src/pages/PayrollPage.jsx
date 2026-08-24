@@ -8,6 +8,7 @@ import CurrencyInput from '../components/CurrencyInput'
 import RecordFilterBar from '../components/RecordFilterBar'
 import { useNotifications } from '../context/NotificationContext'
 import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
+import { calculateProjectEventFinancials } from '../utils/projectEventFinancials'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -25,24 +26,26 @@ function getPayrollTotal(breakdown = []) {
 
 function PayrollPage() {
   const { role, user } = useAuth()
-  const { expenses, updateProjectStatus, refreshExpensesFromSupabase, updateExpenseReceipt } = useBudget()
+  const { expenses, totals, updateProjectStatus, refreshExpensesFromSupabase, updateExpenseReceipt } = useBudget()
   const { addNotification } = useNotifications()
 
   const [expanded, setExpanded] = useState({})
 
+  const currentYear = new Date().getFullYear()
+
   const [searchFilter, setSearchFilter] = useState('')
   const [dateFilter, setDateFilter] = useState('')
   const [monthFilter, setMonthFilter] = useState('')
-  const [yearFilter, setYearFilter] = useState('')
+  const [yearFilter, setYearFilter] = useState(currentYear)
   const [statusFilter, setStatusFilter] = useState('')
 
-  const hasActiveFilters = searchFilter || dateFilter || monthFilter || yearFilter || statusFilter
+  const hasActiveFilters = searchFilter || dateFilter || monthFilter || (yearFilter !== currentYear) || statusFilter
 
   function resetFilters() {
     setSearchFilter('')
     setDateFilter('')
     setMonthFilter('')
-    setYearFilter('')
+    setYearFilter(currentYear)
     setStatusFilter('')
   }
 
@@ -216,18 +219,27 @@ function PayrollPage() {
         if (!title.includes(q) && !purpose.includes(q) && !category.includes(q) && !creator.includes(q)) return false
       }
 
-      if (statusFilter && (item.projectStatus || 'Ongoing') !== statusFilter) return false
+      if (statusFilter && statusFilter !== 'All' && (item.projectStatus || 'Ongoing') !== statusFilter) return false
       
-      const itemDate = new Date(item.eventDate || item.date || item.approvedAt || item.created_at)
+      // Always use the actual payroll date for filtering
+      const rawDate = item.eventDate || item.date
+      const itemDate = rawDate ? new Date(rawDate) : null
+
       if (dateFilter) {
+        if (!itemDate) return false
         const selected = new Date(dateFilter)
         if (itemDate.toDateString() !== selected.toDateString()) return false
       }
-      if (monthFilter) {
-        const mStr = itemDate.toLocaleString('default', { month: 'long' })
-        if (mStr !== monthFilter) return false
+      // monthFilter is a numeric value (1–12) from monthOptions
+      if (monthFilter && monthFilter !== 'All') {
+        if (!itemDate) return false
+        if (itemDate.getMonth() + 1 !== Number(monthFilter)) return false
       }
-      if (yearFilter && itemDate.getFullYear().toString() !== yearFilter) return false
+      // yearFilter is a number (current year by default)
+      if (yearFilter) {
+        if (!itemDate) return false
+        if (itemDate.getFullYear() !== Number(yearFilter)) return false
+      }
       
       return true
     })
@@ -241,14 +253,18 @@ function PayrollPage() {
     if (!expanded[project.id]) return null
 
     const breakdownItems = Array.isArray(project.breakdown) ? project.breakdown : []
-    const breakdownTotal = getPayrollTotal(breakdownItems)
+    const originalBreakdownItems = breakdownItems.filter(e => !e.isAdditional)
+    const breakdownTotal = getPayrollTotal(originalBreakdownItems)
 
-    const additionalExpenses = expenses.filter(e => e.isAdditional && e.parentProjectId === project.id && !e.archivedAt)
-    const additionalSum = additionalExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
+    const verifiedReceiptTotals = totals?.verifiedReceiptTotals || {}
+    const financials = calculateProjectEventFinancials(project, expenses, verifiedReceiptTotals)
     
-    const approvedBudget = Number(project.amount || 0)
-    const totalExpenses = approvedBudget + additionalSum
-    const remainingBalance = approvedBudget - totalExpenses
+    const additionalExpenses = financials.linkedExpenses
+    const additionalSum = financials.recordedExpenseTotal
+    
+    const approvedBudget = financials.approvedBudget
+    const totalExpenses = financials.totalExpenses
+    const remainingBalance = financials.remainingBudget
 
     return (
       <tr className="details-row">
@@ -263,7 +279,7 @@ function PayrollPage() {
               {[
                 { label: 'Approved Budget', value: currency.format(approvedBudget) },
                 { label: 'Total Expenses', value: currency.format(totalExpenses) },
-                { label: 'Additional Expenses', value: currency.format(additionalSum) },
+                { label: 'Additional Requisitions', value: currency.format(additionalSum) },
                 { label: 'Remaining Balance', value: currency.format(remainingBalance), highlight: remainingBalance < 0 },
                 { label: 'Date Approved', value: project.approvedAt ? new Date(project.approvedAt).toLocaleDateString() : '—' }
               ].map((item, i) => (
@@ -311,7 +327,7 @@ function PayrollPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {breakdownItems.map((item, index) => {
+                    {originalBreakdownItems.map((item, index) => {
                       const hon = Number(item.honoraria) || 0
                       const cbc = Number(item.cbcLbf) || 0
                       const net = hon - cbc
@@ -340,34 +356,42 @@ function PayrollPage() {
             </div>
 
             <div className="details-breakdown">
-              <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '12px' }}>Additional Expenses Breakdown</p>
+              <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '12px' }}>Additional Requisition Breakdown</p>
               {additionalExpenses.length > 0 ? (
                 <table className="data-table" style={{ marginTop: '0' }}>
                   <thead>
                     <tr>
-                      <th>Description</th>
-                      <th>Date</th>
-                      <th>Amount</th>
+                      <th style={{ textTransform: 'uppercase' }}>DESCRIPTION</th>
+                      <th style={{ textTransform: 'uppercase' }}>CATEGORY</th>
+                      <th style={{ textTransform: 'uppercase' }}>DATE</th>
+                      <th style={{ textTransform: 'uppercase' }}>REMARKS</th>
+                      <th style={{ textTransform: 'uppercase' }}>QUANTITY</th>
+                      <th style={{ textTransform: 'uppercase' }}>UNIT COST</th>
+                      <th style={{ textTransform: 'uppercase' }}>TOTAL COST</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {additionalExpenses.map(e => (
-                      <tr key={e.id}>
-                        <td>{e.description || e.remarks || '—'}</td>
-                        <td>{e.date ? new Date(e.date).toLocaleDateString() : '—'}</td>
-                        <td>{currency.format(e.amount)}</td>
+                    {additionalExpenses.map((e, index) => (
+                      <tr key={e.id || index}>
+                        <td>{e.itemName || e.description || '—'}</td>
+                        <td>{e.category || project.category || '—'}</td>
+                        <td>{e.date || e.addedAt ? new Date(e.date || e.addedAt).toLocaleDateString() : '—'}</td>
+                        <td>{e.remarks || '—'}</td>
+                        <td>{e.quantity || '—'}</td>
+                        <td>{e.unitCost ? currency.format(e.unitCost) : '—'}</td>
+                        <td style={{ fontWeight: 600, color: 'var(--positive)' }}>{currency.format((Number(e.quantity)||0) * (Number(e.unitCost)||0))}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr>
-                      <th colSpan="2">Total Additional</th>
+                      <th colSpan="6" style={{ textTransform: 'uppercase' }}>TOTAL ADDITIONAL REQUISITIONS</th>
                       <th>{currency.format(additionalSum)}</th>
                     </tr>
                   </tfoot>
                 </table>
               ) : (
-                <p className="details-value" style={{ color: 'var(--text-secondary)' }}>No additional expenses linked to this payroll.</p>
+                <p className="details-value" style={{ color: 'var(--text-secondary)' }}>No additional requisitions linked to this payroll.</p>
               )}
             </div>
 
