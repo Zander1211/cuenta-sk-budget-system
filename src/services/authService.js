@@ -60,8 +60,11 @@ export async function registerUser(
 
 // LOGOUT
 export async function logoutUser() {
-
   const { error } = await supabase.auth.signOut()
+
+  if (!error) {
+    sessionStorage.removeItem('chatbotWelcomeShown')
+  }
 
   return { error }
 }

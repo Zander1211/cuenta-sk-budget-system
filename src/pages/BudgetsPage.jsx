@@ -126,8 +126,8 @@ function BudgetsPage() {
         </div>
       </header>
 
-      <section className="dashboard-content two-column" style={{ gap: '24px', alignItems: 'start' }}>
-        {canEdit ? (
+      <section className={`dashboard-content ${canEdit ? 'two-column' : ''}`} style={{ gap: '24px', alignItems: 'start' }}>
+        {canEdit && (
           <div className="overview-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div>
               <p className="eyebrow">New budget</p>
@@ -204,15 +204,6 @@ function BudgetsPage() {
                 Save Budget
               </button>
             </form>
-          </div>
-        ) : (
-          <div className="overview-card" style={{ padding: '24px' }}>
-            <p className="eyebrow">Budget summary</p>
-            <h2 style={{ margin: 0, marginBottom: '8px' }}>Budgets</h2>
-            <p className="form-note">
-              Only the SK Treasurer can add or edit budgets. You have view-only
-              access.
-            </p>
           </div>
         )}
 

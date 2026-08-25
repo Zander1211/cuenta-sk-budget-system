@@ -192,11 +192,33 @@ function ChatWidgetInner() {
   const [initialized, setInitialized] = useState(false)
   // Nothing is loaded from storage any more, so the widget is ready immediately.
   const [historyLoaded] = useState(true)
+  
+  const [showWelcome, setShowWelcome] = useState(false)
+
+  const { user, role, profileName } = useAuth()
+
+  useEffect(() => {
+    if (user && !sessionStorage.getItem('chatbotWelcomeShown')) {
+      const timer = setTimeout(() => setShowWelcome(true), 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [user])
+
+  const dismissWelcome = (e) => {
+    if (e) e.stopPropagation()
+    setShowWelcome(false)
+    sessionStorage.setItem('chatbotWelcomeShown', 'true')
+  }
+
+  useEffect(() => {
+    if (isOpen && showWelcome) {
+      dismissWelcome()
+    }
+  }, [isOpen, showWelcome])
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
   const location = useLocation()
-  const { user, role, profileName } = useAuth()
   const { requests, expenses, totals, budgets, verifiedReceiptTotals } = useBudget()
 
   const approvedFinancials = summarizeApprovedBudgetFinancials(expenses, verifiedReceiptTotals)
@@ -1133,6 +1155,61 @@ function ChatWidgetInner() {
 
   return (
     <>
+      <AnimatePresence>
+        {showWelcome && !isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+            transition={{ duration: 0.3, type: 'spring', bounce: 0.4 }}
+            className="fixed z-[9999]"
+            style={{
+              bottom: '96px',
+              right: '24px',
+              background: 'white',
+              borderRadius: '20px 20px 4px 20px',
+              boxShadow: 'var(--shadow-lift)',
+              padding: '16px 20px',
+              width: '260px',
+              border: '1px solid var(--line)',
+            }}
+          >
+            <button
+              onClick={dismissWelcome}
+              className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center cursor-pointer border-none"
+              style={{ background: 'transparent', color: 'var(--ink-3)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              aria-label="Close welcome message"
+            >
+              <X size={14} />
+            </button>
+            <div className="flex flex-col gap-2">
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--ink)', margin: 0 }}>
+                👋 Welcome to Cuenta!
+              </h3>
+              <p style={{ fontSize: '0.9rem', color: 'var(--ink-2)', lineHeight: 1.4, margin: 0 }}>
+                Hi! I'm Cue. How can I assist you today?
+              </p>
+            </div>
+            {/* Speech bubble tail */}
+            <div 
+              style={{
+                position: 'absolute',
+                bottom: '-6px',
+                right: '24px',
+                width: '12px',
+                height: '12px',
+                background: 'white',
+                borderRight: '1px solid var(--line)',
+                borderBottom: '1px solid var(--line)',
+                transform: 'rotate(45deg)',
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* FAB Toggle Button */}
       <button
         id="cue-chat-fab"
