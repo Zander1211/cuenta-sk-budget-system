@@ -21,6 +21,7 @@ CREATE INDEX IF NOT EXISTS idx_verification_codes_email ON public.verification_c
 ALTER TABLE public.verification_codes ENABLE ROW LEVEL SECURITY;
 
 -- Allow service role full access (backend API routes use service role)
+DROP POLICY IF EXISTS "Service role full access on verification_codes" ON public.verification_codes;
 CREATE POLICY "Service role full access on verification_codes"
     ON public.verification_codes
     FOR ALL

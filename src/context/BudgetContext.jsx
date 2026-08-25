@@ -685,18 +685,23 @@ function BudgetProvider({ children }) {
         }
 
         // 4. Insert into notifications
+        const rolesToNotify = ['SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']
         try {
-          await supabase.from('notifications').insert({
+          const notificationsToInsert = rolesToNotify.map((r) => ({
             type: 'approval',
             title: 'Budget Request Approved',
             message: `${requestType}: ${request.event}\nApproved: ₱${approvedAmount.toLocaleString()}`,
             actor_id: user?.id || null,
             actor_role: actorRole,
-            recipient_role: 'SK Treasurer',
+            recipient_role: r,
             request_id: requestId,
-          })
+          }))
+          const { error: notifErr } = await supabase.from('notifications').insert(notificationsToInsert)
+          if (notifErr) {
+            console.error('Database Error inserting notifications for approval fallback:', notifErr)
+          }
         } catch (notifErr) {
-          console.warn('Failed to insert notification to database:', notifErr)
+          console.error('Exception inserting notification to database:', notifErr)
         }
       }
 
@@ -829,18 +834,23 @@ function BudgetProvider({ children }) {
       console.warn('Failed to insert audit log for rejection:', auditErr)
     }
 
+    const rolesToNotify = ['SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']
     try {
-      await supabase.from('notifications').insert({
+      const notificationsToInsert = rolesToNotify.map((r) => ({
         type: 'rejection',
         title: 'Budget Request Rejected',
         message: request ? `"${request.event}" was rejected. Reason: ${reason}` : `Request was rejected.`,
         actor_id: user?.id || null,
         actor_role: actorRole,
-        recipient_role: 'SK Treasurer',
+        recipient_role: r,
         request_id: requestId,
-      })
+      }))
+      const { error: notifErr } = await supabase.from('notifications').insert(notificationsToInsert)
+      if (notifErr) {
+        console.error('Database Error inserting notifications for rejection:', notifErr)
+      }
     } catch (notifErr) {
-      console.warn('Failed to insert notification for rejection:', notifErr)
+      console.error('Exception inserting notification for rejection:', notifErr)
     }
 
     addLog({
@@ -969,18 +979,23 @@ function BudgetProvider({ children }) {
         console.warn('Failed to insert audit trail for cancellation:', auditErr)
       }
 
+      const rolesToNotify = ['SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']
       try {
-        await supabase.from('notifications').insert({
+        const notificationsToInsert = rolesToNotify.map((r) => ({
           type: 'rejection',
           title: 'Approval Cancelled',
           message: `The approval for "${request.event}" was cancelled. Reason: ${reason}`,
           actor_id: user?.id || null,
           actor_role: actorRole,
-          recipient_role: 'SK Treasurer',
+          recipient_role: r,
           request_id: requestId,
-        })
+        }))
+        const { error: notifErr } = await supabase.from('notifications').insert(notificationsToInsert)
+        if (notifErr) {
+          console.error('Database Error inserting notifications for cancellation:', notifErr)
+        }
       } catch (notifErr) {
-        console.warn('Failed to insert notification to database:', notifErr)
+        console.error('Exception inserting notification to database:', notifErr)
       }
 
       addLog({
@@ -1166,6 +1181,25 @@ function BudgetProvider({ children }) {
       return { error }
     }
 
+    const rolesToNotify = ['SK Chairman', 'SK Kagawad', 'Barangay Treasurer']
+    try {
+      const notificationsToInsert = rolesToNotify.map((r) => ({
+        type: 'system',
+        title: 'New Budget Request Pending',
+        message: `Project: ${event}\nRequested: ₱${Number(amount || 0).toLocaleString()}\nDate Submitted: ${new Date().toLocaleDateString()}\nBy: SK Treasurer`,
+        actor_id: user?.id || null,
+        actor_role: role || 'SK Treasurer',
+        recipient_role: r,
+        request_id: id,
+      }))
+      const { error: notifErr } = await supabase.from('notifications').insert(notificationsToInsert)
+      if (notifErr) {
+        console.error('Database Error inserting notifications for addRequest:', notifErr)
+      }
+    } catch (notifErr) {
+      console.error('Exception inserting notifications for addRequest:', notifErr)
+    }
+
     const savedRequest = mapRequestRow(data)
     setRequests((prev) => [
       savedRequest,
@@ -1181,6 +1215,7 @@ function BudgetProvider({ children }) {
       description: `New budget request submitted for ${event} (₱${Number(amount || 0).toLocaleString()})`,
       newValue: { event, amount: Number(amount || 0), category, status: 'Pending' },
     })
+
     addNotification({
       type: 'system',
       title: 'New Budget Request Pending',
@@ -1246,7 +1281,45 @@ function BudgetProvider({ children }) {
       console.error('Failed to update resubmitted budget request:', error)
       return { error }
     }
+
+    addLog({
+      action: `Budget Request Resubmitted — ${request.event}`,
+      actionType: 'Request Submitted',
+      module: 'Budget Requests',
+      recordType: 'Budget Request',
+      recordId: requestId,
+      description: `The SK Treasurer has updated and resubmitted the budget request for "${request.event}" worth ₱${Number(amount || 0).toLocaleString()}.`,
+      newValue: { event: request.event, amount: Number(amount || 0), status: 'Pending' },
+    })
+
+    const rolesToNotify = ['SK Chairman', 'SK Kagawad', 'Barangay Treasurer']
+    try {
+      const notificationsToInsert = rolesToNotify.map((r) => ({
+        type: 'system',
+        title: 'Budget Request Resubmitted',
+        message: r === 'SK Chairman'
+          ? `The SK Treasurer has updated and resubmitted the budget request for "${request.event}" worth ₱${Number(amount || 0).toLocaleString()}. The request is ready for your review.`
+          : `The SK Treasurer has resubmitted a corrected budget request for "${request.event}" for review by the SK Chairman.`,
+        actor_id: user?.id || null,
+        actor_role: role || 'SK Treasurer',
+        recipient_role: r,
+        request_id: requestId,
+      }))
+      const { error: notifErr } = await supabase.from('notifications').insert(notificationsToInsert)
+      if (notifErr) {
+        console.error('Database Error inserting notifications for resubmitRequest:', notifErr)
+      }
+    } catch (notifErr) {
+      console.error('Exception inserting notifications for resubmitRequest:', notifErr)
+    }
+
+    addNotification({
+      type: 'system',
+      title: 'Budget Request Resubmitted',
+      message: `The SK Treasurer has updated and resubmitted the budget request for "${request.event}" worth ₱${Number(amount || 0).toLocaleString()}.`,
+    })
     
+
     setRequests((prev) =>
       prev.map((item) => {
         if (String(item.id) !== String(requestId)) return item

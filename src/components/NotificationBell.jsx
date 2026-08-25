@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Bell, Check, CheckCheck, Trash2, X } from 'lucide-react'
 import { useNotifications } from '../context/NotificationContext'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 function timeAgo(timestamp) {
   const now = Date.now()
@@ -27,6 +29,8 @@ const typeIcons = {
 function NotificationBell() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } =
     useNotifications()
+  const { role } = useAuth()
+  const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef(null)
   const bellRef = useRef(null)
@@ -56,6 +60,14 @@ function NotificationBell() {
   function handleNotificationClick(notification) {
     if (!notification.read) {
       markAsRead(notification.id)
+    }
+    setIsOpen(false)
+
+    // Route based on role
+    if (role === 'SK Chairman') {
+      navigate('/dashboard/approvals')
+    } else {
+      navigate('/dashboard/budget-requests')
     }
   }
 

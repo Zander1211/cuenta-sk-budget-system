@@ -63,12 +63,19 @@ function NotificationProvider({ children }) {
       serverBacked: true,
     }))
 
-    setNotifications((prev) => [
-      ...serverNotifications,
-      ...prev.filter((item) =>
-        !serverNotifications.some((serverItem) => serverItem.id === item.id)
-      ),
-    ])
+    setNotifications((prev) => {
+      const mergedServerNotifications = serverNotifications.map((serverItem) => {
+        const existing = prev.find((p) => p.id === serverItem.id)
+        return existing ? { ...serverItem, read: existing.read } : serverItem
+      })
+
+      return [
+        ...mergedServerNotifications,
+        ...prev.filter((item) =>
+          !mergedServerNotifications.some((serverItem) => serverItem.id === item.id)
+        ),
+      ]
+    })
   }, [isAuthenticated])
 
   useEffect(() => {
