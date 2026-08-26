@@ -44,6 +44,7 @@ const BudgetVsActualPage = lazy(() => import('./pages/analysis/BudgetVsActualPag
 const ExpensesByCategoryPage = lazy(() => import('./pages/analysis/ExpensesByCategoryPage'))
 const MonthlySpendingPage = lazy(() => import('./pages/analysis/MonthlySpendingPage'))
 const BudgetUtilizationPage = lazy(() => import('./pages/analysis/BudgetUtilizationPage'))
+const CategoryBudgetDistributionPage = lazy(() => import('./pages/analysis/CategoryBudgetDistributionPage'))
 
 function AppRoutes() {
   const { isLoading, isAuthenticated } = useAuth()
@@ -113,6 +114,14 @@ function AppRoutes() {
             element={
               <Suspense fallback={<LoadingScreen />}>
                 <BudgetUtilizationPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="analysis/budget-distribution"
+            element={
+              <Suspense fallback={<LoadingScreen />}>
+                <CategoryBudgetDistributionPage />
               </Suspense>
             }
           />

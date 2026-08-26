@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
@@ -42,7 +42,6 @@ import {
   pesoTick,
   colorForCategory,
 } from '../../utils/analytics'
-import { exportAiAnalysisPdf } from '../../utils/exportPdf'
 
 
 const BREADCRUMB = [{ label: 'Home', to: '/dashboard' }, { label: 'Financial Analysis' }]
@@ -64,8 +63,6 @@ export default function AnalysisOverviewPage() {
   const yearFilters = useMemo(() => ({ ...filters, view: 'yearly' }), [filters])
   const bva = useBudgetVsActual(yearFilters)
 
-  const [exporting, setExporting] = useState(false)
-  const distChartRef = useRef(null)
 
   const label = periodLabel(filters)
   const hasData = summary.hasAnyData
@@ -387,22 +384,10 @@ export default function AnalysisOverviewPage() {
     );
   };
 
-  async function handleExportPdf() {
-    if (exporting || !dist.hasData) return
-    setExporting(true)
-    try {
-      await exportAiAnalysisPdf({
-        chartRef: distChartRef.current,
-        distribution: dist.distribution,
-        total: dist.total,
-        aiSummary: distAiSummary,
-        filters,
-      })
-    } catch (err) {
-      console.error('PDF export failed:', err)
-    } finally {
-      setExporting(false)
-    }
+  function handleViewFullReport() {
+    const params = new URLSearchParams({ view: filters.view, year: String(filters.year) })
+    if (filters.view === 'monthly') params.set('month', String(filters.month))
+    navigate(`/dashboard/analysis/budget-distribution?${params.toString()}`)
   }
 
   return (
@@ -410,19 +395,6 @@ export default function AnalysisOverviewPage() {
       breadcrumb={BREADCRUMB}
       title="Financial Analysis & AI Insights"
       description="Consolidated intelligence on budgets, spending velocity, category concentrations, and AI-driven risk detection."
-      headerActions={
-        hasData && dist.hasData && (
-          <button
-            type="button"
-            className="an-btn an-btn-outline"
-            onClick={handleExportPdf}
-            disabled={exporting}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
-            {exporting ? 'Exporting...' : 'Export AI Analysis PDF'}
-          </button>
-        )
-      }
       filterBar={
         <AnalysisFilterBar
           filters={filters}
@@ -562,7 +534,7 @@ export default function AnalysisOverviewPage() {
               </div>
 
               {/* Card 2: Approved Budget Distribution (Pie Chart) */}
-              <div className="an-chart-card" ref={distChartRef} data-pdf-capture="full">
+              <div className="an-chart-card">
                 <div className="an-chart-head">
                   <div>
                     <h3 className="an-chart-title">Approved Budget Distribution</h3>
@@ -611,7 +583,17 @@ export default function AnalysisOverviewPage() {
                       <strong>AI Summary:</strong> {distAiSummary}
                     </p>
                   )}
-                  <span style={{ fontSize: '0.75rem', color: 'var(--ink-4)', marginTop: '4px' }}>Updated for {label}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--ink-4)' }}>Updated for {label}</span>
+                    <button
+                      type="button"
+                      className="an-chart-link"
+                      onClick={handleViewFullReport}
+                      disabled={!dist.hasData}
+                    >
+                      View full report <ArrowRight size={14} />
+                    </button>
+                  </div>
                 </div>
               </div>
 

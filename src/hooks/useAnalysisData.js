@@ -181,21 +181,25 @@ export function useApprovedBudgetDistribution(filters) {
     ;(data.approvedBudgetRecords || []).forEach((r) => {
       const amount = Number(r.approvedBudget) || 0
       if (amount <= 0) return
-      
+
       const category = String(r.category || 'Uncategorized').trim()
-      categoryMap.set(category, (categoryMap.get(category) || 0) + amount)
+      const entry = categoryMap.get(category) || { value: 0, count: 0 }
+      entry.value += amount
+      entry.count += 1
+      categoryMap.set(category, entry)
     })
 
     const distribution = Array.from(categoryMap.entries())
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, entry]) => ({ name, value: entry.value, count: entry.count }))
       .filter((c) => c.value > 0)
 
     // Sort descending
     distribution.sort((a, b) => b.value - a.value)
-    
-    const total = distribution.reduce((sum, c) => sum + c.value, 0)
 
-    return { distribution, total, hasData: total > 0 }
+    const total = distribution.reduce((sum, c) => sum + c.value, 0)
+    const totalProjectsEvents = distribution.reduce((sum, c) => sum + c.count, 0)
+
+    return { distribution, total, totalProjectsEvents, hasData: total > 0 }
   }, [data.approvedBudgetRecords])
 }
 

@@ -1023,22 +1023,37 @@ function BudgetProvider({ children }) {
     }
   }
 
-  function archiveRequest(requestId, archivedBy = 'System') {
+  async function archiveRequest(requestId, archivedBy) {
     const request = requests.find((item) => String(item.id) === String(requestId))
     if (!request || request.archivedAt) {
-      return
+      return { error: null }
     }
 
     const now = new Date().toISOString()
+    const actorName = archivedBy || profileName || user?.user_metadata?.full_name || 'System'
+
+    const { error } = await supabase
+      .from('budget_requests')
+      .update({ archived_at: now, archived_by: actorName, updated_at: now })
+      .eq('id', requestId)
+
+    if (error) {
+      console.error('Failed to archive request in Supabase:', error)
+      return { error }
+    }
+
+    if (request.status === 'Approved') {
+      const { error: expErr } = await supabase
+        .from('expenses')
+        .update({ archived_at: now })
+        .eq('request_id', requestId)
+      if (expErr) console.warn('Failed to archive linked expense in Supabase:', expErr)
+    }
 
     setRequests((prev) =>
       prev.map((item) =>
         String(item.id) === String(requestId)
-          ? {
-              ...item,
-              archivedAt: now,
-              archivedBy,
-            }
+          ? { ...item, archivedAt: now, archivedBy: actorName }
           : item
       )
     )
@@ -1046,8 +1061,8 @@ function BudgetProvider({ children }) {
     if (request.status === 'Approved') {
       setExpenses((prev) =>
         prev.map((expense) =>
-          expense.id === requestId || expense.parentProjectId === requestId
-            ? { ...expense, archivedAt: now, archivedBy }
+          String(expense.requestId) === String(requestId)
+            ? { ...expense, archivedAt: now, archivedBy: actorName }
             : expense
         )
       )
@@ -1056,29 +1071,45 @@ function BudgetProvider({ children }) {
     addLog({
       action: `Request Archived — ${request.event}`,
       actionType: 'Request Archived',
-      module: 'Budget Requests',
+      module: request.type || 'Budget Requests',
       recordType: 'Budget Request',
       recordId: requestId,
       description: `Archived budget request for ${request.event}`,
       previousValue: { archivedAt: null },
       newValue: { archivedAt: now },
     })
+
+    return { error: null }
   }
 
-  function restoreRequest(requestId) {
+  async function restoreRequest(requestId) {
     const request = requests.find((item) => String(item.id) === String(requestId))
     if (!request || !request.archivedAt) {
-      return
+      return { error: null }
+    }
+
+    const { error } = await supabase
+      .from('budget_requests')
+      .update({ archived_at: null, archived_by: null, updated_at: new Date().toISOString() })
+      .eq('id', requestId)
+
+    if (error) {
+      console.error('Failed to restore request in Supabase:', error)
+      return { error }
+    }
+
+    if (request.status === 'Approved') {
+      const { error: expErr } = await supabase
+        .from('expenses')
+        .update({ archived_at: null })
+        .eq('request_id', requestId)
+      if (expErr) console.warn('Failed to restore linked expense in Supabase:', expErr)
     }
 
     setRequests((prev) =>
       prev.map((item) =>
         String(item.id) === String(requestId)
-          ? {
-              ...item,
-              archivedAt: null,
-              archivedBy: null,
-            }
+          ? { ...item, archivedAt: null, archivedBy: null }
           : item
       )
     )
@@ -1086,7 +1117,7 @@ function BudgetProvider({ children }) {
     if (request.status === 'Approved') {
       setExpenses((prev) =>
         prev.map((expense) =>
-          expense.id === requestId || expense.parentProjectId === requestId
+          String(expense.requestId) === String(requestId)
             ? { ...expense, archivedAt: null, archivedBy: null }
             : expense
         )
@@ -1096,13 +1127,15 @@ function BudgetProvider({ children }) {
     addLog({
       action: `Request Restored — ${request.event}`,
       actionType: 'Request Restored',
-      module: 'Budget Requests',
+      module: request.type || 'Budget Requests',
       recordType: 'Budget Request',
       recordId: requestId,
       description: `Restored archived budget request for ${request.event}`,
       previousValue: { archivedAt: request.archivedAt },
       newValue: { archivedAt: null },
     })
+
+    return { error: null }
   }
 
   async function addRequest({
@@ -1579,33 +1612,62 @@ function BudgetProvider({ children }) {
     )
   }
 
-  function archiveExpense(expenseId) {
+  async function archiveExpense(expenseId) {
     const expense = expenses.find((item) => item.id === expenseId)
-    if (!expense || expense.archivedAt) return
+    if (!expense || expense.archivedAt) return { error: null }
+
+    const now = new Date().toISOString()
+    const recordType = expense.type || 'Expense'
+    const moduleName = recordType === 'Project' ? 'Projects' : recordType === 'Event' ? 'Events' : recordType === 'Payroll' ? 'Payroll' : 'Expenses'
+
+    const { error } = await supabase
+      .from('expenses')
+      .update({ archived_at: now })
+      .eq('id', expenseId)
+
+    if (error) {
+      console.error('Failed to archive expense in Supabase:', error)
+      return { error }
+    }
 
     setExpenses((prev) =>
       prev.map((item) =>
         item.id === expenseId
-          ? { ...item, archivedAt: new Date().toISOString() }
+          ? { ...item, archivedAt: now }
           : item
       )
     )
 
     addLog({
-      action: `Expense Archived — ${expense.event || expense.project}`,
-      actionType: 'Expense Deleted',
-      module: 'Expenses',
-      recordType: 'Expense',
+      action: `${recordType} Archived — ${expense.event || expense.project}`,
+      actionType: `${recordType} Archived`,
+      module: moduleName,
+      recordType,
       recordId: expenseId,
-      description: `Archived expense for ${expense.event || expense.project}`,
+      description: `Archived ${recordType.toLowerCase()} record for ${expense.event || expense.project}`,
       previousValue: { archivedAt: null, status: expense.status },
-      newValue: { archivedAt: new Date().toISOString() },
+      newValue: { archivedAt: now },
     })
+
+    return { error: null }
   }
 
-  function restoreExpense(expenseId) {
+  async function restoreExpense(expenseId) {
     const expense = expenses.find((item) => item.id === expenseId)
-    if (!expense || !expense.archivedAt) return
+    if (!expense || !expense.archivedAt) return { error: null }
+
+    const recordType = expense.type || 'Expense'
+    const moduleName = recordType === 'Project' ? 'Projects' : recordType === 'Event' ? 'Events' : recordType === 'Payroll' ? 'Payroll' : 'Expenses'
+
+    const { error } = await supabase
+      .from('expenses')
+      .update({ archived_at: null })
+      .eq('id', expenseId)
+
+    if (error) {
+      console.error('Failed to restore expense in Supabase:', error)
+      return { error }
+    }
 
     setExpenses((prev) =>
       prev.map((item) =>
@@ -1616,15 +1678,17 @@ function BudgetProvider({ children }) {
     )
 
     addLog({
-      action: `Expense Restored — ${expense.event || expense.project}`,
-      actionType: 'Expense Updated',
-      module: 'Expenses',
-      recordType: 'Expense',
+      action: `${recordType} Restored — ${expense.event || expense.project}`,
+      actionType: `${recordType} Restored`,
+      module: moduleName,
+      recordType,
       recordId: expenseId,
-      description: `Restored archived expense for ${expense.event || expense.project}`,
+      description: `Restored archived ${recordType.toLowerCase()} record for ${expense.event || expense.project}`,
       previousValue: { archivedAt: expense.archivedAt },
       newValue: { archivedAt: null },
     })
+
+    return { error: null }
   }
 
   const totals = useMemo(() => {

@@ -79,11 +79,25 @@ async function captureChartImage(chartContainerEl) {
       useCORS: true,
       logging: false,
     })
-    return canvas.toDataURL('image/png')
+    return { dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height }
   } catch (err) {
     console.warn('Chart capture failed:', err)
     return null
   }
+}
+
+// Fits a captured image inside a maxWidth x maxHeight box without distorting
+// its aspect ratio (avoids squishing/cropping variable-height content like a
+// pie chart + legend list).
+function fitImageBox(image, maxWidth, maxHeight) {
+  const naturalRatio = image.width / image.height
+  let w = maxWidth
+  let h = w / naturalRatio
+  if (h > maxHeight) {
+    h = maxHeight
+    w = h * naturalRatio
+  }
+  return { w, h }
 }
 
 // ── Report Header ──────────────────────────────────────────────────────────────
@@ -276,7 +290,7 @@ export async function exportBudgetVsActualPdf({ chartRef, bva, filters }) {
     doc.setDrawColor(...COLORS.line)
     doc.setLineWidth(0.3)
     doc.roundedRect(MARGIN, y, CONTENT_W, 72, 2, 2, 'S')
-    doc.addImage(chartImg, 'PNG', MARGIN + 2, y + 2, CONTENT_W - 4, 68)
+    doc.addImage(chartImg.dataUrl, 'PNG', MARGIN + 2, y + 2, CONTENT_W - 4, 68)
     y += 78
   }
 
@@ -373,7 +387,7 @@ export async function exportMonthlySpendingPdf({ chartRef, tableRows, filters })
     doc.setDrawColor(...COLORS.line)
     doc.setLineWidth(0.3)
     doc.roundedRect(MARGIN, y, CONTENT_W, 72, 2, 2, 'S')
-    doc.addImage(chartImg, 'PNG', MARGIN + 2, y + 2, CONTENT_W - 4, 68)
+    doc.addImage(chartImg.dataUrl, 'PNG', MARGIN + 2, y + 2, CONTENT_W - 4, 68)
     y += 78
   }
 
@@ -478,7 +492,7 @@ export async function exportBudgetAllocationPdf({ chartRef, categories, filters 
     doc.setDrawColor(...COLORS.line)
     doc.setLineWidth(0.3)
     doc.roundedRect(MARGIN, y, CONTENT_W, 78, 2, 2, 'S')
-    doc.addImage(chartImg, 'PNG', MARGIN + 2, y + 2, CONTENT_W - 4, 74)
+    doc.addImage(chartImg.dataUrl, 'PNG', MARGIN + 2, y + 2, CONTENT_W - 4, 74)
     y += 84
   }
 
@@ -527,13 +541,13 @@ export async function exportBudgetAllocationPdf({ chartRef, categories, filters 
 // PUBLIC: Export AI Analysis PDF (Approved Budget Distribution)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export async function exportAiAnalysisPdf({ chartRef, distribution, total, aiSummary, filters }) {
+export async function exportAiAnalysisPdf({ chartRef, distribution, total, totalProjectsEvents, aiSummary, filters }) {
   const doc = initPdfDoc('portrait')
   const now = new Date()
   const generatedAt = now.toLocaleString()
 
   let y = drawReportHeader(doc, {
-    title: 'Approved Budget Distribution',
+    title: 'Category Budget Distribution',
     year: filters.year,
     month: filters.month,
     view: filters.view,
@@ -542,37 +556,61 @@ export async function exportAiAnalysisPdf({ chartRef, distribution, total, aiSum
 
   const chartImg = await captureChartImage(chartRef)
   if (chartImg) {
-    y = checkPageBreak(doc, y, 91)
     doc.setFontSize(10)
     doc.setFont('Roboto', 'bold')
     setColor(doc, COLORS.dark)
+
+    // The pie + legend capture's height varies with the number of categories,
+    // so fit it proportionally instead of stretching it into a fixed box —
+    // stretching/clipping was cutting off legend text for longer lists.
+    const maxBoxW = CONTENT_W - 4
+    const maxBoxH = 100
+    const { w: imgW, h: imgH } = fitImageBox(chartImg, maxBoxW, maxBoxH)
+    const boxH = imgH + 6
+
+    y = checkPageBreak(doc, y, boxH + 15)
     doc.text('Category Breakdown', MARGIN, y)
     y += 5
 
     doc.setDrawColor(...COLORS.line)
     doc.setLineWidth(0.3)
-    doc.roundedRect(MARGIN, y, CONTENT_W, 78, 2, 2, 'S')
-    doc.addImage(chartImg, 'PNG', MARGIN + 2, y + 2, CONTENT_W - 4, 74)
-    y += 84
+    doc.roundedRect(MARGIN, y, CONTENT_W, boxH, 2, 2, 'S')
+    doc.addImage(chartImg.dataUrl, 'PNG', MARGIN + (CONTENT_W - imgW) / 2, y + 3, imgW, imgH)
+    y += boxH + 6
   }
 
   y = checkPageBreak(doc, y, 20)
   doc.setFontSize(11)
   doc.setFont('Roboto', 'bold')
   setColor(doc, COLORS.dark)
-  doc.text('Distribution Table', MARGIN, y)
+  doc.text('Budget Summary Table', MARGIN, y)
   y += 6
+
+  const totalCount = totalProjectsEvents ?? distribution.reduce((sum, row) => sum + (Number(row.count) || 0), 0)
 
   y = drawDataTable(doc, {
     startY: y,
     columns: [
-      { key: 'name', header: 'Category', width: 60 },
-      { key: 'value', header: 'Approved Budget', align: 'right', width: 60, format: (row) => formatCurrency(row.value, { detailed: true }) },
-      { key: 'percent', header: 'Share', align: 'right', width: 40, format: (row) => formatPercentage((row.value / total) * 100, 1) },
+      { key: 'name', header: 'Category', width: 50 },
+      { key: 'value', header: 'Total Budget', align: 'right', width: 46, format: (row) => formatCurrency(row.value, { detailed: true }) },
+      { key: 'percent', header: 'Percentage', align: 'right', width: 32, format: (row) => formatPercentage((row.value / total) * 100, 1) },
+      { key: 'count', header: 'Projects/Events', align: 'right', width: 32, format: (row) => String(row.count ?? 0) },
     ],
     rows: distribution,
   })
-  
+
+  const largest = distribution[0] || null
+  y = drawSummaryBox(doc, {
+    title: 'Overall Summary',
+    startY: y,
+    items: [
+      { label: 'Total Budget', value: formatCurrency(total, { detailed: true }) },
+      { label: 'Number of Categories', value: String(distribution.length) },
+      { label: 'Number of Projects/Events', value: String(totalCount) },
+      { label: 'Largest Category', value: largest ? `${largest.name} (${formatPercentage((largest.value / total) * 100, 1)})` : '—' },
+    ],
+  })
+
   if (aiSummary) {
     y = checkPageBreak(doc, y, 30)
     doc.setFontSize(11)
@@ -580,13 +618,12 @@ export async function exportAiAnalysisPdf({ chartRef, distribution, total, aiSum
     setColor(doc, COLORS.brand)
     doc.text('AI Interpretation', MARGIN, y)
     y += 6
-    
+
     doc.setFontSize(9)
     doc.setFont('Roboto', 'normal')
     setColor(doc, COLORS.text)
     const lines = doc.splitTextToSize(aiSummary, CONTENT_W)
     doc.text(lines, MARGIN, y)
-    y += lines.length * 5 + 4
   }
 
   const totalPages = doc.internal.getNumberOfPages()
@@ -596,5 +633,5 @@ export async function exportAiAnalysisPdf({ chartRef, distribution, total, aiSum
   }
 
   const periodSlug = filters.view === 'monthly' ? `${filters.year}-${String(filters.month).padStart(2, '0')}` : filters.year
-  doc.save(`ai-analysis-distribution-${periodSlug}.pdf`)
+  doc.save(`category-budget-distribution-${periodSlug}.pdf`)
 }

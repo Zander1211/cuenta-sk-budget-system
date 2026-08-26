@@ -25,9 +25,9 @@ function RequestPage() {
   const activeRequests = requests.filter((request) => !request.archivedAt && (request.type || 'Project') === requestType)
   const archivedRequests = requests.filter((request) => request.archivedAt && (request.type || 'Project') === requestType)
 
-  function handleArchive(requestId) {
-    archiveRequest(requestId, `${profileName} ${profileSurname}`.trim())
-    setActiveTab('archive')
+  async function handleArchive(requestId) {
+    const result = await archiveRequest(requestId, `${profileName} ${profileSurname}`.trim())
+    if (!result?.error) setActiveTab('archive')
   }
 
   function handleEdit(request) {

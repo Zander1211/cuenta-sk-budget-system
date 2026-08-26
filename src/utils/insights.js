@@ -137,6 +137,37 @@ export function buildUtilizationInsights(util) {
   return out.slice(0, 5)
 }
 
+export function buildDistributionInsights(dist) {
+  const out = []
+  const highest = dist.distribution[0]
+  const lowest = dist.distribution[dist.distribution.length - 1]
+  const highestPercent = highest ? (highest.value / dist.total) * 100 : 0
+  push(out, highest, {
+    type: 'budget', severity: highestPercent > 50 ? 'medium' : 'low',
+    title: `${highest?.name} leads budget allocation`,
+    why: highestPercent > 50
+      ? 'One category holds more than half of the approved budget, which reduces flexibility.'
+      : 'This is informational only and does not currently indicate a risk condition.',
+    detail: highest ? `${highest.name} accounts for ${formatCurrency(highest.value)} (${formatPercentage(highestPercent)}) across ${highest.count} project${highest.count === 1 ? '' : 's'}/event${highest.count === 1 ? '' : 's'}.` : '',
+  })
+  push(out, lowest && lowest.name !== highest?.name, {
+    type: 'budget', severity: 'low', title: `${lowest?.name} has the smallest allocation`,
+    why: 'This is informational only and does not currently indicate a risk condition.',
+    detail: lowest ? `${lowest.name} received ${formatCurrency(lowest.value)} (${formatPercentage((lowest.value / dist.total) * 100)}).` : '',
+  })
+  push(out, dist.distribution.length === 1, {
+    type: 'risk', severity: 'medium', title: 'Single-category concentration',
+    why: 'All approved budget currently sits in one category, which reduces diversification.',
+    detail: `${highest?.name} is the only category with an approved allocation for this period.`,
+  })
+  push(out, dist.distribution.length > 1, {
+    type: 'budget', severity: 'low', title: 'Category coverage',
+    why: 'This is informational only and does not currently indicate a risk condition.',
+    detail: `${dist.distribution.length} categories share ${formatCurrency(dist.total)} in approved budget across ${dist.totalProjectsEvents} project${dist.totalProjectsEvents === 1 ? '' : 's'}/event${dist.totalProjectsEvents === 1 ? '' : 's'}.`,
+  })
+  return out.slice(0, 5)
+}
+
 export function buildVarianceInsights(bva) {
   const out = []
   const varOver = bva.largestVariance?.status === 'Over Budget'

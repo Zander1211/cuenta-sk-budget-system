@@ -22,6 +22,7 @@ const PAGE_NAMES = {
   '/dashboard/analysis/expenses-by-category': 'Expenses by Category Analysis',
   '/dashboard/analysis/monthly-spending': 'Monthly Spending Trend Analysis',
   '/dashboard/analysis/budget-utilization': 'Budget Utilization Analysis',
+  '/dashboard/analysis/budget-distribution': 'Category Budget Distribution Analysis',
   '/dashboard/report': 'Reports',
   '/dashboard/audit-logs': 'Audit Logs',
   '/dashboard/user-management': 'User Management',
