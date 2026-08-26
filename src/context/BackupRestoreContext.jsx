@@ -698,7 +698,45 @@ export function BackupRestoreProvider({ children }) {
       // 1. Replace the current operational state with the backup exactly.
       // This removes records created after the backup, including when a
       // backed-up table or localStorage key was empty.
-      await applySnapshot(backup, { strict: true })
+      // Prefer the atomic SECURITY DEFINER RPC (bypasses per-row RLS, so a
+      // stale JWT role claim can't fail the restore); fall back to the
+      // client-side path if the RPC isn't deployed yet.
+      let rpcSuccess = false
+      let rpcFailureReason = null
+      try {
+        const { data: rpcData, error: rpcError } = await supabase.rpc('restore_backup_atomic', {
+          p_backup_data: backup,
+        })
+
+        if (!rpcError && rpcData?.success) {
+          rpcSuccess = true
+          const rpcLocalStorage = rpcData.localStorage || {}
+          for (const key of LOCAL_STORAGE_KEYS) {
+            if (rpcLocalStorage[key] !== undefined && rpcLocalStorage[key] !== null) {
+              window.localStorage.setItem(key, JSON.stringify(rpcLocalStorage[key]))
+            } else {
+              window.localStorage.removeItem(key)
+            }
+          }
+        } else if (rpcError) {
+          rpcFailureReason = rpcError.message
+          console.warn('[BackupRestore] restore_backup_atomic RPC failed, falling back to client-side restore:', rpcError.message)
+        }
+      } catch (rpcErr) {
+        rpcFailureReason = rpcErr?.message || String(rpcErr)
+        console.warn('[BackupRestore] RPC invocation exception, falling back to client-side restore:', rpcErr)
+      }
+
+      if (!rpcSuccess) {
+        try {
+          await applySnapshot(backup, { strict: true })
+        } catch (fallbackErr) {
+          if (rpcFailureReason) {
+            throw new Error(`Atomic restore failed (${rpcFailureReason}); fallback also failed: ${fallbackErr.message}`)
+          }
+          throw fallbackErr
+        }
+      }
       for (const table of RESTORE_TABLE_ORDER) {
         const count = Array.isArray(supabaseData[table]) ? supabaseData[table].length : 0
         tableResults.push(`${table}: replaced with ${count} backup row${count === 1 ? '' : 's'}`)

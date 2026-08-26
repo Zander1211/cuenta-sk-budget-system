@@ -3,6 +3,7 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
 import { CalendarDays, Sigma, TrendingUp, Activity, FileDown } from 'lucide-react'
+import { useAuth } from '../../context/AuthContext'
 import { useAnalysisFilters } from '../../hooks/useAnalysisFilters'
 import { useMonthlyTrend } from '../../hooks/useAnalysisData'
 import { useAnalysisAI } from '../../hooks/useAnalysisAI'
@@ -35,6 +36,8 @@ function TrendTooltip({ active, payload, label }) {
 }
 
 export default function MonthlySpendingPage() {
+  const { role } = useAuth()
+  const canExport = role === 'SK Chairman' || role === 'SK Treasurer'
   const { filters, setFilter } = useAnalysisFilters()
   const yearFilters = useMemo(() => ({ ...filters, view: 'yearly' }), [filters])
   const trend = useMonthlyTrend(yearFilters)
@@ -130,10 +133,12 @@ export default function MonthlySpendingPage() {
                       Compare {filters.year - 1}
                     </button>
                   ) : null}
-                  <button type="button" className="an-btn an-btn-outline" onClick={handleExportPdf} disabled={exporting} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <FileDown size={15} />
-                    {exporting ? 'Exporting…' : 'Export PDF'}
-                  </button>
+                  {canExport ? (
+                    <button type="button" className="an-btn an-btn-outline" onClick={handleExportPdf} disabled={exporting} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <FileDown size={15} />
+                      {exporting ? 'Exporting…' : 'Export PDF'}
+                    </button>
+                  ) : null}
                 </div>
               }
             >

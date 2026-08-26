@@ -3,6 +3,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
 import { Wallet, Receipt, Scale, Gauge, FileDown } from 'lucide-react'
+import { useAuth } from '../../context/AuthContext'
 import { useAnalysisFilters } from '../../hooks/useAnalysisFilters'
 import { useBudgetVsActual } from '../../hooks/useAnalysisData'
 import { useAnalysisAI } from '../../hooks/useAnalysisAI'
@@ -35,6 +36,8 @@ function Money({ active, payload, label }) {
 }
 
 export default function BudgetVsActualPage() {
+  const { role } = useAuth()
+  const canExport = role === 'SK Chairman' || role === 'SK Treasurer'
   const { filters, setFilter } = useAnalysisFilters()
   const chartRef = useRef(null)
   const [exporting, setExporting] = useState(false)
@@ -100,7 +103,7 @@ export default function BudgetVsActualPage() {
       <div className="an-detail-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <ChartCard eyebrow="Financial Allocation" title={`Total Budget vs Approved Budgets — ${label}`}
-            action={bva.hasData ? (
+            action={bva.hasData && canExport ? (
               <button type="button" className={`an-btn an-btn-outline`} onClick={handleExportPdf} disabled={exporting} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                 <FileDown size={15} />
                 {exporting ? 'Exporting…' : 'Export PDF'}

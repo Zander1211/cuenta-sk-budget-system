@@ -3,6 +3,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip,
 } from 'recharts'
 import { Wallet, Layers, Boxes, TrendingUp, FileDown } from 'lucide-react'
+import { useAuth } from '../../context/AuthContext'
 import { useAnalysisFilters } from '../../hooks/useAnalysisFilters'
 import { useApprovedBudgetDistribution } from '../../hooks/useAnalysisData'
 import { useAnalysisAI } from '../../hooks/useAnalysisAI'
@@ -36,6 +37,8 @@ function renderCustomizedLabel({ cx, cy, midAngle, innerRadius, outerRadius, per
 }
 
 export default function CategoryBudgetDistributionPage() {
+  const { role } = useAuth()
+  const canExport = role === 'SK Chairman' || role === 'SK Treasurer'
   const { filters, setFilter } = useAnalysisFilters()
   const chartRef = useRef(null)
   const [exporting, setExporting] = useState(false)
@@ -125,12 +128,12 @@ export default function CategoryBudgetDistributionPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <ChartCard
               eyebrow="Distribution" title={`Category budget share — ${label}`}
-              action={
+              action={canExport ? (
                 <button type="button" className="an-btn an-btn-outline" onClick={handleExportPdf} disabled={exporting} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                   <FileDown size={15} />
                   {exporting ? 'Exporting…' : 'Export PDF'}
                 </button>
-              }
+              ) : null}
             >
               <div ref={chartRef} data-pdf-capture="full">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'center' }}>
