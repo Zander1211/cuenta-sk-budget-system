@@ -281,6 +281,7 @@ function PayrollPage() {
                 { label: 'Total Expenses', value: currency.format(totalExpenses) },
                 { label: 'Additional Requisitions', value: currency.format(additionalSum) },
                 { label: 'Remaining Balance', value: currency.format(remainingBalance), highlight: remainingBalance < 0 },
+                { label: 'Date Proposed', value: project.eventDate || project.date ? new Date(project.eventDate || project.date).toLocaleDateString() : '—' },
                 { label: 'Date Approved', value: project.approvedAt ? new Date(project.approvedAt).toLocaleDateString() : '—' }
               ].map((item, i) => (
                 <div key={i} style={{ 
