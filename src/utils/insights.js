@@ -16,7 +16,7 @@ function budgetWhy(severity) {
 }
 
 export function buildOverviewInsights(summary) {
-  const { utilizationRate, performance, remainingBalance, missingReceipts, pendingRequests, highestCategory } = summary
+  const { utilizationRate, performance, remainingBalance, missingReceipts, pendingRequests, highestCategory, returnedBudget, returnedRecordCount } = summary
   const out = []
   const perfSeverity = performance.tone === 'danger' ? 'high' : performance.tone === 'warning' ? 'medium' : 'low'
   out.push({
@@ -30,6 +30,11 @@ export function buildOverviewInsights(summary) {
     type: 'budget', severity: 'high', title: 'Spending exceeds allocation',
     why: 'The period is over budget, which is a significant spending risk.',
     detail: `The period is over budget by ${formatCurrency(Math.abs(remainingBalance))}.`,
+  })
+  push(out, (returnedBudget || 0) > 0, {
+    type: 'budget', severity: 'low', title: 'Unused budget recovered',
+    why: 'This is a favorable recovery and does not indicate a risk.',
+    detail: `${formatCurrency(returnedBudget)} was returned to the monthly budget from ${returnedRecordCount} completed project${returnedRecordCount === 1 ? '' : 's'}/event${returnedRecordCount === 1 ? '' : 's'} and is available for new requests.`,
   })
   push(out, highestCategory, {
     type: 'spending', severity: 'low', title: 'Largest spending category',

@@ -3,6 +3,7 @@ import { useAuditLog } from './AuditLogContext'
 import { useNotifications } from './NotificationContext'
 import { useAuth } from './AuthContext'
 import { supabase } from '../supabase/supabaseClient'
+import { calculateProjectEventFinancials } from '../utils/projectEventFinancials'
 
 const BudgetContext = createContext(null)
 const STORAGE_KEY = 'cuenta.budgetData.v4'
@@ -56,6 +57,9 @@ function mapExpenseRow(row) {
     month: Number(row.month) || null,
     year: Number(row.year) || null,
     projectStatus: row.project_status || row.projectStatus || 'Ongoing',
+    returnedBudget: Number(row.returned_budget ?? row.returnedBudget ?? 0) || 0,
+    returnedAt: row.returned_at || row.returnedAt || null,
+    originalApprovedBudget: row.original_approved_budget ?? row.originalApprovedBudget ?? null,
     isAdditional: Boolean(row.is_additional ?? row.isAdditional),
     parentProjectId: row.parent_project_id || row.parentProjectId || null,
     remarks: row.remarks || '',
@@ -1392,20 +1396,191 @@ function BudgetProvider({ children }) {
     return { error: null }
   }
 
+  // PostgREST answers a call to an undeployed function with PGRST202. Falling
+  // back to the plain status update keeps completion working before the
+  // return-unused-budget migration has been applied.
+  function isMissingRpcError(error) {
+    return error?.code === 'PGRST202'
+      || /could not find the function|function .* does not exist|schema cache/i.test(error?.message || '')
+  }
+
+  /*
+   * Completing a Project/Event routes through the complete_project_event RPC,
+   * which atomically marks the record Completed, returns the unused portion
+   * of its approved budget to the month it came from (by reducing the
+   * expense's approved_budget/amount and the linked request's
+   * approved_amount — the columns every summary and the DB capacity trigger
+   * already sum), and writes the audit-trail entry plus the per-role
+   * notifications server-side.
+   *
+   * The "actually used" figure is computed here with the exact same
+   * calculateProjectEventFinancials the detail pages display: verified
+   * receipts on the record plus recorded requisitions (receipt-resolved), so
+   * the amount returned always matches what the Chairman sees on screen.
+   */
+  async function completeWithBudgetReturn(expenseRecord, record, moduleName, requestId) {
+    const financials = calculateProjectEventFinancials(expenseRecord, expenses, verifiedReceiptTotals)
+    const actualUsed = financials.directVerifiedReceiptTotal + financials.resolvedLinkedExpenseTotal
+
+    const { data, error } = await supabase.rpc('complete_project_event', {
+      p_expense_id: expenseRecord.id,
+      p_actual_used: actualUsed,
+    })
+
+    if (error) {
+      if (isMissingRpcError(error)) {
+        console.warn('complete_project_event RPC is not deployed yet; applying a plain status update without a budget return.')
+        const requestRecord = requests.find((item) => String(item.id) === String(requestId)) || null
+        return applyPlainStatusUpdate(requestRecord, expenseRecord, record, moduleName, requestId, 'Completed')
+      }
+      addNotification({
+        type: 'error',
+        title: 'Update Failed',
+        message: error.message || 'Could not mark the record as Completed.',
+      })
+      return
+    }
+
+    const updatedRow = data?.expense ? mapExpenseRow(data.expense) : null
+    const returned = Number(data?.returned_budget) || 0
+    const monthLabel = data?.month_label || 'its original month'
+    const title = record.event || record.project || 'the record'
+
+    setExpenses((prev) =>
+      prev.map((item) =>
+        String(item.id) === String(expenseRecord.id)
+          ? { ...item, ...(updatedRow || {}), projectStatus: 'Completed' }
+          : item
+      )
+    )
+    setRequests((prev) =>
+      prev.map((item) =>
+        String(item.id) === String(requestId)
+          ? { ...item, projectStatus: 'Completed' }
+          : item
+      )
+    )
+
+    addNotification({
+      type: returned > 0 ? 'system' : 'success',
+      title: returned > 0 ? 'Unused Budget Returned' : 'Success',
+      message: returned > 0
+        ? `₱${returned.toLocaleString('en-PH')} has been returned to the ${monthLabel} budget after completing "${title}".`
+        : 'Status updated successfully.',
+    })
+
+    // The "Returned Unused Budget" audit entry is written server-side by the
+    // RPC; this records the status change itself, matching the legacy path.
+    addLog({
+      action: `Status Changed — ${title}`,
+      actionType: 'Status Changed',
+      module: moduleName,
+      recordType: moduleName,
+      recordId: String(requestId),
+      description: `SK Chairman changed the ${moduleName} status from "${record.projectStatus || 'Ongoing'}" to "Completed" for "${title}".`,
+      previousValue: { projectStatus: record.projectStatus || 'Ongoing' },
+      newValue: { projectStatus: 'Completed', returnedBudget: returned },
+    })
+  }
+
+  /*
+   * Reopening a completed record whose budget was returned re-commits the
+   * returned amount. The DB capacity trigger rejects the reversal if that
+   * money has since been consumed by newer requests, so the error message is
+   * surfaced instead of silently un-completing.
+   */
+  async function reopenWithBudgetRestore(expenseRecord, record, moduleName, requestId, newStatus) {
+    const { data, error } = await supabase.rpc('reopen_project_event', {
+      p_expense_id: expenseRecord.id,
+      p_new_status: newStatus,
+    })
+
+    if (error) {
+      if (isMissingRpcError(error)) {
+        const requestRecord = requests.find((item) => String(item.id) === String(requestId)) || null
+        return applyPlainStatusUpdate(requestRecord, expenseRecord, record, moduleName, requestId, newStatus)
+      }
+      addNotification({
+        type: 'error',
+        title: 'Cannot Reopen',
+        message: error.message || 'Could not reopen the record.',
+      })
+      return
+    }
+
+    const updatedRow = data?.expense ? mapExpenseRow(data.expense) : null
+    const restored = Number(data?.restored_budget) || 0
+    const title = record.event || record.project || 'the record'
+
+    setExpenses((prev) =>
+      prev.map((item) =>
+        String(item.id) === String(expenseRecord.id)
+          ? { ...item, ...(updatedRow || {}), projectStatus: newStatus }
+          : item
+      )
+    )
+    setRequests((prev) =>
+      prev.map((item) =>
+        String(item.id) === String(requestId)
+          ? { ...item, projectStatus: newStatus }
+          : item
+      )
+    )
+
+    addNotification({
+      type: 'success',
+      title: 'Success',
+      message: restored > 0
+        ? `Status updated. ₱${restored.toLocaleString('en-PH')} was re-committed to "${title}".`
+        : 'Status updated successfully.',
+    })
+
+    addLog({
+      action: `Status Changed — ${title}`,
+      actionType: 'Status Changed',
+      module: moduleName,
+      recordType: moduleName,
+      recordId: String(requestId),
+      description: `SK Chairman changed the ${moduleName} status from "Completed" to "${newStatus}" for "${title}".`,
+      previousValue: { projectStatus: 'Completed' },
+      newValue: { projectStatus: newStatus, restoredBudget: restored },
+    })
+  }
+
   async function updateProjectStatus(requestId, newStatus) {
     const validStatuses = ['Pending', 'Ongoing', 'Completed']
     if (!validStatuses.includes(newStatus)) return
 
     let requestRecord = requests.find((item) => String(item.id) === String(requestId))
     let expenseRecord = expenses.find((item) => String(item.id) === String(requestId) || String(item.requestId) === String(requestId))
-    
+
     if (!requestRecord && !expenseRecord) return
 
     const record = requestRecord || expenseRecord
     const moduleName = record.type === 'Payroll' ? 'Payroll' : record.type === 'Event' ? 'Event' : 'Project'
 
+    // Only approved Project/Event parents take part in the unused-budget
+    // return; payroll, requisitions and pending-only requests keep the plain
+    // status update below.
+    const isReturnableParent = Boolean(
+      expenseRecord
+      && !expenseRecord.isAdditional
+      && ['Project', 'Event'].includes(expenseRecord.type || 'Project')
+    )
+
+    if (isReturnableParent && newStatus === 'Completed') {
+      return completeWithBudgetReturn(expenseRecord, record, moduleName, requestId)
+    }
+    if (isReturnableParent && newStatus !== 'Completed' && expenseRecord.returnedAt) {
+      return reopenWithBudgetRestore(expenseRecord, record, moduleName, requestId, newStatus)
+    }
+
+    return applyPlainStatusUpdate(requestRecord, expenseRecord, record, moduleName, requestId, newStatus)
+  }
+
+  async function applyPlainStatusUpdate(requestRecord, expenseRecord, record, moduleName, requestId, newStatus) {
     let success = false;
-    
+
     if (requestRecord) {
       try {
         const { error: reqErr } = await supabase

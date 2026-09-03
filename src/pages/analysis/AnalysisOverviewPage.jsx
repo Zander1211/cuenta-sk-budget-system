@@ -85,6 +85,8 @@ export default function AnalysisOverviewPage() {
         missingReceipts: summary.missingReceipts,
         pendingApprovals: summary.pendingRequests.length,
         spendingTrend: trend.trend.direction,
+        returnedBudget: Math.round(summary.returnedBudget || 0),
+        returnedFromCompleted: summary.returnedRecordCount || 0,
       },
       topCategories: category.categories.slice(0, 5).map((c) => ({
         name: c.name,

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   ClipboardCheck,
   Receipt,
+  RotateCcw,
   Search,
   Settings,
   TriangleAlert,
@@ -191,6 +192,36 @@ function MainDashboardPage() {
     return !expense.receiptUrl && !expense.receiptName
   }).length
 
+  // Budget automatically returned when a Project or Event was completed with
+  // unused funds. The card follows the selected period like its siblings; the
+  // history table below lists every return regardless of the filter (its
+  // Month column makes the scope explicit), since it serves as an audit trail.
+  const returnedInPeriod = expenses.filter((exp) =>
+    !exp.isAdditional &&
+    !exp.archivedAt &&
+    (Number(exp.returnedBudget) || 0) > 0 &&
+    isInPeriod(exp.eventDate || exp.date || exp.approvedAt || exp.createdAt)
+  )
+  const totalReturnedBudget = returnedInPeriod.reduce(
+    (sum, exp) => sum + (Number(exp.returnedBudget) || 0),
+    0
+  )
+
+  const returnedHistory = expenses
+    .filter((exp) => !exp.isAdditional && !exp.archivedAt && (Number(exp.returnedBudget) || 0) > 0)
+    .sort((a, b) => new Date(b.returnedAt || 0) - new Date(a.returnedAt || 0))
+  const returnedHistoryTotal = returnedHistory.reduce(
+    (sum, exp) => sum + (Number(exp.returnedBudget) || 0),
+    0
+  )
+
+  function returnedMonthLabel(exp) {
+    const monthName = monthOptions.find((m) => m.value === Number(exp.month))?.label
+    if (monthName && exp.year) return `${monthName} ${exp.year}`
+    const d = parseDate(exp.eventDate || exp.date || exp.approvedAt)
+    return d ? d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'
+  }
+
   const summaryCards = [
     {
       label: 'Total Budget',
@@ -225,6 +256,16 @@ function MainDashboardPage() {
       chip: remainingBudget < 0 ? 'Over-allocated' : hasBudgetData ? `${remainingPercent}% available` : 'Not started',
       tone: remainingBudget < 0 ? 'danger' : remainingPercent < 20 ? 'warning' : 'neutral',
       icon: PieChartIcon,
+    },
+    {
+      label: 'Returned Budget',
+      value: currency.format(totalReturnedBudget),
+      meta: 'Budget returned from completed Projects and Events',
+      chip: returnedInPeriod.length
+        ? `${returnedInPeriod.length} completed`
+        : 'None yet',
+      tone: returnedInPeriod.length ? 'positive' : 'neutral',
+      icon: RotateCcw,
     },
     {
       label: 'Pending Approvals',
@@ -491,6 +532,63 @@ function MainDashboardPage() {
             </div>
           </div>
 
+        </div>
+      </section>
+
+      {/* Returned Budget History */}
+      <section style={{ marginTop: '40px' }} aria-label="Returned budget history">
+        <div style={{ marginBottom: '20px' }}>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: '700', color: 'var(--ink-1)', marginBottom: '6px' }}>Returned Budget History</h2>
+          <p style={{ color: 'var(--ink-3)', fontSize: '0.95rem' }}>Unused budget automatically returned to its month when a Project or Event was marked Completed.</p>
+        </div>
+        <div className="overview-card" style={{ overflowX: 'auto' }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Project/Event</th>
+                <th>Month</th>
+                <th>Approved Budget</th>
+                <th>Actual Used</th>
+                <th>Returned Budget</th>
+                <th>Date Completed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {returnedHistory.length ? returnedHistory.map((exp) => {
+                const returned = Number(exp.returnedBudget) || 0
+                const originalApproved = Number(exp.originalApprovedBudget) || ((Number(exp.approvedBudget) || 0) + returned)
+                const actualUsed = originalApproved - returned
+                return (
+                  <tr key={`returned-${exp.id}`}>
+                    <td data-label="Project/Event">
+                      <strong>{exp.event || exp.project || 'Untitled'}</strong><br />
+                      <span style={{ color: 'var(--ink-3)', fontSize: '.82rem' }}>{exp.type || 'Project'}</span>
+                    </td>
+                    <td data-label="Month">{returnedMonthLabel(exp)}</td>
+                    <td data-label="Approved Budget">{currency.format(originalApproved)}</td>
+                    <td data-label="Actual Used">{currency.format(actualUsed)}</td>
+                    <td data-label="Returned Budget" style={{ fontWeight: 600, color: 'var(--positive, #15803d)' }}>{currency.format(returned)}</td>
+                    <td data-label="Date Completed">{exp.returnedAt ? new Date(exp.returnedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}</td>
+                  </tr>
+                )
+              }) : (
+                <tr>
+                  <td colSpan="6" style={{ textAlign: 'center', fontStyle: 'italic', color: 'var(--ink-3)' }}>
+                    No returned budgets yet. When a completed Project or Event has unused funds, the return will appear here.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            {returnedHistory.length ? (
+              <tfoot>
+                <tr>
+                  <th colSpan="4">Total Returned Budget</th>
+                  <th>{currency.format(returnedHistoryTotal)}</th>
+                  <th />
+                </tr>
+              </tfoot>
+            ) : null}
+          </table>
         </div>
       </section>
 

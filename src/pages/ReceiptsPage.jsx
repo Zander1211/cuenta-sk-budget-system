@@ -14,6 +14,8 @@ import {
   formatOcrMetadataNote,
 } from '../utils/uploadUtils'
 import ReceiptOCRDetailsModal from '../components/receipts/ReceiptOCRDetailsModal'
+import YearSpinner from '../components/YearSpinner'
+import { monthOptions } from '../utils/analytics'
 
 // The scanner pulls in the image pipeline and, on demand, the OCR engine.
 // Splitting it out keeps that weight off users who only view receipts.
@@ -41,6 +43,8 @@ function ReceiptsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterCategory, setFilterCategory] = useState('all')
+  const [filterMonth, setFilterMonth] = useState('all')
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear())
 
   const RECEIPTS_BUCKET = 'receipts'
 
@@ -108,26 +112,48 @@ function ReceiptsPage() {
     return Array.from(set)
   }, [approvedExpenses])
 
+  // The month/year a Project or Event was PROPOSED for — eventDate is the
+  // date picked on the original budget request, matching "Date Proposed" on
+  // Projects & Events. Payroll requests carry no eventDate, so they fall
+  // back to the expense row's own month/year columns.
+  function getProposedPeriod(expense) {
+    const raw = expense.eventDate || expense.date
+    const d = raw ? new Date(raw) : null
+    if (d && !isNaN(d.getTime())) {
+      return { month: d.getMonth() + 1, year: d.getFullYear() }
+    }
+    const month = Number(expense.month)
+    const year = Number(expense.year)
+    return {
+      month: month >= 1 && month <= 12 ? month : null,
+      year: Number.isFinite(year) && year > 0 ? year : null,
+    }
+  }
+
   const filteredExpenses = useMemo(() => {
     return approvedExpenses.filter((expense) => {
       const title = (expense.event || expense.project || '').toLowerCase()
       const cat = (expense.category || '').toLowerCase()
       const query = searchQuery.toLowerCase().trim()
       const matchesSearch = !query || title.includes(query) || cat.includes(query)
-      
+
       const receipts = receiptLinks[expense.id] || []
       const hasReceipts = receipts.length > 0
-      
+
       let matchesStatus = true
       if (filterStatus === 'with') matchesStatus = hasReceipts
       if (filterStatus === 'missing') matchesStatus = !hasReceipts
-      
+
       let matchesCategory = true
       if (filterCategory !== 'all') matchesCategory = expense.category === filterCategory
 
-      return matchesSearch && matchesStatus && matchesCategory
+      const proposed = getProposedPeriod(expense)
+      const matchesMonth = filterMonth === 'all' || proposed.month === Number(filterMonth)
+      const matchesYear = proposed.year === Number(filterYear)
+
+      return matchesSearch && matchesStatus && matchesCategory && matchesMonth && matchesYear
     })
-  }, [approvedExpenses, searchQuery, filterStatus, filterCategory, receiptLinks])
+  }, [approvedExpenses, searchQuery, filterStatus, filterCategory, filterMonth, filterYear, receiptLinks])
 
   const receiptFinancialTotals = useMemo(() => {
     const totals = { ...(verifiedReceiptTotals || {}) }
@@ -258,6 +284,14 @@ function ReceiptsPage() {
   }, [approvedExpenses, receiptOwnerByRecordId, receiptSourceExpenses])
 
   function triggerCamera(expense) {
+    if (expense?.archivedAt) {
+      addNotification({
+        type: 'error',
+        title: 'Record Archived',
+        message: `"${expense.event || expense.project || 'This record'}" has been archived and can no longer accept new receipts.`,
+      })
+      return
+    }
     setActiveExpense(expense)
     setFeedback(null)
     setErrorsById((prev) => ({ ...prev, [expense.id]: '' }))
@@ -463,6 +497,20 @@ function ReceiptsPage() {
                 <option value="missing">Missing Receipts</option>
               </select>
 
+              <select
+                className="receipts-select"
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+                aria-label="Filter by proposed month"
+              >
+                <option value="all">All Months</option>
+                {monthOptions.map((month) => (
+                  <option key={month.value} value={month.value}>{month.label}</option>
+                ))}
+              </select>
+
+              <YearSpinner year={filterYear} onYearChange={setFilterYear} />
+
               {categories.length > 0 ? (
                 <select
                   className="receipts-select"
@@ -512,6 +560,11 @@ function ReceiptsPage() {
                           <span className="receipt-type-pill">
                             {expense.type || 'Project'}
                           </span>
+                          {expense.archivedAt ? (
+                            <span className="status-pill status-neutral" title="This record has been archived and can no longer accept new receipts">
+                              Archived
+                            </span>
+                          ) : null}
                         </td>
                         <td>{expense.category || 'Uncategorized'}</td>
                         <td>
@@ -572,9 +625,9 @@ function ReceiptsPage() {
                               <button
                                   type="button"
                                   className="receipt-action-btn scan-btn"
-                                  disabled={uploadingId !== null}
+                                  disabled={uploadingId !== null || Boolean(expense.archivedAt)}
                                   onClick={() => triggerCamera(expense)}
-                                  title="Take a photo or upload a receipt image, then review the OCR details"
+                                  title={expense.archivedAt ? 'This record has been archived and can no longer accept new receipts' : 'Take a photo or upload a receipt image, then review the OCR details'}
                                 >
                                   {uploadingId === expense.id ? (
                                     <>
@@ -585,7 +638,7 @@ function ReceiptsPage() {
                                       />
                                       <span>Saving…</span>
                                     </>
-                                  ) : '📷 Scan & Upload'}
+                                  ) : expense.archivedAt ? '🔒 Archived' : '📷 Scan & Upload'}
                                 </button>
                             ) : receipts.length === 0 ? (
                               <span className="status-pill status-neutral">View Only</span>
@@ -624,6 +677,11 @@ function ReceiptsPage() {
                       <div>
                         <h3 className="receipt-card-title">{expense.event || expense.project || 'Untitled'}</h3>
                         <span className="receipt-type-pill">{expense.type || 'Project'}</span>
+                        {expense.archivedAt ? (
+                          <span className="status-pill status-neutral" title="This record has been archived and can no longer accept new receipts">
+                            Archived
+                          </span>
+                        ) : null}
                       </div>
                       <span className="receipt-amount-val" style={{ fontSize: '1.05rem' }}>
                         ₱{Number(expense.amount || 0).toLocaleString()}
@@ -683,16 +741,16 @@ function ReceiptsPage() {
                         <button
                           type="button"
                           className="receipt-action-btn scan-btn"
-                          disabled={uploadingId !== null}
+                          disabled={uploadingId !== null || Boolean(expense.archivedAt)}
                           onClick={() => triggerCamera(expense)}
-                          title="Take a photo or upload a receipt image, then review the OCR details"
+                          title={expense.archivedAt ? 'This record has been archived and can no longer accept new receipts' : 'Take a photo or upload a receipt image, then review the OCR details'}
                         >
                           {uploadingId === expense.id ? (
                             <>
                               <span className="spinner" style={{ width: '14px', height: '14px', margin: 0 }} />
                               Saving…
                             </>
-                          ) : '📷 Scan & Upload'}
+                          ) : expense.archivedAt ? '🔒 Archived' : '📷 Scan & Upload'}
                         </button>
                       ) : receipts.length === 0 ? (
                         <span className="status-pill status-neutral">View Only</span>
@@ -838,13 +896,15 @@ function ReceiptsPage() {
                     type="button"
                     className="primary-button"
                     style={{ fontSize: '0.85rem', padding: '8px 14px' }}
+                    disabled={Boolean(viewerExpense?.archivedAt)}
+                    title={viewerExpense?.archivedAt ? 'This record has been archived and can no longer accept new receipts' : undefined}
                     onClick={() => {
                       const target = viewerExpense
                       setViewerExpense(null)
                       triggerCamera(target)
                     }}
                   >
-                    📷 Scan & Upload
+                    {viewerExpense?.archivedAt ? '🔒 Archived' : '📷 Scan & Upload'}
                   </button>
                 </div>
               ) : <div />}

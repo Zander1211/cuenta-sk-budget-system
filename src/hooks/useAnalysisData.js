@@ -128,6 +128,18 @@ export function useFinancialSummary(filters) {
       ? safeDivide(totalExpenses - prevTotalExpenses, prevTotalExpenses) * 100
       : null
 
+    // Unused budget automatically returned by completed Projects/Events in
+    // this period. The freed amounts are already reflected in
+    // totalApprovedAllocations (the records were reduced at completion);
+    // these figures surface the recovery itself for reporting and AI.
+    const returnedRecords = data.approvedFinancials.records.filter(
+      (record) => (Number(record.returnedBudget) || 0) > 0,
+    )
+    const returnedBudget = returnedRecords.reduce(
+      (sum, record) => sum + (Number(record.returnedBudget) || 0),
+      0,
+    )
+
     return {
       ...data,
       monthlyBudget,
@@ -139,6 +151,8 @@ export function useFinancialSummary(filters) {
       performance,
       prevTotalExpenses,
       expensesChangePct,
+      returnedBudget,
+      returnedRecordCount: returnedRecords.length,
       hasBudgetData: monthlyBudget > 0,
     }
   }, [data, budgets, filters])
