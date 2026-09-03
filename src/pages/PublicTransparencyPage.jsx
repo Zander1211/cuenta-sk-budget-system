@@ -2,15 +2,30 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
+  Archive,
   ArrowRight,
+  Banknote,
+  Bell,
+  Building2,
   CalendarDays,
   CheckCircle2,
+  ClipboardCheck,
+  Compass,
+  Crown,
+  Eye,
+  FolderOpen,
+  History,
   Landmark,
   Lock,
   Menu,
+  MessageCircle,
   Receipt,
+  ScanLine,
   ShieldCheck,
+  Sparkles,
+  Target,
   Users,
+  Wallet,
   X,
 } from 'lucide-react'
 import { getPublicTransparencyData } from '../services/publicTransparencyService'
@@ -33,6 +48,66 @@ const NAV_LINKS = [
   ['#budget', 'Budget Allocation'],
   ['#projects', 'Completed Projects'],
   ['#about', 'About'],
+]
+
+const FEATURES = [
+  [Wallet, 'Budget Monitoring and Allocation'],
+  [ClipboardCheck, 'Budget Request and Approval Workflow'],
+  [CalendarDays, 'Projects and Events Management'],
+  [Banknote, 'Payroll Management'],
+  [Receipt, 'Expenses and Requisition Tracking'],
+  [ScanLine, 'Receipt Scanning with OCR'],
+  [FolderOpen, 'Document Management'],
+  [Sparkles, 'AI Financial Analysis'],
+  [MessageCircle, 'Cue AI Chatbot Assistant'],
+  [History, 'Audit Trail Logging'],
+  [Bell, 'Notification System'],
+  [Archive, 'Archive and Restore Records'],
+  [Lock, 'Secure Role-Based Access Control (RBAC)'],
+]
+
+const ROLES = [
+  {
+    icon: Crown,
+    name: 'SK Chairman',
+    duties: [
+      'Full system administration',
+      'Budget approval and monitoring',
+      'User management',
+      'AI analysis and reports',
+      'Audit trail monitoring',
+    ],
+  },
+  {
+    icon: Wallet,
+    name: 'SK Treasurer',
+    duties: [
+      'Budget preparation',
+      'Budget requests',
+      'Project and event management',
+      'Expenses and requisitions',
+      'Receipt uploads',
+      'Financial reports',
+    ],
+  },
+  {
+    icon: Eye,
+    name: 'SK Kagawad',
+    duties: [
+      'View-only access to authorized financial information',
+      'Project and budget monitoring',
+      'AI analysis viewing',
+    ],
+  },
+  {
+    icon: Building2,
+    name: 'Barangay Treasurer',
+    duties: [
+      'View-only access to approved financial information',
+      'Budget and project monitoring',
+      'AI analysis viewing',
+    ],
+  },
 ]
 
 function Header() {
@@ -334,45 +409,112 @@ export default function PublicTransparencyPage() {
             </section>
 
             <section className="pub-section" id="about">
-              <div className="pub-container about-layout">
-                <div className="about-copy pub-reveal">
-                  <h2>Transparency without public accounts</h2>
-                  <p>
-                    Residents get read-only access to information the council has deliberately published. No sign-up, no
-                    account, no request form. What you see here is what has been reviewed, approved and completed.
+              <div className="pub-container">
+                <div className="about-hero pub-reveal">
+                  <span className="about-eyebrow">
+                    <ShieldCheck size={15} aria-hidden="true" />
+                    About Cuenta
+                  </span>
+                  <h2>Welcome to Cuenta</h2>
+                  <p className="about-lead">
+                    <strong>Cuenta: SK Budget Monitoring and Documentation Tracking with AI Analysis</strong> is a
+                    web-based financial management system designed to help the Sangguniang Kabataan (SK) efficiently
+                    manage, monitor, and document budget allocations, projects, events, payroll, and financial
+                    records.
                   </p>
                   <p>
-                    Staff records and working documents stay inside the system. Publishing a project is an explicit step,
-                    not a side effect of recording it.
+                    The system promotes transparency, accountability, and efficient financial monitoring by providing
+                    real-time budget tracking, secure document management, AI-assisted financial analysis, and
+                    role-based access for authorized users.
                   </p>
                 </div>
 
-                <div className="about-ledger pub-reveal">
-                  <h3>What is published, and what is not</h3>
-                  <ul>
-                    <li data-kind="shown">
-                      <CheckCircle2 aria-hidden="true" />
-                      <span>
-                        <b>Published:</b> project name, purpose, category, approved allocation, the total of verified
-                        receipts, implementation dates, beneficiaries and progress notes.
-                      </span>
-                    </li>
-                    <li data-kind="hidden">
-                      <Lock aria-hidden="true" />
-                      <span>
-                        <b>Never published:</b> the receipt documents themselves, internal notes, workflow comments,
-                        staff and member personal information, and payroll records. Only the total is shown, never the
-                        individual receipts behind it.
-                      </span>
-                    </li>
-                    <li data-kind="hidden">
-                      <Lock aria-hidden="true" />
-                      <span>
-                        <b>Not yet published:</b> projects still in progress or awaiting approval. They appear only once
-                        completed and verified.
-                      </span>
-                    </li>
+                <div className="about-mv-grid pub-reveal">
+                  <div className="about-mv-card">
+                    <Target aria-hidden="true" />
+                    <h3>Mission</h3>
+                    <p>
+                      To provide an intelligent, secure, and user-friendly financial monitoring system that helps SK
+                      officials improve budget management, documentation, and decision-making through digital
+                      technologies and AI-assisted insights.
+                    </p>
+                  </div>
+                  <div className="about-mv-card">
+                    <Compass aria-hidden="true" />
+                    <h3>Vision</h3>
+                    <p>
+                      To become a reliable digital financial management solution that promotes transparency,
+                      accountability, and responsible budgeting within every Sangguniang Kabataan organization.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="about-block pub-reveal">
+                  <h3 className="about-block-title">Key Features</h3>
+                  <ul className="feature-grid">
+                    {FEATURES.map(([Icon, label]) => (
+                      <li key={label}>
+                        <Icon aria-hidden="true" />
+                        <span>{label}</span>
+                      </li>
+                    ))}
                   </ul>
+                </div>
+
+                <div className="about-block pub-reveal">
+                  <h3 className="about-block-title">System Users</h3>
+                  <p className="about-block-sub">The Cuenta system supports the following user roles:</p>
+                  <div className="roles-grid">
+                    {ROLES.map(role => (
+                      <div className="role-card" key={role.name}>
+                        <div className="role-card-top">
+                          <role.icon aria-hidden="true" />
+                          <h4>{role.name}</h4>
+                        </div>
+                        <ul>
+                          {role.duties.map(duty => (
+                            <li key={duty}>{duty}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="about-goal pub-reveal">
+                  <h3>Our Goal</h3>
+                  <p>
+                    Cuenta was developed to replace manual financial recording with a centralized web-based system
+                    that simplifies financial transactions, improves documentation, and provides accurate reports for
+                    better decision-making.
+                  </p>
+                  <p>
+                    By integrating automation, OCR technology, AI-powered insights, and secure role-based access,
+                    Cuenta helps ensure that every budget allocation and financial activity is properly recorded,
+                    monitored, and managed.
+                  </p>
+                </div>
+
+                <div className="dev-info pub-reveal">
+                  <h3>Development Information</h3>
+                  <dl>
+                    <div>
+                      <dt>System Name</dt>
+                      <dd>Cuenta</dd>
+                    </div>
+                    <div>
+                      <dt>Full Title</dt>
+                      <dd>SK Budget Monitoring and Documentation Tracking with AI Analysis</dd>
+                    </div>
+                    <div>
+                      <dt>Developed By</dt>
+                      <dd>BSIT Capstone Researchers</dd>
+                    </div>
+                    <div>
+                      <dt>Academic Institution</dt>
+                      <dd>Notre Dame of Midsayap College</dd>
+                    </div>
+                  </dl>
                 </div>
               </div>
             </section>
