@@ -55,7 +55,6 @@ export function DocumentProvider({ children }) {
     total: 0,
     active: 0,
     archived: 0,
-    uploaded: 0,
   })
   const [documentTypes, setDocumentTypes] = useState([])
   const currentQueryRef = useRef(DEFAULT_DOCUMENT_QUERY)
@@ -125,19 +124,15 @@ export function DocumentProvider({ children }) {
 
   const loadDocumentStats = useCallback(async () => {
     if (isAuthLoading || !userId) {
-      setDocumentStats({ total: 0, active: 0, archived: 0, uploaded: 0 })
+      setDocumentStats({ total: 0, active: 0, archived: 0 })
       setDocumentTypes([])
       return
     }
 
-    const [totalResult, activeResult, archivedResult, uploadedResult, typesResult] = await Promise.all([
+    const [totalResult, activeResult, archivedResult, typesResult] = await Promise.all([
       supabase.from('documents').select('id', { count: 'exact', head: true }),
       supabase.from('documents').select('id', { count: 'exact', head: true }).is('archived_at', null),
       supabase.from('documents').select('id', { count: 'exact', head: true }).not('archived_at', 'is', null),
-      supabase
-        .from('documents')
-        .select('id', { count: 'exact', head: true })
-        .or('file_path.not.is.null,storage_url.not.is.null'),
       supabase.from('documents').select('type'),
     ])
 
@@ -151,7 +146,6 @@ export function DocumentProvider({ children }) {
       total: totalResult.count ?? 0,
       active: activeResult.count ?? 0,
       archived: archivedResult.count ?? 0,
-      uploaded: uploadedResult.error ? 0 : (uploadedResult.count ?? 0),
     })
 
     if (!typesResult.error) {
@@ -168,7 +162,7 @@ export function DocumentProvider({ children }) {
         if (cancelled) return
         setDocuments([])
         setTotalCount(0)
-        setDocumentStats({ total: 0, active: 0, archived: 0, uploaded: 0 })
+        setDocumentStats({ total: 0, active: 0, archived: 0 })
         setDocumentTypes([])
       })
     }

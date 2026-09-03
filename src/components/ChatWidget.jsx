@@ -425,12 +425,49 @@ function ChatWidgetInner() {
       }
     }
 
+    /*
+     * Trend-based prediction for the next unrecorded month, using a trailing
+     * average of the most recent months that actually have budget or expense
+     * data. Computed once here — deterministically, not by the LLM — so Cue
+     * never averages figures itself; it only reads the result (same reason
+     * remainingBalance is precomputed per rule 3 in the edge function prompt).
+     */
+    const PREDICTION_WINDOW = 3
+    const MIN_MONTHS_FOR_PREDICTION = 2
+    const historicalMonths = monthlySummaries
+      .filter(m => m.year < currentYear || (m.year === currentYear && m.monthNumber <= currentMonthNum))
+      .sort((a, b) => (a.year - b.year) || (a.monthNumber - b.monthNumber))
+
+    let prediction
+    if (historicalMonths.length < MIN_MONTHS_FOR_PREDICTION) {
+      prediction = { available: false, monthsRecorded: historicalMonths.length }
+    } else {
+      const basis = historicalMonths.slice(-PREDICTION_WINDOW)
+      const avgAllocated = basis.reduce((sum, m) => sum + m.allocatedBudget, 0) / basis.length
+      const avgExpenses = basis.reduce((sum, m) => sum + m.totalExpenses, 0) / basis.length
+      let nextMonthNum = currentMonthNum + 1
+      let nextYear = currentYear
+      if (nextMonthNum > 12) {
+        nextMonthNum = 1
+        nextYear += 1
+      }
+      prediction = {
+        available: true,
+        nextMonth: MONTH_NAMES[nextMonthNum - 1],
+        nextYear,
+        basisMonths: basis.map(m => `${m.month} ${m.year}`),
+        predictedAllocatedBudget: Math.round(avgAllocated),
+        predictedExpenses: Math.round(avgExpenses),
+      }
+    }
+
     return {
       role,
       userName,
       currentPage,
       currentYear,
       currentMonthName,
+      prediction,
       totals: {
         // Total Budget = sum of all monthly budgets (SK Treasurer entries)
         totalBudget: totals?.totalBudget || 0,
@@ -462,6 +499,7 @@ function ChatWidgetInner() {
       'document', 'receipt', 'narrative', 'report', 'upload', 'attachment', 'file',
       'supporting document', 'coa', 'commission on audit',
       'analysis', 'insight', 'recommendation', 'recommend', 'suggest', 'suggestion', 'where to spend', 'where should', 'risk', 'trend', 'forecast', 'summary',
+      'predict', 'prediction', 'projected', 'projection', 'estimate', 'estimated',
       'ai analysis', 'financial analysis', 'spending trend',
       'dashboard', 'chart', 'statistic', 'overview', 'total',
       'audit', 'log', 'trail', 'activity log', 'approval', 'pending', 'approved', 'rejected',
@@ -550,6 +588,18 @@ function ChatWidgetInner() {
 
     if (isSuggestionQuery) {
       return generateDataDrivenRecommendation(systemCtx, allBudgets, allRequests, targetMonth, targetYear, currentYear)
+    }
+
+    /* "How much will next month's budget need to be", "predict/forecast/
+       projected/estimated budget" — a trend question, not a lookup. Answered
+       from the prediction precomputed in buildSystemContext() (trailing
+       average of the most recent recorded months) so this fallback never
+       averages figures itself either. */
+    const isPredictionQuery = /\b(predict\w*|projected?|projection|forecast\w*|estimat\w*)\b/.test(text)
+      || (text.includes('next month') && (text.includes('budget') || text.includes('need') || text.includes('spend')))
+
+    if (isPredictionQuery) {
+      return buildPredictionAnswer(systemCtx, targetMonth, targetYear)
     }
 
     /* "What are the spending patterns" is a question about shape, not size.
@@ -702,6 +752,28 @@ function ChatWidgetInner() {
       return `No approved Project, Event, or Payroll budgets have been recorded in the system yet.`
     }
     return `Your overall approved working budget is ₱${Number(totalB).toLocaleString('en-PH')} and ₱${Number(totalR).toLocaleString('en-PH')} remains after recorded expenses.`
+  }
+
+  /*
+   * Answers prediction/forecast questions using the trailing-average estimate
+   * already computed in buildSystemContext() — this fallback reads it rather
+   * than averaging again, same reasoning as the rest of this rule engine.
+   */
+  function buildPredictionAnswer(systemCtx, targetMonth, targetYear) {
+    const prediction = systemCtx.prediction
+    if (!prediction || !prediction.available) {
+      const have = prediction?.monthsRecorded ?? 0
+      return `I can't generate a budget prediction yet — there ${have === 1 ? 'is' : 'are'} only ${have} month${have === 1 ? '' : 's'} of recorded budget/expense data, and at least 2 are needed to estimate a trend.`
+    }
+
+    if (
+      targetMonth && targetYear &&
+      !(String(targetMonth).toLowerCase() === String(prediction.nextMonth).toLowerCase() && Number(targetYear) === Number(prediction.nextYear))
+    ) {
+      return `I can only project one month ahead with the available data — ${prediction.nextMonth} ${prediction.nextYear}. There isn't enough recorded history yet to estimate ${targetMonth} ${targetYear} specifically.`
+    }
+
+    return `Based on the trend from ${prediction.basisMonths.join(', ')}, the estimated budget need for ${prediction.nextMonth} ${prediction.nextYear} is around ₱${Number(prediction.predictedAllocatedBudget).toLocaleString('en-PH')} (estimated expenses: ₱${Number(prediction.predictedExpenses).toLocaleString('en-PH')}). This is a trend-based estimate, not a guaranteed figure — the actual approved budget may differ.`
   }
 
   /**

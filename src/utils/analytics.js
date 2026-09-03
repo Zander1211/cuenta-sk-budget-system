@@ -26,29 +26,79 @@ export const monthOptions = MONTHS_FULL.map((label, i) => ({ value: i + 1, label
 //
 // Category charts need hue as well as lightness separation. These tones are
 // deliberately dark enough to support white data labels inside pie slices.
+// 14 slots so a barangay-scale budget (a handful of real categories today,
+// room for several more later) never has to repeat a hue before every slot
+// is used.
 export const CATEGORY_COLORS = [
-  '#1D4ED8', // blue
-  '#15803D', // green
-  '#B45309', // orange
-  '#B91C1C', // red
-  '#6D28D9', // purple
-  '#0F766E', // teal
-  '#A21CAF', // magenta
-  '#475569', // slate
+  '#2563EB', // blue
+  '#16A34A', // green
+  '#EA580C', // orange
+  '#0D9488', // teal
+  '#DC2626', // red
+  '#7C3AED', // purple
+  '#CA8A04', // amber
+  '#DB2777', // pink
+  '#78350F', // brown
+  '#64748B', // gray
+  '#0891B2', // cyan
+  '#4338CA', // indigo
+  '#65A30D', // lime
+  '#9333EA', // violet
 ]
 
+// Every category name Cuenta actually produces — the SK budget request
+// dropdown (Sports/Education/Community Programs/Environment/Other),
+// Payroll (set as the literal category for payroll requests, see
+// NewRequestPage), and the extra buckets from the original spec's example
+// table — gets a hand-picked, PERMANENT color here. That's what keeps a
+// category's color identical everywhere (dashboard, every Analysis chart,
+// the exported PDF) and across every refresh/month/year: the color is keyed
+// to the name, never to the category's rank or position in whichever list
+// happens to be rendered this time.
+//
+// Matched case-insensitively. Every value below is unique — including the
+// legacy synonym rows — except where two keys are literally the same
+// concept (a plural, or "other"/"uncategorized" naming the same misc
+// bucket), which intentionally share a color since they're never two
+// distinct slices on the same chart.
 const CATEGORY_COLOR_BY_NAME = {
-  project: '#1D4ED8',
-  projects: '#1D4ED8',
-  event: '#15803D',
-  events: '#15803D',
-  payroll: '#B45309',
-  'additional expense': '#B91C1C',
-  'additional expenses': '#B91C1C',
-  other: '#6D28D9',
-  others: '#6D28D9',
-  uncategorized: '#6D28D9',
-  'remaining budget': '#0F766E',
+  sports: '#2563EB',
+  education: '#16A34A',
+  'community programs': '#EA580C',
+  environment: '#0D9488',
+  payroll: '#0891B2',
+  health: '#DC2626',
+  livelihood: '#7C3AED',
+  'disaster preparedness': '#CA8A04',
+  'youth development': '#DB2777',
+  'culture & arts': '#78350F',
+  'culture and arts': '#78350F',
+  other: '#64748B',
+  others: '#64748B',
+  uncategorized: '#4338CA',
+  // Legacy category strings from older records/exports.
+  project: '#2563EB',
+  projects: '#2563EB',
+  event: '#16A34A',
+  events: '#16A34A',
+  'additional expense': '#DC2626',
+  'additional expenses': '#DC2626',
+  'remaining budget': '#0D9488',
+}
+
+// Stable string hash (djb2-ish) used only as a fallback for a category name
+// with no hand-picked color above — e.g. a brand-new category added to the
+// request form later. Hashing the NAME (not its position in whatever list
+// happens to be rendered) is what makes the fallback color permanent too:
+// the same unrecognized name always lands on the same palette slot, on
+// every refresh and for every month/year, instead of drifting with sort
+// order the way an index-based pick would.
+function hashCategoryName(name) {
+  let hash = 5381
+  for (let i = 0; i < name.length; i += 1) {
+    hash = ((hash * 33) ^ name.charCodeAt(i)) | 0
+  }
+  return Math.abs(hash)
 }
 
 // Fixed semantic roles across Budget vs Actual / Monthly Trend / Utilization.
@@ -84,10 +134,69 @@ export function pesoTick(v) {
   return `₱${v}`
 }
 
+/**
+ * Resolves a single, permanent color for one category name. `index` is kept
+ * only as a last-resort fallback for a blank name — it must never be used
+ * as the primary key, or the same category would recolor whenever its
+ * rank/position shifts between different categories or a different
+ * month/year's data (which is exactly the bug this replaced: two
+ * categories could land on the same index, and therefore the same color,
+ * purely by coincidence of sort order).
+ *
+ * For coloring several categories on the SAME chart, prefer
+ * `assignCategoryColors` instead — it also guarantees no two of THOSE
+ * categories collide, which a single name-hash lookup alone can't promise
+ * for two unrecognized names.
+ */
 export function colorForCategory(name, index = 0) {
   const normalizedName = String(name || '').trim().toLowerCase()
+  if (!normalizedName) return CATEGORY_COLORS[index % CATEGORY_COLORS.length]
   return CATEGORY_COLOR_BY_NAME[normalizedName]
-    || CATEGORY_COLORS[index % CATEGORY_COLORS.length]
+    || CATEGORY_COLORS[hashCategoryName(normalizedName) % CATEGORY_COLORS.length]
+}
+
+/**
+ * Resolves colors for a whole set of category names at once (one chart's
+ * worth), returned as a Map keyed by the ORIGINAL (un-normalized) name so
+ * callers can look a color up with the exact string they already have.
+ *
+ * Guarantees every name in `names` gets a distinct color as long as
+ * `names` itself has no more entries than CATEGORY_COLORS — ties are
+ * broken deterministically (alphabetical name order) so the same set of
+ * categories always resolves the same way, never by first-seen/render order.
+ */
+export function assignCategoryColors(names) {
+  const used = new Set()
+  const result = new Map()
+
+  const uniqueNames = Array.from(new Set(names || []))
+  const ordered = [...uniqueNames].sort((a, b) => String(a).localeCompare(String(b)))
+
+  ordered.forEach((name) => {
+    const normalizedName = String(name || '').trim().toLowerCase()
+    let color = normalizedName ? CATEGORY_COLOR_BY_NAME[normalizedName] : null
+
+    if (!color || used.has(color)) {
+      const start = hashCategoryName(normalizedName || String(name))
+      for (let i = 0; i < CATEGORY_COLORS.length; i += 1) {
+        const candidate = CATEGORY_COLORS[(start + i) % CATEGORY_COLORS.length]
+        if (!used.has(candidate)) {
+          color = candidate
+          break
+        }
+      }
+    }
+
+    // Every palette slot is already taken (more categories than colors) —
+    // fall back to the hash pick even though it repeats a color already in
+    // use; there is nothing more distinct left to hand out.
+    if (!color) color = CATEGORY_COLORS[hashCategoryName(normalizedName || String(name)) % CATEGORY_COLORS.length]
+
+    used.add(color)
+    result.set(name, color)
+  })
+
+  return result
 }
 
 // ---------- Normalization helpers ----------

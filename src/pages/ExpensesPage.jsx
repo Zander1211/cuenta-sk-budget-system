@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState, lazy, Suspense, useCallback } from 'react'
-import { AlertCircle, FileText, CheckCircle, ChevronDown, Plus, CreditCard, ChevronRight, Calculator, Archive, ArchiveRestore } from 'lucide-react'
+import { AlertCircle, FileText, CheckCircle, ChevronDown, Plus, PlusCircle, Trash2, CreditCard, ChevronRight, Calculator, Archive, ArchiveRestore } from 'lucide-react'
 import { useBudget } from '../context/BudgetContext'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
@@ -13,6 +13,9 @@ import { getBreakdownTotal, getRecordPeriod } from '../utils/budgetUtils'
 import BudgetBreakdownTable from '../components/BudgetBreakdownTable'
 import PaginationControls from '../components/PaginationControls'
 import { calculateProjectEventFinancials, formatUtilization, summarizeApprovedBudgetFinancials } from '../utils/projectEventFinancials'
+import '../components/documents/AdditionalDocuments.css'
+
+const EMPTY_REQUISITION_ROW = { itemName: '', quantity: 1, unitCost: 0 }
 
 const ReceiptScanModal = lazy(() => import('../components/receipts/ReceiptScanModal'))
 
@@ -49,7 +52,7 @@ function ExpensesPage() {
     refreshExpensesFromSupabase,
     archiveExpense,
     restoreExpense,
-    addExpense,
+    addAdditionalRequisition,
     updateExpenseReceipt,
   } = useBudget()
   const { addLog } = useAuditLog()
@@ -71,11 +74,29 @@ function ExpensesPage() {
   const [addExpenseForm, setAddExpenseForm] = useState({
     parentProjectId: '',
     category: 'Other',
-    description: '',
-    amount: '',
     date: '',
     remarks: '',
   })
+  const [requisitionItems, setRequisitionItems] = useState([{ ...EMPTY_REQUISITION_ROW }])
+
+  function updateRequisitionItem(index, field, value) {
+    setRequisitionItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+    )
+  }
+
+  function addRequisitionItemRow() {
+    setRequisitionItems((prev) => [...prev, { ...EMPTY_REQUISITION_ROW }])
+  }
+
+  function removeRequisitionItemRow(index) {
+    setRequisitionItems((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)))
+  }
+
+  const totalRequisitionCost = requisitionItems.reduce(
+    (sum, item) => sum + ((Number(item.quantity) || 0) * (Number(item.unitCost) || 0)),
+    0,
+  )
 
   const recordableProjectEvents = useMemo(() => (
     expenses
@@ -136,9 +157,7 @@ function ExpensesPage() {
     const parentExpense = recordableProjectEvents.find(
       (expense) => String(expense.id) === String(addExpenseForm.parentProjectId),
     )
-    const description = addExpenseForm.description.trim()
     const remarks = addExpenseForm.remarks.trim()
-    const amount = Number(addExpenseForm.amount) || 0
 
     if (!parentExpense) {
       addNotification({
@@ -149,11 +168,41 @@ function ExpensesPage() {
       return
     }
 
-    if (!description || !addExpenseForm.date || amount <= 0) {
+    if (!addExpenseForm.date) {
       addNotification({
         type: 'error',
-        title: 'Complete the Expense Details',
-        message: 'Enter a description, an amount greater than zero, and the date incurred.',
+        title: 'Complete the Requisition Details',
+        message: 'Enter the date incurred for this requisition.',
+      })
+      return
+    }
+
+    // A row left exactly at its blank default (no item name, no unit cost
+    // typed in) is dropped silently rather than flagged — that's the normal
+    // shape of a spare row the user never got to. Only a row that was
+    // PARTIALLY filled in is treated as a mistake worth a validation message.
+    const trimmedRows = requisitionItems.map((item) => ({
+      itemName: (item.itemName || '').trim(),
+      quantity: Number(item.quantity) || 0,
+      unitCost: Number(item.unitCost) || 0,
+    }))
+    const touchedRows = trimmedRows.filter((item) => item.itemName || item.quantity > 0 || item.unitCost > 0)
+    const validRows = touchedRows.filter((item) => item.itemName && item.quantity > 0 && item.unitCost > 0)
+
+    if (touchedRows.length === 0) {
+      addNotification({
+        type: 'error',
+        title: 'Add at least one requisition item',
+        message: 'Enter a requisition item with a quantity and unit cost before saving.',
+      })
+      return
+    }
+
+    if (validRows.length !== touchedRows.length) {
+      addNotification({
+        type: 'error',
+        title: 'Complete every requisition row',
+        message: 'Each row needs a requisition item, a quantity greater than zero, and a unit cost greater than zero before it can be saved.',
       })
       return
     }
@@ -161,22 +210,23 @@ function ExpensesPage() {
     setIsAddingExpense(true)
 
     try {
-      const result = await addExpense({
-        isAdditional: true,
-        parentProjectId: parentExpense.id,
-        type: parentExpense.type,
+      const items = validRows.map((row) => ({
+        itemName: row.itemName,
+        quantity: row.quantity,
+        unitCost: row.unitCost,
         category: addExpenseForm.category || 'Other',
-        description,
-        amount,
         date: addExpenseForm.date,
         remarks,
-      })
+        recordedBy: role || '',
+      }))
+
+      const result = await addAdditionalRequisition(parentExpense.id, items)
 
       if (result?.error) {
         addNotification({
           type: 'error',
-          title: 'Expense Not Recorded',
-          message: result.error.message || 'The expense could not be saved.',
+          title: 'Requisition Not Recorded',
+          message: result.error.message || 'The requisition could not be saved.',
         })
         return
       }
@@ -186,21 +236,20 @@ function ExpensesPage() {
       setAddExpenseForm({
         parentProjectId: '',
         category: 'Other',
-        description: '',
-        amount: '',
         date: '',
         remarks: '',
       })
+      setRequisitionItems([{ ...EMPTY_REQUISITION_ROW }])
       addNotification({
         type: 'system',
-        title: 'Requisition recorded',
-        message: `The requisition was added under ${parentExpense.event || parentExpense.project}; its receipts and utilization remain consolidated there.`,
+        title: items.length > 1 ? 'Requisitions recorded' : 'Requisition recorded',
+        message: `${items.length} requisition item${items.length > 1 ? 's were' : ' was'} added under ${parentExpense.event || parentExpense.project}; its receipts and utilization remain consolidated there.`,
       })
     } catch (error) {
       addNotification({
         type: 'error',
-        title: 'Expense Not Recorded',
-        message: error?.message || 'The expense could not be saved.',
+        title: 'Requisition Not Recorded',
+        message: error?.message || 'The requisition could not be saved.',
       })
     } finally {
       setIsAddingExpense(false)
@@ -638,30 +687,32 @@ function ExpensesPage() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th className="table-band" colSpan="6">ADDITIONAL REQUISITION</th>
+                    <th className="table-band" colSpan="7">ADDITIONAL REQUISITION BREAKDOWN</th>
                   </tr>
                   <tr>
+                    <th style={{ textTransform: 'uppercase' }}>REQUISITION ITEM</th>
                     <th style={{ textTransform: 'uppercase' }}>CATEGORY</th>
-                    <th style={{ textTransform: 'uppercase' }}>REQUISITION</th>
-                    <th style={{ textTransform: 'uppercase' }}>DESCRIPTION</th>
-                    <th style={{ textTransform: 'uppercase' }}>EXPENSE DATE</th>
-                    <th style={{ textTransform: 'uppercase' }}>AMOUNT</th>
-                    <th style={{ textTransform: 'uppercase' }}>RECORDED BY</th>
+                    <th style={{ textTransform: 'uppercase' }}>DATE</th>
+                    <th style={{ textTransform: 'uppercase' }}>REMARKS</th>
+                    <th style={{ textTransform: 'uppercase' }}>QUANTITY</th>
+                    <th style={{ textTransform: 'uppercase' }}>UNIT COST</th>
+                    <th style={{ textTransform: 'uppercase' }}>TOTAL COST</th>
                   </tr>
                 </thead>
                 <tbody>
                   {additionalExpenses.length ? additionalExpenses.map((addEx, index) => (
                     <tr key={`${expense.id}-add-${index}`}>
+                      <td data-label="Requisition Item">{addEx.itemName || addEx.description || addEx.category || '—'}</td>
                       <td data-label="Category">{addEx.category || '—'}</td>
-                      <td data-label="Requisition">{addEx.description || addEx.category || '—'}</td>
-                      <td data-label="Description">{addEx.remarks || '—'}</td>
-                      <td data-label="Expense Date">{addEx.date ? new Date(addEx.date).toLocaleDateString() : '—'}</td>
-                      <td data-label="Amount">{currency.format(Number(addEx.amount) || 0)}</td>
-                      <td data-label="Recorded By">{addEx.requestedBy || '—'}</td>
+                      <td data-label="Date">{(addEx.date || addEx.addedAt) ? new Date(addEx.date || addEx.addedAt).toLocaleDateString() : '—'}</td>
+                      <td data-label="Remarks">{addEx.remarks || '—'}</td>
+                      <td data-label="Quantity">{addEx.quantity || '—'}</td>
+                      <td data-label="Unit Cost">{addEx.unitCost ? currency.format(addEx.unitCost) : '—'}</td>
+                      <td data-label="Total Cost">{currency.format(Number(addEx.amount) || 0)}</td>
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan="6" style={{ textAlign: 'center', fontStyle: 'italic', color: 'var(--ink-3)' }}>
+                      <td colSpan="7" style={{ textAlign: 'center', fontStyle: 'italic', color: 'var(--ink-3)' }}>
                         {financials.verifiedReceiptTotal > 0
                           ? `Actual spending is based on ${currency.format(financials.verifiedReceiptTotal)} in verified receipts.`
                           : 'No requisitions recorded under this approved budget.'}
@@ -672,9 +723,8 @@ function ExpensesPage() {
                 {additionalExpenses.length ? (
                   <tfoot>
                     <tr>
-                      <th colSpan="4">Total Requisition</th>
+                      <th colSpan="6">Total Additional Requisition Cost</th>
                       <th>{currency.format(additionalTotal)}</th>
-                      <th />
                     </tr>
                   </tfoot>
                 ) : null}
@@ -773,15 +823,15 @@ function ExpensesPage() {
             aria-labelledby="additional-expense-title"
           >
             <div className="additional-expense-header">
-              <h2 id="additional-expense-title">Record additional expense requisition</h2>
-              <p>Add an actual cost under one approved Project, Event, or Payroll. This does not create another budget record.</p>
+              <h2 id="additional-expense-title">Record Requisition</h2>
+              <p>Add one or more actual costs under one approved Project, Event, or Payroll. This does not create another budget record.</p>
             </div>
             <form onSubmit={handleAddExpenseSubmit} className="additional-expense-form">
               <div className="additional-expense-grid">
                 <label className="field additional-expense-field">
                   <span>Approved Project, Event, or Payroll</span>
-                  <select 
-                    value={addExpenseForm.parentProjectId} 
+                  <select
+                    value={addExpenseForm.parentProjectId}
                     onChange={e => setAddExpenseForm({...addExpenseForm, parentProjectId: e.target.value})}
                     disabled={isAddingExpense || recordableProjectEvents.length === 0}
                     required
@@ -815,48 +865,100 @@ function ExpensesPage() {
                 </label>
 
                 <label className="field additional-expense-field">
-                  <span>Amount (₱)</span>
-                  <CurrencyInput
-                    value={addExpenseForm.amount}
-                    onValueChange={(val) => setAddExpenseForm({...addExpenseForm, amount: Number(val)})}
-                    disabled={isAddingExpense}
-                    required
-                  />
-                </label>
-
-                <label className="field additional-expense-field">
-                  <span>Requisition Title / Description</span>
-                  <input 
-                    type="text" 
-                    value={addExpenseForm.description} 
-                    onChange={e => setAddExpenseForm({...addExpenseForm, description: e.target.value})}
-                    disabled={isAddingExpense}
-                    required 
-                    placeholder="e.g. Fuel, printing, decoration"
-                  />
-                </label>
-
-                <label className="field additional-expense-field">
                   <span>Date Incurred</span>
-                  <input 
-                    type="date" 
-                    value={addExpenseForm.date} 
+                  <input
+                    type="date"
+                    value={addExpenseForm.date}
                     onChange={e => setAddExpenseForm({...addExpenseForm, date: e.target.value})}
                     disabled={isAddingExpense}
-                    required 
+                    required
                   />
                 </label>
 
                 <label className="field additional-expense-field additional-expense-field--wide">
                   <span>Remarks (Optional)</span>
                   <textarea
-                    value={addExpenseForm.remarks} 
+                    value={addExpenseForm.remarks}
                     onChange={e => setAddExpenseForm({...addExpenseForm, remarks: e.target.value})}
                     disabled={isAddingExpense}
                     rows={3}
                     placeholder="Add context or notes about this expense"
                   />
                 </label>
+              </div>
+
+              <div className="requisition-rows-section" style={{ marginTop: '20px' }}>
+                <p className="eyebrow">Requisition items</p>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="add-row-table">
+                    <thead>
+                      <tr>
+                        <th>Requisition Item</th>
+                        <th style={{ width: '90px' }}>Quantity</th>
+                        <th style={{ width: '140px' }}>Unit Cost</th>
+                        <th style={{ width: '140px' }}>Total Cost</th>
+                        <th style={{ width: '40px' }} />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {requisitionItems.map((item, index) => (
+                        <tr key={`requisition-row-${index}`}>
+                          <td>
+                            <input
+                              type="text"
+                              value={item.itemName}
+                              onChange={(e) => updateRequisitionItem(index, 'itemName', e.target.value)}
+                              disabled={isAddingExpense}
+                              placeholder="e.g. Extension Wire"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.quantity}
+                              onChange={(e) => updateRequisitionItem(index, 'quantity', e.target.value)}
+                              disabled={isAddingExpense}
+                            />
+                          </td>
+                          <td>
+                            <CurrencyInput
+                              value={item.unitCost}
+                              onValueChange={(val) => updateRequisitionItem(index, 'unitCost', val)}
+                              disabled={isAddingExpense}
+                            />
+                          </td>
+                          <td className="computed-cell">
+                            {currency.format((Number(item.quantity) || 0) * (Number(item.unitCost) || 0))}
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="remove-row-btn"
+                              onClick={() => removeRequisitionItemRow(index)}
+                              disabled={isAddingExpense || requisitionItems.length === 1}
+                              aria-label="Remove requisition row"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="total-row">
+                        <th colSpan="3" style={{ textAlign: 'right' }}>Total Additional Requisition Cost</th>
+                        <th>{currency.format(totalRequisitionCost)}</th>
+                        <th />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <div className="add-row-actions">
+                  <button type="button" className="add-row-btn" onClick={addRequisitionItemRow} disabled={isAddingExpense}>
+                    <PlusCircle size={16} /> Add Requisition Row
+                  </button>
+                </div>
               </div>
 
               <div className="additional-expense-actions">
@@ -873,7 +975,7 @@ function ExpensesPage() {
                   className="primary-button"
                   disabled={isAddingExpense || recordableProjectEvents.length === 0}
                 >
-                  {isAddingExpense ? 'Saving requisition...' : 'Add requisition'}
+                  {isAddingExpense ? 'Saving requisition...' : 'Add to Requisition Breakdown'}
                 </button>
               </div>
             </form>

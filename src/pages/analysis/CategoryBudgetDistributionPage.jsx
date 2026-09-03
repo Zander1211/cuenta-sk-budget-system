@@ -14,7 +14,7 @@ import {
 } from '../../components/analysis/AnalysisUI'
 import { buildDistributionInsights } from '../../utils/insights'
 import {
-  formatCurrency, formatPercentage, periodLabel, colorForCategory, CHART_INK,
+  formatCurrency, formatPercentage, periodLabel, assignCategoryColors, CHART_INK,
 } from '../../utils/analytics'
 import { exportAiAnalysisPdf } from '../../utils/exportPdf'
 
@@ -36,6 +36,21 @@ function renderCustomizedLabel({ cx, cy, midAngle, innerRadius, outerRadius, per
   )
 }
 
+function PieCategoryTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null
+  const data = payload[0].payload
+  return (
+    <div style={{ background: 'var(--surface)', border: `1px solid ${CHART_INK.grid}`, padding: '12px', borderRadius: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
+      <p style={{ margin: '0 0 8px', fontWeight: 700, color: 'var(--ink-1)' }}>{data.name}</p>
+      <p style={{ margin: '4px 0', fontSize: '13px', color: 'var(--ink-3)' }}>Budget: <strong style={{ color: 'var(--ink-1)' }}>{formatCurrency(data.value)}</strong></p>
+      <p style={{ margin: '4px 0', fontSize: '13px', color: 'var(--ink-3)' }}>Percentage: <strong style={{ color: 'var(--ink-1)' }}>{formatPercentage(data.percent, 1)}</strong></p>
+      {data.count != null && (
+        <p style={{ margin: '4px 0', fontSize: '13px', color: 'var(--ink-3)' }}>Projects: <strong style={{ color: 'var(--ink-1)' }}>{data.count}</strong></p>
+      )}
+    </div>
+  )
+}
+
 export default function CategoryBudgetDistributionPage() {
   const { role } = useAuth()
   const canExport = role === 'SK Chairman' || role === 'SK Treasurer'
@@ -46,9 +61,18 @@ export default function CategoryBudgetDistributionPage() {
   const dist = useApprovedBudgetDistribution(filters)
   const label = periodLabel(filters)
 
-  const pieData = useMemo(() =>
-    dist.distribution.map((c, i) => ({ ...c, color: colorForCategory(c.name, i) })),
+  const colorByName = useMemo(
+    () => assignCategoryColors(dist.distribution.map((c) => c.name)),
     [dist.distribution]
+  )
+
+  const pieData = useMemo(() =>
+    dist.distribution.map((c) => ({
+      ...c,
+      color: colorByName.get(c.name),
+      percent: dist.total > 0 ? (c.value / dist.total) * 100 : 0,
+    })),
+    [dist.distribution, dist.total, colorByName]
   )
 
   const fallback = useMemo(() => buildDistributionInsights(dist), [dist])
@@ -82,8 +106,8 @@ export default function CategoryBudgetDistributionPage() {
 
   const columns = [
     {
-      key: 'name', header: 'Category', render: (r, i) => (
-        <span><span className="an-cat-dot" style={{ background: colorForCategory(r.name, i) }} />{r.name}</span>
+      key: 'name', header: 'Category', render: (r) => (
+        <span><span className="an-cat-dot" style={{ background: colorByName.get(r.name) }} />{r.name}</span>
       )
     },
     { key: 'value', header: 'Total Budget', align: 'right', render: (r) => formatCurrency(r.value) },
@@ -156,10 +180,7 @@ export default function CategoryBudgetDistributionPage() {
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip
-                          formatter={(value, name) => [`${formatCurrency(value)} (${formatPercentage((value / dist.total) * 100, 1)})`, name]}
-                          cursor={{ fill: CHART_INK.cursor }}
-                        />
+                        <Tooltip content={<PieCategoryTooltip />} cursor={{ fill: CHART_INK.cursor }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>

@@ -14,7 +14,7 @@ import {
 } from '../../components/analysis/AnalysisUI'
 import { buildCategoryInsights } from '../../utils/insights'
 import {
-  formatCurrency, formatPercentage, periodLabel, colorForCategory,
+  formatCurrency, formatPercentage, periodLabel, assignCategoryColors,
   CHART_INK, CHART_COLORS, pesoTick,
   filterExpenses, expenseDate, parseDate, normalizeAmount,
 } from '../../utils/analytics'
@@ -62,8 +62,13 @@ export default function ExpensesByCategoryPage() {
     return map
   }, [expenses, verifiedReceiptTotals, filters.year, filters.month])
 
-  const chartData = cat.categories.map((c, i) => ({
-    name: c.name, value: c.value, percent: c.percent, fill: colorForCategory(c.name, i),
+  const colorByName = useMemo(
+    () => assignCategoryColors(cat.categories.map((c) => c.name)),
+    [cat.categories]
+  )
+
+  const chartData = cat.categories.map((c) => ({
+    name: c.name, value: c.value, percent: c.percent, fill: colorByName.get(c.name),
   }))
 
   const fallback = useMemo(() => buildCategoryInsights(cat), [cat])
@@ -87,13 +92,13 @@ export default function ExpensesByCategoryPage() {
     { key: 'rank', header: '#', render: (r) => r.rank },
     {
       key: 'name', header: 'Category', render: (r) => (
-        <span><span className="an-cat-dot" style={{ background: colorForCategory(r.name, r.rank - 1) }} />{r.name}</span>
+        <span><span className="an-cat-dot" style={{ background: colorByName.get(r.name) }} />{r.name}</span>
       )
     },
     { key: 'value', header: 'Total', align: 'right', render: (r) => formatCurrency(r.value) },
     { key: 'percent', header: '% of Total', align: 'right', render: (r) => formatPercentage(r.percent, 1) },
     { key: 'changePct', header: 'vs Prev.', align: 'right', render: (r) => <PercentageChange value={r.hasPrev ? r.changePct : null} invertColor /> },
-    { key: 'spark', header: 'Trend', align: 'center', render: (r) => <Sparkline points={sparklines.get(r.name)} color={colorForCategory(r.name, r.rank - 1)} /> },
+    { key: 'spark', header: 'Trend', align: 'center', render: (r) => <Sparkline points={sparklines.get(r.name)} color={colorByName.get(r.name)} /> },
   ]
 
   const hasData = cat.categories.length > 0

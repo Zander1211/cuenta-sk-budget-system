@@ -225,7 +225,7 @@ function ProfilePage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
               <div>
                 <p className="eyebrow" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase' }}>Personal Records</p>
-                <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--ink)' }}>Biodata</h2>
+                <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--ink)' }}>Personal Information</h2>
               </div>
               {biodataComplete !== null ? (
                 <span className={`an-chip ${biodataComplete ? 'positive' : 'warning'}`} style={{ padding: '4px 12px', borderRadius: '999px', fontSize: '0.8rem', fontWeight: 600, backgroundColor: biodataComplete ? '#dcfce7' : '#fef3c7', color: biodataComplete ? '#15803d' : '#92400e' }}>
@@ -235,9 +235,9 @@ function ProfilePage() {
             </div>
             
             {biodata.status === 'loading' ? (
-              <p className="profile-hint" style={{ color: 'var(--ink-3)' }}>Loading biodata…</p>
+              <p className="profile-hint" style={{ color: 'var(--ink-3)' }}>Loading personal information…</p>
             ) : biodata.status === 'error' ? (
-              <p className="profile-hint" style={{ color: 'var(--negative)' }}>Unable to load biodata right now.</p>
+              <p className="profile-hint" style={{ color: 'var(--negative)' }}>Unable to load personal information right now.</p>
             ) : biodata.data ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px', marginBottom: '24px' }}>
                 <div>
@@ -267,7 +267,7 @@ function ProfilePage() {
               </div>
             ) : (
               <p className="profile-hint" style={{ color: 'var(--ink-3)', marginBottom: '24px' }}>
-                You haven&apos;t filled out your biodata yet.
+                You haven&apos;t filled out your personal information yet.
               </p>
             )}
 
@@ -276,7 +276,7 @@ function ProfilePage() {
               onClick={() => navigate('/dashboard/profile/biodata')}
               style={{ width: '100%', justifyContent: 'center', padding: '10px' }}
             >
-              {biodataComplete ? 'Edit Biodata' : 'Complete Your Biodata'}
+              {biodataComplete ? 'Edit Personal Information' : 'Complete Your Personal Information'}
             </button>
           </div>
 

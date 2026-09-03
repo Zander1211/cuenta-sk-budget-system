@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, Plus, X, Eye, Download, Archive, RotateCcw, Search, Filter, Receipt } from 'lucide-react'
+import { FileText, Plus, X, Eye, Download, Archive, RotateCcw, Search, Filter } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import DocumentGenerator from '../components/DocumentGenerator'
 import { useAuth } from '../context/AuthContext'
@@ -14,15 +14,12 @@ import TransmittalLetterPreview from '../components/documents/TransmittalLetterP
 import AnnualReportPreview from '../components/documents/AnnualReportPreview'
 import NarrativeReportPreview from '../components/documents/NarrativeReportPreview'
 import PaginationControls from '../components/PaginationControls'
-import { useBudget } from '../context/BudgetContext'
-import { supabase } from '../supabase/supabaseClient'
 
 const DOCUMENTS_PAGE_SIZE = 10
 
 function DocumentsPage() {
   const navigate = useNavigate()
   const { role } = useAuth()
-  const { expenses } = useBudget()
   const {
     documents,
     isLoadingDocuments,
@@ -45,7 +42,6 @@ function DocumentsPage() {
   const [viewingDoc, setViewingDoc] = useState(null)
   const [activeTab, setActiveTab] = useState('active')
   const [archiveModal, setArchiveModal] = useState({ open: false, docId: null })
-  const [receiptDocuments, setReceiptDocuments] = useState([])
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('')
@@ -81,63 +77,6 @@ function DocumentsPage() {
     window.addEventListener('cuenta:document-created', handleDocumentCreated)
     return () => window.removeEventListener('cuenta:document-created', handleDocumentCreated)
   }, [])
-
-  useEffect(() => {
-    let mounted = true
-    const recordIds = expenses.map(expense => String(expense.id))
-    if (!recordIds.length) return undefined
-
-    const parents = new Map()
-    expenses.filter(expense => !expense.isAdditional).forEach(parent => {
-      parents.set(String(parent.id), parent)
-      if (parent.requestId) parents.set(String(parent.requestId), parent)
-    })
-    const requisitions = new Map()
-    expenses.filter(expense => expense.isAdditional).forEach(requisition => {
-      requisitions.set(String(requisition.id), requisition)
-    })
-
-    ;(async () => {
-      let { data, error } = await supabase
-        .from('receipt_records')
-        .select('id, record_id, requisition_id, file_path, file_name, uploaded_at')
-        .in('record_id', recordIds)
-        .order('uploaded_at', { ascending: false })
-        .limit(50)
-
-      if (error) {
-        const legacy = await supabase
-          .from('receipt_records')
-          .select('id, record_id, file_path, file_name, uploaded_at')
-          .in('record_id', recordIds)
-          .order('uploaded_at', { ascending: false })
-          .limit(50)
-        data = legacy.data
-        error = legacy.error
-      }
-      if (error || !mounted) return
-
-      const rows = await Promise.all((data || []).map(async receipt => {
-        const legacyRequisition = requisitions.get(String(receipt.record_id))
-        const requisition = requisitions.get(String(receipt.requisition_id)) || legacyRequisition
-        const parent = parents.get(String(receipt.record_id))
-          || parents.get(String(requisition?.parentProjectId))
-        const { data: signed } = await supabase.storage
-          .from('receipts')
-          .createSignedUrl(receipt.file_path, 60 * 60)
-        return {
-          ...receipt,
-          url: signed?.signedUrl || null,
-          parentTitle: parent?.event || parent?.project || 'Approved record',
-          parentType: parent?.type || 'Record',
-          requisitionTitle: requisition?.description || requisition?.category || null,
-        }
-      }))
-      if (mounted) setReceiptDocuments(rows)
-    })()
-
-    return () => { mounted = false }
-  }, [expenses])
 
   function handleCreateSelect(type) {
     if (type === 'annual-report') {
@@ -230,10 +169,6 @@ function DocumentsPage() {
               <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Generated Documents</p>
                 <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>{documentStats.active}</h3>
-              </div>
-              <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
-                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Uploaded Documents</p>
-                <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>{documentStats.uploaded}</h3>
               </div>
               <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Archived Documents</p>
@@ -390,52 +325,6 @@ function DocumentsPage() {
               ) : null}
             </div>
 
-            {activeTab === 'active' ? (
-              <section className="overview-card" style={{ marginTop: '24px', overflow: 'hidden' }}>
-                <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)' }}>
-                  <p className="eyebrow">Supporting documents</p>
-                  <h2 style={{ margin: '4px 0 6px' }}>Receipt attachments</h2>
-                  <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                    Original and requisition receipts remain grouped under their approved Project, Event, or Payroll.
-                  </p>
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Approved record</th>
-                        <th>Receipt</th>
-                        <th>Scope</th>
-                        <th>Date uploaded</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {receiptDocuments.length ? receiptDocuments.map(receipt => (
-                        <tr key={receipt.id}>
-                          <td data-label="Approved record">
-                            <strong>{receipt.parentTitle}</strong><br />
-                            <span style={{ color: 'var(--text-secondary)', fontSize: '.82rem' }}>{receipt.parentType}</span>
-                          </td>
-                          <td data-label="Receipt">{receipt.file_name || 'Receipt attachment'}</td>
-                          <td data-label="Scope">{receipt.requisitionTitle ? `Requisition: ${receipt.requisitionTitle}` : 'Original budget receipt'}</td>
-                          <td data-label="Date uploaded">{receipt.uploaded_at ? new Date(receipt.uploaded_at).toLocaleDateString() : '—'}</td>
-                          <td data-label="Action">
-                            {receipt.url ? (
-                              <a className="secondary-button" href={receipt.url} target="_blank" rel="noreferrer">
-                                <Receipt size={15} /> View receipt
-                              </a>
-                            ) : 'Unavailable'}
-                          </td>
-                        </tr>
-                      )) : (
-                        <tr><td colSpan="5" className="empty-state">No receipt attachments found.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            ) : null}
           </>
         )}
       </section>

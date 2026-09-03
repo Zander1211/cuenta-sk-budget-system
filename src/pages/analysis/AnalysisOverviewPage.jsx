@@ -40,7 +40,7 @@ import {
   CHART_COLORS,
   CHART_INK,
   pesoTick,
-  colorForCategory,
+  assignCategoryColors,
 } from '../../utils/analytics'
 
 
@@ -314,14 +314,15 @@ export default function AnalysisOverviewPage() {
     })
   }, [ai.recommendations, summary, category])
 
-  const distPieData = useMemo(() =>
-    dist.distribution.map((d, index) => ({
+  const distPieData = useMemo(() => {
+    const colorByName = assignCategoryColors(dist.distribution.map((d) => d.name))
+    return dist.distribution.map((d) => ({
       name: d.name,
       value: d.value,
-      color: colorForCategory(d.name, index)
-    })),
-    [dist.distribution]
-  )
+      count: d.count,
+      color: colorByName.get(d.name),
+    }))
+  }, [dist.distribution])
 
   const distAiSummary = useMemo(() => {
     if (!dist.distribution.length) return null;
@@ -358,6 +359,9 @@ export default function AnalysisOverviewPage() {
           <p style={{ margin: '0 0 8px 0', fontWeight: 'bold', color: 'var(--cuenta-text-heading)' }}>{data.name}</p>
           <p style={{ margin: '4px 0', fontSize: '13px', color: 'var(--cuenta-text-secondary)' }}>Approved Budget: <strong style={{ color: 'var(--cuenta-text-heading)' }}>{formatCurrency(data.value)}</strong></p>
           <p style={{ margin: '4px 0', fontSize: '13px', color: 'var(--cuenta-text-secondary)' }}>Percentage: <strong style={{ color: 'var(--cuenta-text-heading)' }}>{percent}%</strong></p>
+          {data.count != null && (
+            <p style={{ margin: '4px 0', fontSize: '13px', color: 'var(--cuenta-text-secondary)' }}>Projects/Events: <strong style={{ color: 'var(--cuenta-text-heading)' }}>{data.count}</strong></p>
+          )}
         </div>
       );
     }

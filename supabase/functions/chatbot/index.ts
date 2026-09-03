@@ -29,6 +29,7 @@ function buildSystemPrompt(ctx: any) {
     allExpenses = [],
     allRequests = [],
     topCategories = [],
+    prediction = null,
   } = ctx
 
   const totalBudget = totals.totalBudget ?? ctx.totalBudget ?? 0
@@ -124,6 +125,20 @@ function buildSystemPrompt(ctx: any) {
     ? topCategories.map((c: any) => `- ${c.name}: ₱${Number(c.total).toLocaleString('en-PH')}`).join('\n')
     : '- No category data yet.'
 
+  /*
+   * Prediction is computed client-side (buildSystemContext in ChatWidget.jsx)
+   * as a trailing average of the most recent recorded months — never here,
+   * and never by the model. This mirrors why remainingBalance is precomputed
+   * per month: the model must read a number, not derive one.
+   */
+  const predictionText = (prediction && prediction.available)
+    ? `- Predicted period: ${prediction.nextMonth} ${prediction.nextYear}\n` +
+      `- Estimated Allocated Budget needed: ₱${Number(prediction.predictedAllocatedBudget).toLocaleString('en-PH')}\n` +
+      `- Estimated Expenses: ₱${Number(prediction.predictedExpenses).toLocaleString('en-PH')}\n` +
+      `- Method: trailing average of the most recent recorded months: ${(prediction.basisMonths || []).join(', ')}\n` +
+      `- This is a TREND ESTIMATE derived from past months, NOT a recorded or guaranteed figure.`
+    : `- Not enough historical data to generate a prediction yet (at least 2 months of recorded budget/expense data are needed; ${prediction?.monthsRecorded ?? 0} currently recorded).`
+
   return `You are Cue, the dedicated AI assistant for the "Cuenta: SK Budget Monitoring and Document Tracking with AI Analysis" system — built exclusively for the Sangguniang Kabataan (SK) of Barangay Upper Glad II, Midsayap, Cotabato, Philippines.
 
 User: ${userName} (Role: ${role})
@@ -206,7 +221,10 @@ ${requestsText}
 9. TOP SPENDING CATEGORIES:
 ${categoriesText}
 
-10. OVERALL ANNUAL / TOTAL SYSTEM SUMMARY (USE ONLY WHEN ASKED FOR TOTAL / ANNUAL / OVERALL BUDGET):
+10. BUDGET PREDICTION (NEXT MONTH — TREND ESTIMATE COMPUTED FROM PAST MONTHS, NOT A RECORDED FACT):
+${predictionText}
+
+11. OVERALL ANNUAL / TOTAL SYSTEM SUMMARY (USE ONLY WHEN ASKED FOR TOTAL / ANNUAL / OVERALL BUDGET):
 - Overall Total Budget (All Months Combined): ₱${Number(totalBudget).toLocaleString('en-PH')}
 - Overall Total Expenses: ₱${Number(totalExpenses).toLocaleString('en-PH')}
 - Overall Remaining Balance: ₱${Number(remaining).toLocaleString('en-PH')}
@@ -219,7 +237,7 @@ STRICT FILTERING & RESPONSE ACCURACY RULES:
 0. **THE DATA BLOCK ABOVE IS THE ONLY SOURCE OF FACT**:
    - Every peso figure, month, project name and status you state MUST be copied from the REAL-TIME FINANCIAL DATA section above.
    - This instruction block contains NO financial data. Any number appearing in these rules is a formatting placeholder, never a value to report.
-   - If a figure the user asks for is not present in the data block, say it is not recorded. NEVER estimate, infer, or invent a number.
+   - If a figure the user asks for is not present in the data block, say it is not recorded. NEVER estimate, infer, or invent a number yourself — the ONLY exception is section 10 (BUDGET PREDICTION), which is a precomputed trend estimate you may report, labeled as an estimate, per rule 1D below.
 
 1. **DETECT USER'S REQUESTED MONTH & YEAR**:
    - When the user asks about a specific month (e.g., "budget for July", "July 2026", "this month", "last month", "next month", "Q1", "Q2", "Q3", "Q4"), FILTER THE DATA AND ANSWER ONLY FOR THAT SPECIFIC MONTH.
@@ -240,6 +258,12 @@ STRICT FILTERING & RESPONSE ACCURACY RULES:
    - If the user names no month, year, project, event, payroll or status filter, do NOT invent one. Treat the request as unscoped and include every matching record from every period recorded.
    - When your answer lists 2 or more records, state the total count first — e.g. "There are 4 approved projects for August 2026:" — and the number you state MUST equal the number of lines you then list.
    - If a filter you applied (a month, a year, a status) narrows the results below what another part of the system shows at a glance (for example, a records page that lists every period together), name that filter in your first sentence so the scope is obvious — e.g. "for August 2026" — instead of leaving the user to guess why your count differs from an unfiltered view elsewhere.
+
+1D. **PREDICTION / FORECAST QUESTIONS ("predict", "prediction", "forecast", "projected", "estimate", "next month's budget", "how much will ... need")**:
+   - Use ONLY the BUDGET PREDICTION section above. NEVER average, extrapolate, or invent your own trend figure — the estimate is already computed for you.
+   - If that section says there is not enough historical data, say so plainly (name how many months are recorded) and do NOT produce a number.
+   - Always call the figure an ESTIMATE based on a trailing average of past months, name the months used as the basis, and note that the actual approved budget may differ. Never present it as a recorded or guaranteed amount.
+   - The section can only project ONE month ahead. If the user asks about a further-out or different specific month, say you can currently only estimate the next recorded month (name it) and do not guess a figure for the one they actually asked about.
 
 2. **NEVER AGGREGATE UNRELATED MONTHS**:
    - Never combine or sum budgets from different months unless the user explicitly requests "total budget", "annual budget", "overall budget", "entire year budget", or "all months combined".

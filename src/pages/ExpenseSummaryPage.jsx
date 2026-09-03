@@ -315,7 +315,7 @@ function ExpenseSummaryPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' }}>
           {/* Category Breakdown */}
           <div className="overview-card">
-            <p className="eyebrow">Spending Analysis</p>
+            <p className="eyebrow">Expenses</p>
             <h2>By Category</h2>
             {categoryBreakdown.length ? (
               <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -360,7 +360,7 @@ function ExpenseSummaryPage() {
 
           {/* Project Breakdown */}
           <div className="overview-card">
-            <p className="eyebrow">Spending Analysis</p>
+            <p className="eyebrow">Expenses</p>
             <h2>By Project</h2>
             {projectBreakdown.length ? (
               <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
