@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useBudget } from '../context/BudgetContext'
 import RoleGate from '../components/RoleGate'
 import { useAuth } from '../context/AuthContext'
@@ -23,8 +24,12 @@ function ProjectsEventsPage() {
   const { expenses, totals, updateProjectStatus, refreshExpensesFromSupabase, updateExpenseReceipt } = useBudget()
   const { addNotification } = useNotifications()
 
-  const [activeTab, setActiveTab] = useState('projects') // 'projects' | 'events'
+  const [searchParams, setSearchParams] = useSearchParams()
+  const highlightId = searchParams.get('highlight')
+
+  const [activeTab, setActiveTab] = useState(() => (searchParams.get('tab') === 'events' ? 'events' : 'projects')) // 'projects' | 'events'
   const [expanded, setExpanded] = useState({})
+  const [highlightedId, setHighlightedId] = useState(null)
 
   const currentYear = new Date().getFullYear()
 
@@ -33,6 +38,45 @@ function ProjectsEventsPage() {
   const [monthFilter, setMonthFilter] = useState('')
   const [yearFilter, setYearFilter] = useState(currentYear)
   const [statusFilter, setStatusFilter] = useState('')
+
+  // Arrived here via the dashboard search — jump straight to the matching
+  // record: pick the right tab, clear any filters that could hide it, expand
+  // its details, and clear the query params so this only runs once.
+  useEffect(() => {
+    if (!highlightId) return
+    const target = expenses.find((item) => String(item.id) === String(highlightId))
+    if (!target) return
+
+    setActiveTab(target.type === 'Event' ? 'events' : 'projects')
+    setSearchFilter('')
+    setDateFilter('')
+    setMonthFilter('')
+    setStatusFilter('')
+    setYearFilter('')
+    setExpanded((prev) => ({ ...prev, [target.id]: true }))
+    setHighlightedId(target.id)
+
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('highlight')
+      next.delete('tab')
+      return next
+    }, { replace: true })
+  }, [highlightId, expenses, setSearchParams])
+
+  // Scroll the highlighted row into view once it's rendered.
+  useEffect(() => {
+    if (!highlightedId) return
+    const el = document.getElementById(`project-row-${highlightedId}`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [highlightedId, activeTab])
+
+  // Fade the highlight out after a few seconds.
+  useEffect(() => {
+    if (!highlightedId) return
+    const timeout = setTimeout(() => setHighlightedId(null), 4000)
+    return () => clearTimeout(timeout)
+  }, [highlightedId])
 
   const hasActiveFilters = searchFilter || dateFilter || monthFilter || (yearFilter !== currentYear) || statusFilter
 
@@ -410,7 +454,10 @@ function ProjectsEventsPage() {
                   
                   return (
                     <Fragment key={item.id}>
-                      <tr>
+                      <tr
+                        id={`project-row-${item.id}`}
+                        className={item.id === highlightedId ? 'row-highlighted' : undefined}
+                      >
                         <td data-label={activeTab === 'projects' ? 'Project Title' : 'Event Title'}>{item.project || item.event || 'Untitled'}</td>
                         <td data-label="Category">{item.category || '—'}</td>
                         <td data-label="Date Proposed">{item.eventDate || item.date ? new Date(item.eventDate || item.date).toLocaleDateString() : '—'}</td>

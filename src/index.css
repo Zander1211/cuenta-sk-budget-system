@@ -361,6 +361,29 @@ button:disabled,
 	background: var(--surface-2);
 }
 
+.row-highlighted {
+	animation: rowHighlightFade 4s ease-out;
+}
+
+.row-highlighted td {
+	position: relative;
+}
+
+@keyframes rowHighlightFade {
+	0% {
+		background: var(--accent-soft);
+		box-shadow: inset 3px 0 0 var(--accent);
+	}
+	70% {
+		background: var(--accent-soft);
+		box-shadow: inset 3px 0 0 var(--accent);
+	}
+	100% {
+		background: transparent;
+		box-shadow: inset 3px 0 0 transparent;
+	}
+}
+
 .table-actions {
 	display: flex;
 	gap: 8px;
@@ -4027,9 +4050,25 @@ td.nr-info-label {
 }
 
 .gs-result-item:hover,
-.gs-result-item:focus {
+.gs-result-item:focus,
+.gs-result-item-active {
 	background: var(--sea-light);
 	outline: none;
+}
+
+.gs-submit {
+	display: grid;
+	place-items: center;
+	margin-right: 12px;
+	padding: 0;
+	border: none;
+	background: transparent;
+	cursor: pointer;
+}
+
+.gs-submit:disabled {
+	cursor: default;
+	opacity: 0.5;
 }
 
 .gs-result-info {
@@ -4057,7 +4096,8 @@ td.nr-info-label {
 }
 
 .gs-result-item:hover .gs-result-arrow,
-.gs-result-item:focus .gs-result-arrow {
+.gs-result-item:focus .gs-result-arrow,
+.gs-result-item-active .gs-result-arrow {
 	opacity: 1;
 	transform: translateX(0);
 	color: var(--sea-dark);

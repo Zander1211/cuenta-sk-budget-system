@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Search, X, FileText, ArrowRight } from 'lucide-react'
 import { useBudget } from '../context/BudgetContext'
-import { getBreakdownTotal } from '../utils/budgetUtils'
-import BudgetBreakdownTable from '../components/BudgetBreakdownTable'
+import { useAuth } from '../context/AuthContext'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -10,12 +10,16 @@ const currency = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 0,
 })
 
-
+// Keep in sync with the RoleGate allow-list on ProjectsEventsPage — only
+// roles that can actually open that page should be redirected there.
+const PROJECTS_EVENTS_ROLES = ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']
 
 function GlobalSearch({ isOpen, onClose }) {
   const { expenses } = useBudget()
+  const { role } = useAuth()
+  const navigate = useNavigate()
   const [query, setQuery] = useState('')
-  const [selectedProjectId, setSelectedProjectId] = useState(null)
+  const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef(null)
 
   // Focus input on open
@@ -23,7 +27,7 @@ function GlobalSearch({ isOpen, onClose }) {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 50)
       setQuery('')
-      setSelectedProjectId(null)
+      setActiveIndex(0)
     }
   }, [isOpen])
 
@@ -32,9 +36,7 @@ function GlobalSearch({ isOpen, onClose }) {
     function handleKeyDown(e) {
       if (!isOpen) return
       if (e.key === 'Escape') {
-        if (selectedProjectId) {
-          setSelectedProjectId(null)
-        } else if (query) {
+        if (query) {
           setQuery('')
         } else {
           onClose()
@@ -43,120 +45,64 @@ function GlobalSearch({ isOpen, onClose }) {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, query, selectedProjectId, onClose])
+  }, [isOpen, query, onClose])
 
   const approvedProjects = useMemo(() => {
     return expenses.filter((item) => {
       const status = item.status || 'Approved'
-      return ['Approved', 'Released'].includes(status) && !item.archivedAt
+      return ['Approved', 'Released'].includes(status) && !item.archivedAt && !item.isAdditional
     })
   }, [expenses])
 
   const searchResults = useMemo(() => {
-    if (!query.trim()) return []
-    const lowerQuery = query.toLowerCase()
-    
+    const trimmed = query.trim()
+    if (!trimmed) return []
+    const lowerQuery = trimmed.toLowerCase()
+
     return approvedProjects.filter((p) => {
       const titleMatch = (p.event || p.project || '').toLowerCase().includes(lowerQuery)
       const descMatch = (p.description || '').toLowerCase().includes(lowerQuery)
       const catMatch = (p.category || '').toLowerCase().includes(lowerQuery)
       const notesMatch = (p.notes || '').toLowerCase().includes(lowerQuery)
-      
+
       let breakdownMatch = false
       if (Array.isArray(p.breakdown)) {
-        breakdownMatch = p.breakdown.some(b => 
+        breakdownMatch = p.breakdown.some(b =>
           (b.itemName || '').toLowerCase().includes(lowerQuery) ||
           (b.name || '').toLowerCase().includes(lowerQuery) ||
           (b.position || '').toLowerCase().includes(lowerQuery)
         )
       }
-      
+
       return titleMatch || descMatch || catMatch || notesMatch || breakdownMatch
     })
   }, [approvedProjects, query])
 
-  const selectedProject = selectedProjectId 
-    ? approvedProjects.find((p) => p.id === selectedProjectId)
-    : null
+  const canOpenProjectsEvents = PROJECTS_EVENTS_ROLES.includes(role)
+
+  function goToItem(item) {
+    if (!item || !canOpenProjectsEvents) return
+    const tab = item.type === 'Event' ? 'events' : 'projects'
+    navigate(`/dashboard/projects-events?tab=${tab}&highlight=${encodeURIComponent(item.id)}`)
+    onClose()
+  }
+
+  function handleInputKeyDown(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (searchResults.length) {
+        goToItem(searchResults[Math.min(activeIndex, searchResults.length - 1)])
+      }
+    } else if (e.key === 'ArrowDown' && searchResults.length) {
+      e.preventDefault()
+      setActiveIndex((i) => Math.min(i + 1, searchResults.length - 1))
+    } else if (e.key === 'ArrowUp' && searchResults.length) {
+      e.preventDefault()
+      setActiveIndex((i) => Math.max(i - 1, 0))
+    }
+  }
 
   if (!isOpen) return null
-
-  function renderProjectDetails() {
-    if (!selectedProject) return null
-
-    const breakdownItems = Array.isArray(selectedProject.breakdown) ? selectedProject.breakdown : []
-    const breakdownTotal = getBreakdownTotal(breakdownItems, selectedProject.type === 'Payroll')
-    const requestedAmount = Number(selectedProject.amount) || 0
-    const totalAmount = requestedAmount > 0 ? requestedAmount : breakdownTotal
-
-    return (
-      <div className="gs-details-pane">
-        <div className="gs-details-header">
-          <button type="button" className="icon-button" onClick={() => setSelectedProjectId(null)}>
-            <ArrowRight style={{ transform: 'rotate(180deg)' }} size={18} />
-          </button>
-          <h2>{selectedProject.event || selectedProject.project || 'Untitled Project'}</h2>
-        </div>
-        
-        <div className="gs-details-content">
-          <div className="details-panel" style={{ marginTop: 0, border: 'none', background: 'transparent', padding: 0 }}>
-            <div className="details-grid">
-              <div>
-                <p className="details-label">Description</p>
-                <p className="details-value">{selectedProject.description || '—'}</p>
-              </div>
-              <div>
-                <p className="details-label">Total Amount</p>
-                <p className="details-value">{currency.format(totalAmount)}</p>
-              </div>
-              <div>
-                <p className="details-label">Date Approved</p>
-                <p className="details-value">
-                  {selectedProject.approvedAt
-                    ? new Date(selectedProject.approvedAt).toLocaleDateString()
-                    : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="details-label">Current Status</p>
-                <p className="details-value">
-                  {selectedProject.projectStatus || 'Ongoing'}
-                </p>
-              </div>
-              <div>
-                <p className="details-label">Category</p>
-                <p className="details-value">{selectedProject.category || '—'}</p>
-              </div>
-              <div>
-                <p className="details-label">Event Date</p>
-                <p className="details-value">
-                  {selectedProject.eventDate
-                    ? new Date(selectedProject.eventDate).toLocaleDateString()
-                    : '—'}
-                </p>
-              </div>
-            </div>
-
-            <div className="details-breakdown">
-              <p className="details-label">Budget Breakdown</p>
-              <BudgetBreakdownTable request={selectedProject} breakdownItems={breakdownItems} currency={currency} totalAmount={totalAmount} />
-            </div>
-            
-            <div className="details-receipt-section">
-              <p className="details-label">Documentation</p>
-              <div className="details-receipt-actions">
-                {selectedProject.receiptUrl || selectedProject.receipt_url ? (
-                  <span className="status-pill status-approved">Document Uploaded</span>
-                ) : (
-                  <p className="details-value" style={{ margin: 0 }}>No documents uploaded.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="global-search-overlay" onClick={onClose}>
@@ -164,17 +110,26 @@ function GlobalSearch({ isOpen, onClose }) {
         
         {/* Search Input Area */}
         <div className="gs-header">
-          <Search size={20} className="gs-search-icon" />
+          <button
+            className="gs-submit"
+            type="button"
+            aria-label="Go to top result"
+            disabled={!searchResults.length}
+            onClick={() => goToItem(searchResults[Math.min(activeIndex, searchResults.length - 1)])}
+          >
+            <Search size={20} className="gs-search-icon" />
+          </button>
           <input
             ref={inputRef}
             type="text"
             className="gs-input"
-            placeholder="Search approved projects, descriptions, categories..."
+            placeholder="Search projects & events by name..."
             value={query}
             onChange={(e) => {
               setQuery(e.target.value)
-              if (selectedProjectId) setSelectedProjectId(null)
+              setActiveIndex(0)
             }}
+            onKeyDown={handleInputKeyDown}
           />
           <button className="icon-button" type="button" onClick={onClose}>
             <X size={20} />
@@ -183,25 +138,26 @@ function GlobalSearch({ isOpen, onClose }) {
 
         {/* Dynamic Content Area */}
         <div className="gs-body">
-          {selectedProject ? (
-            renderProjectDetails()
-          ) : query.trim().length === 0 ? (
+          {query.trim().length === 0 ? (
             <div className="gs-empty-state">
               <FileText size={48} className="gs-empty-icon" />
-              <p>Type to search all approved projects & events.</p>
+              <p>Type a project or event name to jump straight to it.</p>
             </div>
           ) : searchResults.length > 0 ? (
             <div className="gs-results-list">
-              {searchResults.map((project) => (
-                <button 
-                  key={project.id} 
-                  className="gs-result-item" 
-                  onClick={() => setSelectedProjectId(project.id)}
+              {searchResults.map((project, index) => (
+                <button
+                  key={project.id}
+                  className={`gs-result-item${index === activeIndex ? ' gs-result-item-active' : ''}`}
+                  onClick={() => goToItem(project)}
+                  onMouseEnter={() => setActiveIndex(index)}
                   type="button"
                 >
                   <div className="gs-result-info">
                     <span className="gs-result-title">{project.event || project.project || 'Untitled'}</span>
-                    <span className="gs-result-meta">{project.category} • {currency.format(project.amount || 0)}</span>
+                    <span className="gs-result-meta">
+                      {project.type === 'Event' ? 'Event' : 'Project'} • {project.category} • {currency.format(project.amount || 0)}
+                    </span>
                   </div>
                   <ArrowRight size={16} className="gs-result-arrow" />
                 </button>
@@ -209,7 +165,7 @@ function GlobalSearch({ isOpen, onClose }) {
             </div>
           ) : (
             <div className="gs-empty-state">
-              <p>No projects found matching "{query}"</p>
+              <p>No matching Project or Event was found.</p>
             </div>
           )}
         </div>
