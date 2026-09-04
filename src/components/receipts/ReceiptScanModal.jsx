@@ -13,6 +13,7 @@ import {
   releaseBitmap,
   rotateByAngle,
   rotateQuarterTurns,
+  toImageData,
 } from '../../utils/receiptScanner'
 import { parseReceiptText } from '../../utils/ocr/receiptParser'
 import ReceiptCropEditor from './ReceiptCropEditor'
@@ -74,7 +75,7 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
   const [originalSrc, setOriginalSrc] = useState('')
   const [corners, setCorners] = useState(null)
   const [detectionFailed, setDetectionFailed] = useState(false)
-  const [sourceRotation, setSourceRotation] = useState(0)
+  const [rotationCount, setRotationCount] = useState(0)
 
   const [filter, setFilter] = useState('auto')
   const [scanSrc, setScanSrc] = useState('')
@@ -96,11 +97,28 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
   const fileInputRef = useRef(null)
   const objectUrlsRef = useRef([])
   const previewUrlRef = useRef(null)
+  const workingSrcUrlRef = useRef(null)
 
   const trackUrl = useCallback(url => {
     objectUrlsRef.current.push(url)
     return url
   }, [])
+
+  /* The crop step's displayed image is regenerated every time the source is
+     rotated, so unlike other object URLs (which live until unmount) this one
+     is replaced repeatedly within a single session and must revoke its
+     predecessor immediately or a few rotate clicks leak several full-size
+     blobs. */
+  const setWorkingSrc = useCallback(
+    url => {
+      const previous = workingSrcUrlRef.current
+      workingSrcUrlRef.current = url
+      trackUrl(url)
+      setOriginalSrc(url)
+      if (previous) URL.revokeObjectURL(previous)
+    },
+    [trackUrl],
+  )
 
   /* ── Resource cleanup ─────────────────────────────────────────────────
      Bitmaps, streams and object URLs all leak silently if left, and this
@@ -175,8 +193,8 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
         bitmapRef.current = bitmap
 
         setOriginalFile(file)
-        setOriginalSrc(trackUrl(URL.createObjectURL(file)))
-        setSourceRotation(0)
+        setWorkingSrc(URL.createObjectURL(file))
+        setRotationCount(0)
 
         const detection = detectDocumentEdges(bitmap)
         setCorners(detection.corners)
@@ -188,7 +206,7 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
         setStep(STEPS.SOURCE)
       }
     },
-    [trackUrl],
+    [setWorkingSrc],
   )
 
   function handleFilePicked(event) {
@@ -215,6 +233,56 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
     stopCamera()
     await ingest(new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' }))
   }
+
+  /* ── Edge adjustment: rotate and reset ───────────────────────────────
+     Rotation used to only set a counter that was applied invisibly to the
+     final cropped image after "Continue" — the crop step itself never
+     visibly changed, which read as a broken button. It now rotates the
+     actual working bitmap (a fresh raster, never the uploaded original)
+     right away, so the photo and the crop box turn together on screen. */
+  const rotateEditor = useCallback(async () => {
+    const bitmap = bitmapRef.current
+    if (!bitmap || !corners) return
+
+    try {
+      const { imageData } = toImageData(bitmap)
+      const rotated = rotateQuarterTurns(imageData, 1)
+      const nextBitmap = await createImageBitmap(rotated)
+
+      releaseBitmap(bitmap)
+      bitmapRef.current = nextBitmap
+
+      // 90° clockwise: a point (x, y) in the pre-rotation image (height H)
+      // lands at (H - y, x) in the rotated one. Matches the pixel remap in
+      // rotateQuarterTurns, just in continuous corner coordinates.
+      const sourceHeight = imageData.height
+      setCorners(corners.map(({ x, y }) => ({ x: sourceHeight - y, y: x })))
+      setRotationCount(value => (value + 1) % 4)
+
+      const url = await imageDataToObjectURL(rotated)
+      setWorkingSrc(url)
+    } catch (cause) {
+      console.error('Rotate failed', cause)
+      setError('The photo could not be rotated. Try again.')
+    }
+  }, [corners, setWorkingSrc])
+
+  const resetEditor = useCallback(async () => {
+    if (!originalFile) return
+
+    try {
+      const bitmap = await loadBitmap(originalFile)
+      releaseBitmap(bitmapRef.current)
+      bitmapRef.current = bitmap
+
+      setCorners(defaultQuad(bitmap.width, bitmap.height))
+      setRotationCount(0)
+      setWorkingSrc(URL.createObjectURL(originalFile))
+    } catch (cause) {
+      console.error('Reset failed', cause)
+      setError('The edits could not be reset. Try again.')
+    }
+  }, [originalFile, setWorkingSrc])
 
   /* ── Correction and enhancement ───────────────────────────────────── */
 
@@ -269,10 +337,6 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
         onProgress: ratio => setProgress({ label: 'Straightening the document', value: ratio * 0.6 }),
       })
 
-      if (sourceRotation) {
-        corrected = rotateQuarterTurns(corrected, sourceRotation)
-      }
-
       // Residual tilt only. Perspective correction has already done the heavy
       // lifting, so anything found here is a small print misalignment.
       setProgress({ label: 'Checking alignment', value: 0.7 })
@@ -296,7 +360,7 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
       )
       setStep(STEPS.CROP)
     }
-  }, [corners, sourceRotation, renderFilter])
+  }, [corners, renderFilter])
 
   async function changeFilter(filterId) {
     setFilter(filterId)
@@ -430,7 +494,7 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
         scanSettings: {
           filter,
           corners,
-          rotation: sourceRotation,
+          rotation: rotationCount,
           ocrConfidence,
           ocrDiagnostics: {
             ...(ocrDiagnostics || {}),
@@ -519,12 +583,8 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
               imageSrc={originalSrc}
               corners={corners}
               onChange={setCorners}
-              onRotate={() => setSourceRotation(value => (value + 1) % 4)}
-              onReset={() => {
-                const bitmap = bitmapRef.current
-                setCorners(bitmap ? defaultQuad(bitmap.width, bitmap.height) : corners)
-                setSourceRotation(0)
-              }}
+              onRotate={rotateEditor}
+              onReset={resetEditor}
               detectionFailed={detectionFailed}
             />
           )}

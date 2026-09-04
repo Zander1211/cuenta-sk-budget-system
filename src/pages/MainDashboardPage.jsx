@@ -207,8 +207,33 @@ function MainDashboardPage() {
     0
   )
 
+  // The month/year a returned budget belongs to is the same value the Month
+  // column displays: the row's own month/year first (the budget it was
+  // returned to), falling back to its event/approval date only when those
+  // are missing. Filtering the history by anything else would disagree with
+  // what the Month column visibly shows for a selected period.
+  function getReturnedPeriod(exp) {
+    const month = Number(exp.month)
+    const year = Number(exp.year)
+    if (month >= 1 && month <= 12 && year) return { month, year }
+    const d = parseDate(exp.eventDate || exp.date || exp.approvedAt)
+    return d ? { month: d.getMonth() + 1, year: d.getFullYear() } : { month: null, year: null }
+  }
+
+  function isReturnedInSelectedPeriod(exp) {
+    const { month, year } = getReturnedPeriod(exp)
+    if (!year) return false
+    if (viewMode === 'monthly') return year === selectedYear && month === selectedMonth
+    return year === selectedYear
+  }
+
   const returnedHistory = expenses
-    .filter((exp) => !exp.isAdditional && !exp.archivedAt && (Number(exp.returnedBudget) || 0) > 0)
+    .filter((exp) =>
+      !exp.isAdditional &&
+      !exp.archivedAt &&
+      (Number(exp.returnedBudget) || 0) > 0 &&
+      isReturnedInSelectedPeriod(exp)
+    )
     .sort((a, b) => new Date(b.returnedAt || 0) - new Date(a.returnedAt || 0))
   const returnedHistoryTotal = returnedHistory.reduce(
     (sum, exp) => sum + (Number(exp.returnedBudget) || 0),
@@ -216,10 +241,9 @@ function MainDashboardPage() {
   )
 
   function returnedMonthLabel(exp) {
-    const monthName = monthOptions.find((m) => m.value === Number(exp.month))?.label
-    if (monthName && exp.year) return `${monthName} ${exp.year}`
-    const d = parseDate(exp.eventDate || exp.date || exp.approvedAt)
-    return d ? d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'
+    const { month, year } = getReturnedPeriod(exp)
+    const monthName = monthOptions.find((m) => m.value === month)?.label
+    return monthName && year ? `${monthName} ${year}` : '—'
   }
 
   const summaryCards = [
@@ -539,7 +563,9 @@ function MainDashboardPage() {
       <section style={{ marginTop: '40px' }} aria-label="Returned budget history">
         <div style={{ marginBottom: '20px' }}>
           <h2 style={{ fontSize: '1.4rem', fontWeight: '700', color: 'var(--ink-1)', marginBottom: '6px' }}>Returned Budget History</h2>
-          <p style={{ color: 'var(--ink-3)', fontSize: '0.95rem' }}>Unused budget automatically returned to its month when a Project or Event was marked Completed.</p>
+          <p style={{ color: 'var(--ink-3)', fontSize: '0.95rem' }}>
+            Unused budget automatically returned to its month when a Project or Event was marked Completed, for {periodLabel}.
+          </p>
         </div>
         <div className="overview-card" style={{ overflowX: 'auto' }}>
           <table className="data-table">
@@ -574,7 +600,7 @@ function MainDashboardPage() {
               }) : (
                 <tr>
                   <td colSpan="6" style={{ textAlign: 'center', fontStyle: 'italic', color: 'var(--ink-3)' }}>
-                    No returned budgets yet. When a completed Project or Event has unused funds, the return will appear here.
+                    No returned budgets for {periodLabel}. When a completed Project or Event has unused funds, the return will appear here.
                   </td>
                 </tr>
               )}
