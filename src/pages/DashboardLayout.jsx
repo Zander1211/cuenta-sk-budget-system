@@ -13,7 +13,6 @@ import {
   Files,
   ThumbsUp,
   BarChart3,
-  ScrollText,
   Users,
   UserCircle,
   LogOut,
@@ -89,13 +88,7 @@ const navItems = [
     icon: BarChart3
   },
   {
-    label: 'Receipts',
-    path: '/dashboard/receipts',
-    roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
-    icon: ScrollText
-  },
-  {
-    label: 'Audit Trail',
+    label: 'Activity Logs',
     path: '/dashboard/audit-trail',
     roles: ['SK Chairman'],
     icon: FileText

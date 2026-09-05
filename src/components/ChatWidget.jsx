@@ -24,7 +24,7 @@ const PAGE_NAMES = {
   '/dashboard/analysis/budget-utilization': 'Budget Utilization Analysis',
   '/dashboard/analysis/budget-distribution': 'Category Budget Distribution Analysis',
   '/dashboard/report': 'Reports',
-  '/dashboard/audit-logs': 'Audit Logs',
+  '/dashboard/audit-trail': 'Activity Logs',
   '/dashboard/user-management': 'User Management',
   '/dashboard/profile': 'Profile',
 }

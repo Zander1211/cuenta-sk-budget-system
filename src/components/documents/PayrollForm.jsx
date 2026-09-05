@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import CurrencyInput from '../CurrencyInput';
 import { PlusCircle, Trash2 } from 'lucide-react'
 import { supabase } from '../../supabase/supabaseClient'
+import { useActiveSkChairmanName } from '../../hooks/useActiveSkChairmanName'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -72,6 +73,7 @@ async function getNextPayrollNumber() {
 }
 
 function PayrollForm({ profileName, role, selectedRequest, onPreview }) {
+  const activeChairmanName = useActiveSkChairmanName()
   const [payrollNumber, setPayrollNumber] = useState('')
   const [periodCovered, setPeriodCovered] = useState(getCurrentMonthRange())
   const [rows, setRows] = useState(() => Array.from({ length: 5 }, createEmptyRow))
@@ -87,6 +89,10 @@ function PayrollForm({ profileName, role, selectedRequest, onPreview }) {
   useEffect(() => {
     if (role === 'SK Kagawad') setSkKagawad(profileName || '')
   }, [profileName, role])
+
+  useEffect(() => {
+    if (activeChairmanName) setSkChairman((prev) => prev || activeChairmanName)
+  }, [activeChairmanName])
 
   useEffect(() => {
     if (selectedRequest) {

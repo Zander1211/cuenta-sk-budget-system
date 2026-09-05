@@ -168,10 +168,15 @@ function AuthProvider({ children }) {
       }
 
       if ((!directoryName || !resolvedRole) && userEmail) {
+        // A disabled account can share its email with a newer active one
+        // (disabling frees the email up), so prefer the active row and cap
+        // at one result — .maybeSingle() errors if more than one row matches.
         const { data, error } = await supabase
           .from('created_accounts')
           .select('full_name, role')
           .eq('email', userEmail)
+          .order('is_active', { ascending: false })
+          .limit(1)
           .maybeSingle()
 
         if (!error && data) {

@@ -131,8 +131,8 @@ export const dashboardSections = {
     ],
   },
   auditTrail: {
-    eyebrow: 'Audit Trail',
-    title: 'Audit Trail',
+    eyebrow: 'Activity Logs',
+    title: 'Activity Logs',
     description: 'Review activity trails and compliance checks.',
     overviewTitle: 'Recent checks',
     actions: [

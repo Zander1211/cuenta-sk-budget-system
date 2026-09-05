@@ -4,6 +4,8 @@ import tailwindcss from '@tailwindcss/vite'
 import { createClient } from '@supabase/supabase-js'
 import { verifyOtpRequest } from './api/verify-otp.js'
 import { updateProfileRequest } from './api/update-profile.js'
+import { createUserRequest } from './api/create-user.js'
+import { registerChairmanRequest } from './api/register-chairman.js'
 
 // Local middleware to serve /api/chat using Gemini API
 // instead of proxying to the deployed Vercel function
@@ -372,6 +374,55 @@ function localOtpHandler(env) {
           return
         }
 
+        // ── CREATE USER ────────────────────────────────────────
+        if (req.url === '/api/create-user' && req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => { body += chunk.toString() })
+          req.on('end', async () => {
+            res.setHeader('Content-Type', 'application/json')
+            try {
+              const payload = JSON.parse(body)
+              const result = await createUserRequest({
+                ...payload,
+                authorization: req.headers.authorization,
+                supabaseUrl,
+                serviceKey: supabaseServiceKey,
+              })
+              res.statusCode = result.status
+              res.end(JSON.stringify(result.body))
+            } catch (error) {
+              console.error('[Create User] Local handler error:', error)
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: 'Account creation failed. Please try again.' }))
+            }
+          })
+          return
+        }
+
+        // ── REGISTER CHAIRMAN ───────────────────────────────────
+        if (req.url === '/api/register-chairman' && req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => { body += chunk.toString() })
+          req.on('end', async () => {
+            res.setHeader('Content-Type', 'application/json')
+            try {
+              const payload = JSON.parse(body)
+              const result = await registerChairmanRequest({
+                ...payload,
+                supabaseUrl,
+                serviceKey: supabaseServiceKey,
+              })
+              res.statusCode = result.status
+              res.end(JSON.stringify(result.body))
+            } catch (error) {
+              console.error('[Register Chairman] Local handler error:', error)
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: 'Account registration failed. Please try again.' }))
+            }
+          })
+          return
+        }
+
         // ── DELETE USER ────────────────────────────────────────
         if (req.url === '/api/delete-user' && req.method === 'POST') {
           let body = ''
@@ -457,7 +508,7 @@ export default defineConfig(({ mode }) => {
             if (req.url.startsWith('/api/user-login')) {
               return req.url
             }
-            if (req.url === '/api/send-otp' || req.url === '/api/verify-otp' || req.url === '/api/delete-user') {
+            if (req.url === '/api/send-otp' || req.url === '/api/verify-otp' || req.url === '/api/delete-user' || req.url === '/api/create-user' || req.url === '/api/register-chairman') {
               return req.url
             }
           }

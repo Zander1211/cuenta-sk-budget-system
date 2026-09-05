@@ -60,7 +60,7 @@ const FEATURES = [
   [FolderOpen, 'Document Management'],
   [Sparkles, 'AI Financial Analysis'],
   [MessageCircle, 'Cue AI Chatbot Assistant'],
-  [History, 'Audit Trail Logging'],
+  [History, 'Activity Logs'],
   [Bell, 'Notification System'],
   [Archive, 'Archive and Restore Records'],
   [Lock, 'Secure Role-Based Access Control (RBAC)'],

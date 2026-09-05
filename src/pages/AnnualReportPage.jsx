@@ -11,6 +11,7 @@ import { useDocuments } from '../context/DocumentContext'
 import YearSpinner from '../components/YearSpinner'
 import { supabase } from '../supabase/supabaseClient'
 import { summarizeApprovedBudgetFinancials } from '../utils/projectEventFinancials'
+import { useActiveSkChairmanName } from '../hooks/useActiveSkChairmanName'
 
 const currentYear = new Date().getFullYear()
 
@@ -19,7 +20,8 @@ function AnnualReportPage() {
   const { addDocument } = useDocuments()
   const { profileName, role, profileSurname } = useAuth()
   const navigate = useNavigate()
-  
+  const activeChairmanName = useActiveSkChairmanName()
+
   const [expectedResults, setExpectedResults] = useState('')
   const [performanceIndicators, setPerformanceIndicators] = useState('')
   const [projectOverrides, setProjectOverrides] = useState({})
@@ -36,9 +38,13 @@ function AnnualReportPage() {
   const [province, setProvince] = useState('COTABATO')
   
   const [skTreasurer, setSkTreasurer] = useState(role === 'SK Treasurer' ? fullName : '')
-  const [skChairperson, setSkChairperson] = useState(role === 'SK Chairman' ? fullName : '')
+  const [skChairperson, setSkChairperson] = useState('')
   const [skSecretary, setSkSecretary] = useState('')
   const [skKagawads, setSkKagawads] = useState(['', '', '', '', '', '', ''])
+
+  useEffect(() => {
+    if (activeChairmanName) setSkChairperson((prev) => prev || activeChairmanName)
+  }, [activeChairmanName])
 
   const handleKagawadChange = (index, value) => {
     const newKagawads = [...skKagawads]

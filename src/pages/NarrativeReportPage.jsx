@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { useDocuments } from '../context/DocumentContext'
 import NarrativeReportPreview from '../components/documents/NarrativeReportPreview'
 import { savePhoto, getPhotosByProject, deletePhoto } from '../utils/photoDB'
+import { useActiveSkChairmanName } from '../hooks/useActiveSkChairmanName'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -27,6 +28,7 @@ function NarrativeReportPage() {
   const { requests, expenses } = useBudget()
   const { addDocument } = useDocuments()
   const { profileName, role } = useAuth()
+  const activeChairmanName = useActiveSkChairmanName()
 
   const [selectedRequestId, setSelectedRequestId] = useState('')
   const [preview, setPreview] = useState(null)
@@ -42,6 +44,10 @@ function NarrativeReportPage() {
   const [skChairperson, setSkChairperson] = useState(DEFAULTS.skChairperson)
   const [skKagawad, setSkKagawad] = useState(DEFAULTS.skKagawad)
   const [otherSignatories, setOtherSignatories] = useState('')
+
+  useEffect(() => {
+    if (activeChairmanName) setSkChairperson((prev) => prev || activeChairmanName)
+  }, [activeChairmanName])
   const [acknowledgment, setAcknowledgment] = useState(
     'We, the undersigned members of the Sangguniang Kabataan Council, hereby acknowledge and certify the contents of this Narrative Report as true and accurate. This report is submitted in compliance with the documentation requirements set forth by the Commission on Audit (COA) and the Department of the Interior and Local Government (DILG).'
   )

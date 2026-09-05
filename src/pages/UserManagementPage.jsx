@@ -1,22 +1,79 @@
 import { useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { Eye, EyeOff } from 'lucide-react'
 import { useAuditLog } from '../context/AuditLogContext'
 import RoleGate from '../components/RoleGate'
-import { supabase, supabaseAnonKey, supabaseUrl } from '../supabase/supabaseClient'
+import { supabase } from '../supabase/supabaseClient'
 import { formatBirthdate } from '../utils/biodata'
 import { useAuth } from '../context/AuthContext'
 
 const roles = ['SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']
-const adminClient = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storageKey: 'cuenta-admin-auth-storage',
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false,
-  },
-})
+
+// Maximum number of ACTIVE accounts allowed per role. Disabled accounts do not count.
+const ROLE_LIMITS = {
+  'SK Treasurer': 1,
+  'Barangay Treasurer': 1,
+  'SK Kagawad': 8,
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Supabase Auth Admin errors sometimes stringify to a bare "{}" — never show that raw.
+function safeErrorMessage(error, fallback) {
+  const candidates = [
+    typeof error === 'string' ? error : null,
+    error?.message,
+    error?.error_description,
+    error?.error,
+  ]
+  const message = candidates.find((value) => (
+    typeof value === 'string'
+    && value.trim()
+    && value.trim() !== '{}'
+    && value.trim() !== '[object Object]'
+  ))
+  return message || fallback
+}
+
+// A server error (crash, timeout, missing deployment) can return an empty or
+// non-JSON body — calling response.json() directly on that throws a raw
+// browser TypeError ("Unexpected end of JSON input"). Parse defensively instead.
+async function readJsonResponse(response) {
+  const text = await response.text()
+  if (!text) return {}
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { error: response.ok ? '' : text }
+  }
+}
+
+async function getActiveRoleCount(role) {
+  const { count, error } = await supabase
+    .from('created_accounts')
+    .select('id', { count: 'exact', head: true })
+    .eq('role', role)
+    .eq('is_active', true)
+
+  if (error) throw error
+  return count ?? 0
+}
+
+function roleLimitMessage(role, limit) {
+  if (limit === 1) {
+    return `An active ${role} account already exists. Please disable the existing ${role} account before creating a new one.`
+  }
+  return `The maximum number of active ${role} accounts (${limit}) has already been reached. Please disable an existing ${role} account before creating a new one.`
+}
+
+// Returns a user-facing message if the role's active-account limit has been reached, else null.
+async function checkRoleLimit(role) {
+  const limit = ROLE_LIMITS[role]
+  if (!limit) return null
+
+  const count = await getActiveRoleCount(role)
+  if (count >= limit) return roleLimitMessage(role, limit)
+  return null
+}
 
 function StatusBadge({ isActive }) {
   return (
@@ -52,6 +109,7 @@ function UserManagementPage() {
     password: '',
     role: roles[0],
   })
+  const [showPassword, setShowPassword] = useState(false)
   const [accounts, setAccounts] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -64,9 +122,6 @@ function UserManagementPage() {
   const [otpCode, setOtpCode] = useState('')
   const [pendingUser, setPendingUser] = useState(null)
 
-  // Edit state
-  const [editingRoleId, setEditingRoleId] = useState(null)
-  const [editRoleValue, setEditRoleValue] = useState('')
   const [updatingId, setUpdatingId] = useState(null)
 
   // Disable / Enable confirmation modal
@@ -181,16 +236,30 @@ function UserManagementPage() {
     setIsSubmitting(true)
 
     try {
+      // Check role limits BEFORE sending an OTP so we never send an unnecessary email.
+      const limitError = await checkRoleLimit(formState.role)
+      if (limitError) {
+        setFormError(limitError)
+        setIsSubmitting(false)
+        return
+      }
+    } catch (err) {
+      setFormError(safeErrorMessage(err, 'Unable to verify role availability right now. Please try again.'))
+      setIsSubmitting(false)
+      return
+    }
+
+    try {
       const res = await fetch('/api/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       })
 
-      const result = await res.json()
+      const result = await readJsonResponse(res)
 
       if (!res.ok) {
-        setFormError(result.error || 'Failed to send verification code.')
+        setFormError(safeErrorMessage(result, 'Failed to send verification code.'))
         setIsSubmitting(false)
         return
       }
@@ -200,7 +269,7 @@ function UserManagementPage() {
       setFormStatus('Verification code sent! Please check the inbox of ' + email)
       setIsSubmitting(false)
     } catch (err) {
-      setFormError('Failed to send verification code: ' + err.message)
+      setFormError(safeErrorMessage(err, 'Failed to send verification code. Please check your connection and try again.'))
       setIsSubmitting(false)
     }
   }
@@ -224,46 +293,44 @@ function UserManagementPage() {
         body: JSON.stringify({ email: pendingUser.email, code: otpCode.trim() }),
       })
 
-      const verifyResult = await verifyRes.json()
+      const verifyResult = await readJsonResponse(verifyRes)
 
       if (!verifyRes.ok) {
-        setFormError(verifyResult.error || 'Invalid verification code.')
+        setFormError(safeErrorMessage(verifyResult, 'Invalid verification code.'))
         setIsSubmitting(false)
         return
       }
 
-      const { data, error } = await adminClient.auth.signUp({
-        email: pendingUser.email,
-        password: pendingUser.password,
-        options: {
-          data: {
-            full_name: pendingUser.name,
-            role: pendingUser.role,
-          },
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData?.session?.access_token
+      if (!accessToken) {
+        setFormError('Your session has expired. Please log in again.')
+        setIsSubmitting(false)
+        return
+      }
+
+      const createRes = await fetch('/api/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
         },
+        body: JSON.stringify({
+          fullName: pendingUser.name,
+          email: pendingUser.email,
+          password: pendingUser.password,
+          role: pendingUser.role,
+          code: otpCode.trim(),
+        }),
       })
 
-      if (error) {
-        setFormError(error.message)
-        setIsSubmitting(false)
-        return
-      }
+      const createResult = await readJsonResponse(createRes)
 
-      if (!data.user?.id) {
-        setFormError('Unable to create the account. Try again.')
-        setIsSubmitting(false)
-        return
-      }
-
-      const { error: insertError } = await supabase.from('created_accounts').insert({
-        id: data.user.id,
-        full_name: pendingUser.name,
-        email: pendingUser.email,
-        role: pendingUser.role,
-      })
-
-      if (insertError) {
-        setFormError(insertError.message)
+      if (!createRes.ok) {
+        const fallback = createRes.status === 404
+          ? 'The account creation service is unavailable. Please make sure the latest version of the app is deployed, then try again.'
+          : 'Unable to create the account. Please try again.'
+        setFormError(safeErrorMessage(createResult, fallback))
         setIsSubmitting(false)
         return
       }
@@ -273,12 +340,12 @@ function UserManagementPage() {
         actionType: 'User Created',
         module: 'User Management',
         recordType: 'User',
-        recordId: data.user.id,
+        recordId: createResult.user?.id,
         description: `Created account for ${pendingUser.name} (${pendingUser.role})`,
         newValue: { name: pendingUser.name, email: pendingUser.email, role: pendingUser.role },
       })
 
-      setFormStatus('Account successfully created and verified!')
+      setFormStatus('Account created successfully.')
       setFormState({ name: '', email: '', password: '', role: roles[0] })
       setVerificationStep(false)
       setOtpCode('')
@@ -286,7 +353,7 @@ function UserManagementPage() {
       await loadAccounts()
       setIsSubmitting(false)
     } catch (err) {
-      setFormError('Verification failed: ' + err.message)
+      setFormError(safeErrorMessage(err, 'Verification failed. Please try again.'))
       setIsSubmitting(false)
     }
   }
@@ -302,14 +369,14 @@ function UserManagementPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: pendingUser.email }),
       })
-      const result = await res.json()
+      const result = await readJsonResponse(res)
       if (!res.ok) {
-        setFormError(result.error || 'Failed to resend code.')
+        setFormError(safeErrorMessage(result, 'Failed to resend code.'))
       } else {
         setFormStatus('Verification code resent successfully to ' + pendingUser.email)
       }
     } catch (err) {
-      setFormError('Failed to resend code: ' + err.message)
+      setFormError(safeErrorMessage(err, 'Failed to resend code. Please try again.'))
     }
     setIsSubmitting(false)
   }
@@ -320,54 +387,6 @@ function UserManagementPage() {
     setPendingUser(null)
     setFormError('')
     setFormStatus('')
-  }
-
-  // ── Edit Role ────────────────────────────────────────────────────────────
-
-  function startEditRole(account) {
-    setEditingRoleId(account.id)
-    setEditRoleValue(account.role)
-  }
-
-  function cancelEditRole() {
-    setEditingRoleId(null)
-    setEditRoleValue('')
-  }
-
-  async function saveRole(account) {
-    if (editRoleValue === account.role) {
-      cancelEditRole()
-      return
-    }
-
-    setUpdatingId(account.id)
-
-    const { error } = await supabase
-      .from('created_accounts')
-      .update({ role: editRoleValue })
-      .eq('id', account.id)
-
-    if (error) {
-      console.warn('Failed to update role:', error.message)
-      setUpdatingId(null)
-      return
-    }
-
-    addLog({
-      action: `User Updated — Role Changed for ${account.full_name}`,
-      actionType: 'User Updated',
-      module: 'User Management',
-      recordType: 'User',
-      recordId: account.id,
-      description: `Role changed for ${account.full_name} (${account.email})`,
-      previousValue: { role: account.role },
-      newValue: { role: editRoleValue },
-    })
-
-    setEditingRoleId(null)
-    setEditRoleValue('')
-    setUpdatingId(null)
-    await loadAccounts()
   }
 
   // ── Disable / Enable account ─────────────────────────────────────────────
@@ -385,10 +404,25 @@ function UserManagementPage() {
     const { account, action } = disableModal
     if (!account) return
 
+    const isDisabling = action === 'disable'
+
+    if (!isDisabling) {
+      try {
+        const limitError = await checkRoleLimit(account.role)
+        if (limitError) {
+          closeDisableModal()
+          alert(limitError)
+          return
+        }
+      } catch (err) {
+        closeDisableModal()
+        alert(safeErrorMessage(err, 'Unable to verify role availability right now. Please try again.'))
+        return
+      }
+    }
+
     setUpdatingId(account.id)
     closeDisableModal()
-
-    const isDisabling = action === 'disable'
 
     // ── Step 1: Update is_active (critical — always attempt this) ──────────
     const { error: primaryError } = await supabase
@@ -505,14 +539,26 @@ function UserManagementPage() {
 
                 <label className="field">
                   <span>Password</span>
-                  <input
-                    type="password"
-                    name="password"
-                    value={formState.password}
-                    onChange={handleChange}
-                    placeholder="Create a temporary password"
-                    required
-                  />
+                  <div className="password-field">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      autoComplete="new-password"
+                      value={formState.password}
+                      onChange={handleChange}
+                      placeholder=""
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </label>
 
                 <label className="field">
@@ -714,30 +760,7 @@ function UserManagementPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <p style={{ margin: 0, fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Role</p>
-                        {editingRoleId === user.id ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <select
-                              className="panel-select"
-                              value={editRoleValue}
-                              onChange={(e) => setEditRoleValue(e.target.value)}
-                              style={{ width: '100%', fontSize: '0.85rem', padding: '6px 10px' }}
-                            >
-                              {roles.map((r) => (
-                                <option key={r} value={r}>{r}</option>
-                              ))}
-                            </select>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <button type="button" className="primary-button" style={{ padding: '6px 12px', fontSize: '0.8rem', flex: 1 }} onClick={() => saveRole(user)} disabled={updatingId === user.id}>
-                                Save
-                              </button>
-                              <button type="button" className="secondary-button" style={{ padding: '6px 12px', fontSize: '0.8rem', flex: 1 }} onClick={cancelEditRole}>
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', fontWeight: '400' }}>{user.role}</p>
-                        )}
+                        <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', fontWeight: '400' }}>{user.role}</p>
                       </div>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -761,19 +784,8 @@ function UserManagementPage() {
                         style={{ flex: '1 1 auto', fontSize: '0.85rem', padding: '8px 12px' }}
                         onClick={() => openViewModal(user)}
                       >
-                        View Info
+                        View Details
                       </button>
-                      {editingRoleId !== user.id && (
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          style={{ flex: '1 1 auto', fontSize: '0.85rem', padding: '8px 12px' }}
-                          onClick={() => startEditRole(user)}
-                          disabled={updatingId === user.id}
-                        >
-                          Edit Role
-                        </button>
-                      )}
                       <button
                         type="button"
                         style={{

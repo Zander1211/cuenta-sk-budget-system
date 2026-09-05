@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import ReCAPTCHA from 'react-google-recaptcha'
 import { AlertCircle, ArrowLeft, CheckCircle2, Eye, EyeOff, FileText, Lock, ShieldCheck } from 'lucide-react'
-import { loginUser, registerUser } from '../services/authService'
+import { loginUser } from '../services/authService'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
@@ -10,6 +10,42 @@ import logo from '../assets/cuenta-logo.png'
 import './LoginPage.css'
 
 const GMAIL_PATTERN = /^[a-zA-Z0-9._%+-]+@gmail\.com$/i
+const PASSWORD_RULE_MESSAGE =
+  'Password must be at least 6 characters and include a letter and a number.'
+
+function isPasswordValid(value) {
+  return /^(?=.*[A-Za-z])(?=.*\d).{6,}$/.test(value)
+}
+
+// A server error (crash, timeout, missing deployment) can return an empty or
+// non-JSON body — calling response.json() directly on that throws a raw
+// browser TypeError ("Unexpected end of JSON input"). Parse defensively instead.
+async function readJsonResponse(response) {
+  const text = await response.text()
+  if (!text) return {}
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { error: response.ok ? '' : text }
+  }
+}
+
+// Supabase Auth errors sometimes stringify to a bare "{}" — never show that raw.
+function safeErrorMessage(error, fallback) {
+  const candidates = [
+    typeof error === 'string' ? error : null,
+    error?.message,
+    error?.error_description,
+    error?.error,
+  ]
+  const message = candidates.find((value) => (
+    typeof value === 'string'
+    && value.trim()
+    && value.trim() !== '{}'
+    && value.trim() !== '[object Object]'
+  ))
+  return message || fallback
+}
 
 function FieldError({ id, children }) {
   if (!children) return null
@@ -156,6 +192,11 @@ function LoginPage() {
       return
     }
 
+    if (!isPasswordValid(password)) {
+      setFieldErrors({ password: PASSWORD_RULE_MESSAGE })
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
@@ -166,10 +207,10 @@ function LoginPage() {
         body: JSON.stringify({ email }),
       })
 
-      const result = await res.json()
+      const result = await readJsonResponse(res)
 
       if (!res.ok) {
-        setFormError(result.error || 'Failed to send verification code.')
+        setFormError(safeErrorMessage(result, 'Failed to send verification code.'))
         setIsSubmitting(false)
         return
       }
@@ -180,7 +221,7 @@ function LoginPage() {
       setFormStatus(`Verification code sent. Check the inbox of ${email}.`)
       setIsSubmitting(false)
     } catch (err) {
-      setFormError(`Failed to send verification code: ${err.message}`)
+      setFormError(safeErrorMessage(err, 'Failed to send verification code. Please check your connection and try again.'))
       setIsSubmitting(false)
     }
   }
@@ -204,24 +245,30 @@ function LoginPage() {
         body: JSON.stringify({ email: pendingUser.email, code: otpCode.trim() }),
       })
 
-      const verifyResult = await verifyRes.json()
+      const verifyResult = await readJsonResponse(verifyRes)
 
       if (!verifyRes.ok) {
-        setFieldErrors({ otp: verifyResult.error || 'That code is not valid. Check it and try again.' })
+        setFieldErrors({ otp: safeErrorMessage(verifyResult, 'That code is not valid. Check it and try again.') })
         setIsSubmitting(false)
         return
       }
 
-      // Code verified! Now finalize registration
-      const { error } = await registerUser(pendingUser.email, pendingUser.password, {
-        data: {
-          full_name: pendingUser.fullName,
-          role: 'SK Chairman',
-        },
+      // Code verified! Now finalize registration server-side
+      const createRes = await fetch('/api/register-chairman', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: pendingUser.fullName,
+          email: pendingUser.email,
+          password: pendingUser.password,
+          code: otpCode.trim(),
+        }),
       })
 
-      if (error) {
-        setFormError(error.message)
+      const createResult = await readJsonResponse(createRes)
+
+      if (!createRes.ok) {
+        setFormError(safeErrorMessage(createResult, 'Unable to create the account. Please try again.'))
         setIsSubmitting(false)
         return
       }
@@ -243,7 +290,7 @@ function LoginPage() {
         setIsRegistering(false)
       }
     } catch (err) {
-      setFormError(`Verification failed: ${err.message}`)
+      setFormError(safeErrorMessage(err, 'Verification failed. Please try again.'))
       setIsSubmitting(false)
     }
   }
@@ -259,15 +306,15 @@ function LoginPage() {
         body: JSON.stringify({ email: pendingUser.email }),
       })
 
-      const result = await res.json()
+      const result = await readJsonResponse(res)
 
       if (!res.ok) {
-        setFormError(result.error || 'Failed to resend code.')
+        setFormError(safeErrorMessage(result, 'Failed to resend code.'))
       } else {
         setFormStatus(`Verification code resent to ${pendingUser.email}.`)
       }
     } catch (err) {
-      setFormError(`Failed to resend code: ${err.message}`)
+      setFormError(safeErrorMessage(err, 'Failed to resend code. Please try again.'))
     }
     setIsSubmitting(false)
   }
@@ -314,7 +361,7 @@ function LoginPage() {
             <ul className="login-assurance">
               <li>
                 <ShieldCheck aria-hidden="true" />
-                <span>Every sign-in attempt is recorded in the audit trail.</span>
+                <span>Every sign-in attempt is recorded in the activity log.</span>
               </li>
               <li>
                 <Lock aria-hidden="true" />
@@ -426,7 +473,7 @@ function LoginPage() {
                   <FieldError id="email-error">{fieldErrors.email}</FieldError>
                 </label>
 
-                <label className="auth-field">
+                <label className="auth-field" data-invalid={Boolean(fieldErrors.password)}>
                   <span>Password</span>
                   <div className="password-field">
                     <input
@@ -436,7 +483,10 @@ function LoginPage() {
                       value={password}
                       onChange={e => setPassword(e.target.value)}
                       required
+                      minLength={isRegistering ? 6 : undefined}
                       disabled={fieldsDisabled}
+                      aria-describedby={fieldErrors.password ? 'password-error' : undefined}
+                      aria-invalid={Boolean(fieldErrors.password)}
                     />
                     <button
                       type="button"
@@ -448,6 +498,7 @@ function LoginPage() {
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
+                  {isRegistering && <FieldError id="password-error">{fieldErrors.password}</FieldError>}
                 </label>
 
                 <div className="auth-field">
@@ -491,12 +542,14 @@ function LoginPage() {
             {!verificationStep && (
               <div className="login-footer">
                 <p>Need access? Only the SK Chairman can create accounts for members.</p>
-                <p className="login-footer-register">
-                  SK Chairman registration:
-                  <button type="button" className="auth-btn auth-btn--link" onClick={toggleRegistering}>
-                    {isRegistering ? 'Back to sign in' : 'Open registration'}
-                  </button>
-                </p>
+                {!hasChairman && (
+                  <p className="login-footer-register">
+                    SK Chairman registration:
+                    <button type="button" className="auth-btn auth-btn--link" onClick={toggleRegistering}>
+                      {isRegistering ? 'Back to sign in' : 'Open registration'}
+                    </button>
+                  </p>
+                )}
               </div>
             )}
           </div>

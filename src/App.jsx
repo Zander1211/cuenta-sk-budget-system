@@ -11,8 +11,6 @@ import ExpensesPage from './pages/ExpensesPage'
 import RequestPage from './pages/RequestPage'
 import DocumentsPage from './pages/DocumentsPage'
 import ApprovalsPage from './pages/ApprovalsPage'
-import ReceiptsPage from './pages/ReceiptsPage'
-import ReceiptDetailsPage from './pages/ReceiptDetailsPage'
 import AuditTrailPage from './pages/AuditTrailPage'
 import BackupRestorePage from './pages/BackupRestorePage'
 import UserManagementPage from './pages/UserManagementPage'
@@ -125,14 +123,14 @@ function AppRoutes() {
               </Suspense>
             }
           />
-          <Route path="receipts" element={<ReceiptsPage />} />
+          {/* Receipts merged into the Documents page (now a tab there); keep old bookmarks working. */}
+          <Route path="receipts" element={<Navigate to="/dashboard/documents" replace />} />
           <Route path="audit-trail" element={<AuditTrailPage />} />
           <Route path="backup-restore" element={<BackupRestorePage />} />
           <Route path="user-management" element={<UserManagementPage />} />
           <Route path="budget-requests" element={<BudgetRequestsPage />} />
           <Route path="payroll" element={<PayrollPage />} />
           <Route path="expense-summary" element={<ExpenseSummaryPage />} />
-          <Route path="receipt-details" element={<ReceiptDetailsPage />} />
           <Route path="narrative-report" element={<NarrativeReportPage />} />
           <Route path="annual-report" element={<AnnualReportPage />} />
           <Route path="profile">

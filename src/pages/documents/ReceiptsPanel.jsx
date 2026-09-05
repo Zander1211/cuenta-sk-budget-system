@@ -1,10 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import RoleGate from '../components/RoleGate'
-import { useBudget } from '../context/BudgetContext'
-import { supabase } from '../supabase/supabaseClient'
-import { useAuth } from '../context/AuthContext'
-import { useAuditLog } from '../context/AuditLogContext'
-import { useNotifications } from '../context/NotificationContext'
+import { useBudget } from '../../context/BudgetContext'
+import { supabase } from '../../supabase/supabaseClient'
+import { useAuth } from '../../context/AuthContext'
+import { useAuditLog } from '../../context/AuditLogContext'
+import { useNotifications } from '../../context/NotificationContext'
 import {
   validateReceiptFile,
   getUploadErrorMessage,
@@ -12,16 +11,16 @@ import {
   logUploadDebugInfo,
   insertScannedReceiptRecord,
   formatOcrMetadataNote,
-} from '../utils/uploadUtils'
-import ReceiptOCRDetailsModal from '../components/receipts/ReceiptOCRDetailsModal'
-import YearSpinner from '../components/YearSpinner'
-import { monthOptions } from '../utils/analytics'
+} from '../../utils/uploadUtils'
+import ReceiptOCRDetailsModal from '../../components/receipts/ReceiptOCRDetailsModal'
+import YearSpinner from '../../components/YearSpinner'
+import { monthOptions } from '../../utils/analytics'
 
 // The scanner pulls in the image pipeline and, on demand, the OCR engine.
 // Splitting it out keeps that weight off users who only view receipts.
-const ReceiptScanModal = lazy(() => import('../components/receipts/ReceiptScanModal'))
+const ReceiptScanModal = lazy(() => import('../../components/receipts/ReceiptScanModal'))
 
-function ReceiptsPage() {
+function ReceiptsPanel() {
   const { user, role } = useAuth()
   const { addNotification } = useNotifications()
   const { addLog } = useAuditLog()
@@ -448,17 +447,7 @@ function ReceiptsPage() {
   }
 
   return (
-    <RoleGate allow={['SK Chairman', 'SK Treasurer', 'Barangay Treasurer', 'SK Kagawad']}>
-      <header className="dashboard-header">
-        <div className="header-left">
-          <div>
-            <p className="eyebrow">Receipts</p>
-            <h1>Approved Project, Event, and Payroll receipts</h1>
-            <p>Upload and manage multiple receipts for approved Projects, Events, and Payroll records. Maximum 20 MB per file.</p>
-          </div>
-        </div>
-      </header>
-
+    <>
       <section className="dashboard-content">
         {feedback ? (
           <div
@@ -942,8 +931,8 @@ function ReceiptsPage() {
           />
         </Suspense>
       ) : null}
-    </RoleGate>
+    </>
   )
 }
 
-export default ReceiptsPage
+export default ReceiptsPanel

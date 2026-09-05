@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import CurrencyInput from '../CurrencyInput'
 import { supabase } from '../../supabase/supabaseClient'
+import { useActiveSkChairmanName } from '../../hooks/useActiveSkChairmanName'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -49,6 +50,7 @@ async function getNextDvNumber() {
 }
 
 function DisbursementVoucherForm({ profileName, role, selectedRequest, onPreview }) {
+  const activeChairmanName = useActiveSkChairmanName()
   const [dvNumber, setDvNumber] = useState('')
   const [docDate, setDocDate] = useState(todayISO())
   const [fund, setFund] = useState('10% SK')
@@ -59,6 +61,9 @@ function DisbursementVoucherForm({ profileName, role, selectedRequest, onPreview
   const [skKagawad, setSkKagawad] = useState('')
   const [skTreasurer, setSkTreasurer] = useState('')
   const [skChairman, setSkChairman] = useState('')
+  useEffect(() => {
+    if (activeChairmanName) setSkChairman((prev) => prev || activeChairmanName)
+  }, [activeChairmanName])
   const [certDateA, setCertDateA] = useState(todayISO())
   const [certDateB, setCertDateB] = useState(todayISO())
   const [certDateC, setCertDateC] = useState(todayISO())

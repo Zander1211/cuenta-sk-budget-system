@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { useBudget } from '../context/BudgetContext'
 import { useAuth } from '../context/AuthContext'
 import { useDocuments } from '../context/DocumentContext'
+import { useActiveSkChairmanName } from '../hooks/useActiveSkChairmanName'
 import { supabase } from '../supabase/supabaseClient'
 import PurchaseRequestPreview from './PurchaseRequestPreview'
 import DisbursementVoucherForm from './documents/DisbursementVoucherForm'
@@ -95,6 +96,7 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
   const { requests } = useBudget()
   const { profileName, role } = useAuth()
   const { addDocument } = useDocuments()
+  const activeChairmanName = useActiveSkChairmanName()
 
   const [docType, setDocType] = useState(initialDocType)
   const [selectedRequestId, setSelectedRequestId] = useState('')
@@ -110,6 +112,11 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
   const [requestedByName, setRequestedByName] = useState('')
   const [approvedByName, setApprovedByName] = useState('')
   const [items, setItems] = useState([])
+
+  // Default "Approved By" to the active SK Chairman's name, editable.
+  useEffect(() => {
+    if (activeChairmanName) setApprovedByName((prev) => prev || activeChairmanName)
+  }, [activeChairmanName])
 
 
 

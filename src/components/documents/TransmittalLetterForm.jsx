@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import CurrencyInput from '../CurrencyInput';
 import { PlusCircle, Trash2 } from 'lucide-react'
+import { useActiveSkChairmanName } from '../../hooks/useActiveSkChairmanName'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -43,6 +44,7 @@ function createEmptyOtherRow() {
 }
 
 function TransmittalLetterForm({ profileName, role, onPreview }) {
+  const activeChairmanName = useActiveSkChairmanName()
   const [docDate, setDocDate] = useState(todayISO())
   const [coaTeamNumber, setCoaTeamNumber] = useState('')
   const [month, setMonth] = useState(getCurrentMonth())
@@ -53,6 +55,10 @@ function TransmittalLetterForm({ profileName, role, onPreview }) {
   const [bodyText, setBodyText] = useState('')
   const [skTreasurer, setSkTreasurer] = useState('')
   const [skChairperson, setSkChairperson] = useState('')
+
+  useEffect(() => {
+    if (activeChairmanName) setSkChairperson((prev) => prev || activeChairmanName)
+  }, [activeChairmanName])
 
   // Default body text
   useState(() => {

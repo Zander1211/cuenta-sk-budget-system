@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import CurrencyInput from '../CurrencyInput'
 import { PlusCircle, Trash2 } from 'lucide-react'
+import { useActiveSkChairmanName } from '../../hooks/useActiveSkChairmanName'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -9,6 +10,7 @@ const currency = new Intl.NumberFormat('en-PH', {
 })
 
 function ProjectDesignForm({ profileName, role, selectedRequest, onPreview }) {
+  const activeChairmanName = useActiveSkChairmanName()
   const [title, setTitle] = useState('')
   const [cost, setCost] = useState('')
   const [location, setLocation] = useState('')
@@ -25,6 +27,10 @@ function ProjectDesignForm({ profileName, role, selectedRequest, onPreview }) {
   useEffect(() => {
     setProjectLeader(profileName || '')
   }, [profileName])
+
+  useEffect(() => {
+    if (activeChairmanName) setNotedBy((prev) => prev || activeChairmanName)
+  }, [activeChairmanName])
 
   useEffect(() => {
     if (selectedRequest) {

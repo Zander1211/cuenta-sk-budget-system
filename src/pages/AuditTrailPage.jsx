@@ -247,7 +247,7 @@ function AuditTrailPage() {
       <header className="dashboard-header">
         <div className="header-left">
           <div>
-            <p className="eyebrow">Audit Trail</p>
+            <p className="eyebrow">Activity Logs</p>
             <h1>Tamper-Evident Activity Log</h1>
             <p>Complete chronological record of all system actions. Append-only — records cannot be modified or deleted.</p>
           </div>
@@ -434,7 +434,7 @@ function AuditTrailPage() {
           <div className="audit-table-header">
             <div>
               <p className="eyebrow">Chronological Record</p>
-              <h2>Audit Trail</h2>
+              <h2>Activity Logs</h2>
             </div>
             <span className="items-found-badge">
               Page {currentPage} of {totalPages} &nbsp;·&nbsp; {logs.length} entries shown
@@ -461,7 +461,7 @@ function AuditTrailPage() {
                     <td colSpan="8" className="empty-state">
                       <div className="audit-loading">
                         <div className="audit-spinner" />
-                        Loading audit trail…
+                        Loading activity logs…
                       </div>
                     </td>
                   </tr>
