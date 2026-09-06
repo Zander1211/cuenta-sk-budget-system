@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useBudget } from '../context/BudgetContext'
 import CurrencyInput from '../components/CurrencyInput'
@@ -53,7 +53,14 @@ function BudgetsPage() {
   const [filterQuarter, setFilterQuarter] = useState(Math.floor((initialMonth - 1) / 3) + 1)
   const [filterYear, setFilterYear] = useState(now.getFullYear())
   const [budgetPage, setBudgetPage] = useState(1)
+  const [savedMessage, setSavedMessage] = useState('')
   const canEdit = role === 'SK Treasurer'
+
+  useEffect(() => {
+    if (!savedMessage) return
+    const timer = setTimeout(() => setSavedMessage(''), 3500)
+    return () => clearTimeout(timer)
+  }, [savedMessage])
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -78,6 +85,9 @@ function BudgetsPage() {
     })
 
     if (result?.error) return
+
+    const monthLabel = monthOptions.find((m) => m.value === month)?.label || `Month ${month}`
+    setSavedMessage(`Budget for ${monthLabel} ${year} was added successfully.`)
 
     setAmount('')
     setSourceOption('')
@@ -200,6 +210,25 @@ function BudgetsPage() {
                   />
                 </label>
               </div>
+              {savedMessage && (
+                <div
+                  role="status"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '12px 16px',
+                    borderRadius: 'var(--radius-surface)',
+                    backgroundColor: 'var(--positive-soft)',
+                    color: 'var(--positive)',
+                    fontWeight: 500,
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  <span aria-hidden="true">✓</span>
+                  <span>{savedMessage}</span>
+                </div>
+              )}
               <button type="submit" className="primary-button" style={{ alignSelf: 'flex-start', padding: '10px 24px' }}>
                 Save Budget
               </button>
