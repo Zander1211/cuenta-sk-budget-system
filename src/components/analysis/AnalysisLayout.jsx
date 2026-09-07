@@ -122,18 +122,25 @@ export function AnalysisFilterBar({
   )
 }
 // Page wrapper: role-guards, renders breadcrumb + title + description + filter bar.
-export function AnalysisLayout({ breadcrumb, title, description, filterBar, children }) {
+// `embedded` is for when this layout renders inside a page that already owns
+// the header — the Analysis tab on Budgets. The breadcrumb and title would
+// duplicate that page's own heading, so only the filter bar is kept.
+export function AnalysisLayout({ breadcrumb, title, description, filterBar, children, embedded = false }) {
   return (
     <RoleGate allow={ANALYSIS_ROLES}>
       <div className="an-page">
         <header className="an-page-head">
-          <Breadcrumb trail={breadcrumb} />
-          <div className="an-page-title-row">
-            <div>
-              <h1 className="an-page-title">{title}</h1>
-              {description ? <p className="an-page-desc">{description}</p> : null}
-            </div>
-          </div>
+          {embedded ? null : (
+            <>
+              <Breadcrumb trail={breadcrumb} />
+              <div className="an-page-title-row">
+                <div>
+                  <h1 className="an-page-title">{title}</h1>
+                  {description ? <p className="an-page-desc">{description}</p> : null}
+                </div>
+              </div>
+            </>
+          )}
           {filterBar}
         </header>
         {children}

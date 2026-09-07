@@ -387,6 +387,29 @@ button:disabled,
 .table-actions {
 	display: flex;
 	gap: 8px;
+	align-items: center;
+}
+
+/* The Projects & Events table carries seven columns plus a row of actions. Below a wide desktop they no longer fit, and a plain table
+   spills past the rounded card it sits in. The wrapper keeps the overflow
+   inside the card as a horizontal scroll instead. */
+.table-scroll {
+	max-width: 100%;
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+.table-scroll>.data-table {
+	min-width: 940px;
+}
+
+@media (max-width: 600px) {
+
+	/* Below 600px the tables stack into cards, so the min-width would only
+	   force a pointless scrollbar. */
+	.table-scroll>.data-table {
+		min-width: 0;
+	}
 }
 
 .details-row td {
@@ -2045,6 +2068,7 @@ button:disabled,
 .table-actions {
 	display: flex;
 	gap: 8px;
+	align-items: center;
 }
 
 .details-row td {
@@ -4377,10 +4401,34 @@ td.nr-info-label {
 }
 
 /* Breakdown layout classes */
+/* ── Budgets page: shared period filter above the form and history ── */
+.budgets-filter-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 16px;
+	padding: 18px 24px;
+}
+
 .expenses-breakdown-grid {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 	gap: 20px;
+	align-items: stretch;
+}
+
+/* Both cards carry short, comparable content, so they read best as an even
+   landscape pair rather than one towering over the other. Content stays
+   top-aligned in each so any slack collects at the card's bottom edge
+   instead of stranding a gap mid-card. */
+.expenses-breakdown-grid>.overview-card {
+	display: flex;
+	flex-direction: column;
+}
+
+.expenses-breakdown-grid .breakdown-category-list {
+	align-content: start;
 }
 
 @media (max-width: 900px) {
@@ -4445,6 +4493,7 @@ td.nr-info-label {
 	font-size: 1.15rem;
 	font-weight: 700;
 	color: var(--ink);
+	font-variant-numeric: tabular-nums;
 }
 
 .breakdown-category-list {
@@ -4483,6 +4532,8 @@ td.nr-info-label {
 .breakdown-category-amount {
 	font-weight: 600;
 	color: var(--ink);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
 }
 
 .category-tag {
@@ -8480,6 +8531,13 @@ td.nr-info-label {
 	text-transform: uppercase;
 }
 
+.record-filter-heading-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-shrink: 0;
+}
+
 .record-filter-count {
 	color: var(--ink-3, #5f7b79);
 	font-size: 0.78rem;
@@ -8489,13 +8547,13 @@ td.nr-info-label {
 
 .record-filter-grid {
 	display: grid;
-	grid-template-columns: minmax(220px, 1.5fr) repeat(5, minmax(118px, 0.7fr)) auto;
+	grid-template-columns: minmax(220px, 1.5fr) repeat(5, minmax(118px, 0.7fr));
 	align-items: end;
 	gap: 10px;
 }
 
 .record-filter-grid--payroll {
-	grid-template-columns: minmax(240px, 1.6fr) repeat(4, minmax(125px, 0.75fr)) auto;
+	grid-template-columns: minmax(240px, 1.6fr) repeat(4, minmax(125px, 0.75fr));
 }
 
 .record-filter-field {
@@ -8608,6 +8666,13 @@ td.nr-info-label {
 	cursor: not-allowed;
 }
 
+.record-filter-reset--icon {
+	padding: 0;
+	width: 34px;
+	height: 34px;
+	flex-shrink: 0;
+}
+
 @media (max-width: 1180px) {
 
 	.record-filter-grid,
@@ -8630,8 +8695,7 @@ td.nr-info-label {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
-	.record-filter-field--search,
-	.record-filter-reset {
+	.record-filter-field--search {
 		grid-column: 1 / -1;
 	}
 }
@@ -8643,13 +8707,17 @@ td.nr-info-label {
 		gap: 8px;
 	}
 
+	.record-filter-heading-actions {
+		width: 100%;
+		justify-content: space-between;
+	}
+
 	.record-filter-grid,
 	.record-filter-grid--payroll {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
-	.record-filter-field--search,
-	.record-filter-reset {
+	.record-filter-field--search {
 		grid-column: auto;
 	}
 }

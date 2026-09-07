@@ -7,12 +7,10 @@ import {
   LayoutDashboard,
   Wallet,
   Briefcase,
-  CheckSquare,
   Receipt,
   FileText,
   Files,
   ThumbsUp,
-  BarChart3,
   Users,
   UserCircle,
   LogOut,
@@ -46,12 +44,6 @@ const navItems = [
     icon: Briefcase
   },
   {
-    label: 'Payroll',
-    path: '/dashboard/payroll',
-    roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
-    icon: CheckSquare
-  },
-  {
     label: 'Expense Summary',
     path: '/dashboard/expense-summary',
     roles: ['SK Kagawad', 'Barangay Treasurer'],
@@ -80,12 +72,6 @@ const navItems = [
     path: '/dashboard/approvals',
     roles: ['SK Chairman'],
     icon: ThumbsUp
-  },
-  {
-    label: 'Analysis',
-    path: '/dashboard/analysis',
-    roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
-    icon: BarChart3
   },
   {
     label: 'Activity Logs',

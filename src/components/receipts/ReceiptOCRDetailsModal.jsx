@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
   ExternalLink,
   FileQuestion,
+  ShieldCheck,
   X,
 } from 'lucide-react'
 import {
@@ -103,6 +104,8 @@ export default function ReceiptOCRDetailsModal({
   receipt,
   expenses,
   verifiedReceiptTotals,
+  canVerify = false,
+  onVerify,
   onClose,
 }) {
   useEffect(() => {
@@ -112,6 +115,29 @@ export default function ReceiptOCRDetailsModal({
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
+
+  const [verifyAmount, setVerifyAmount] = useState(
+    hasValue(receipt?.ocrMetadata?.totalAmount) ? String(receipt.ocrMetadata.totalAmount) : ''
+  )
+  const [verifying, setVerifying] = useState(false)
+  const [verifyError, setVerifyError] = useState('')
+
+  async function handleVerify() {
+    const amount = Number(verifyAmount)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setVerifyError('Enter the total amount shown on the receipt.')
+      return
+    }
+    setVerifyError('')
+    setVerifying(true)
+    try {
+      await onVerify(amount)
+    } catch (error) {
+      setVerifyError(error?.message || 'Could not verify this receipt.')
+    } finally {
+      setVerifying(false)
+    }
+  }
 
   const metadata = receipt?.ocrMetadata || null
   const scanSettings = receipt?.scanSettings || {}
@@ -148,6 +174,12 @@ export default function ReceiptOCRDetailsModal({
   const particulars = Array.isArray(metadata?.particulars)
     ? metadata.particulars.map((item) => item?.description || String(item)).filter(Boolean).join(', ')
     : metadata?.particulars
+
+  // Mirrors the rule buildVerifiedReceiptTotals uses: a verification
+  // timestamp alone isn't enough — it only counts toward spending once a
+  // positive confirmed total is attached too.
+  const isCountedTowardSpending = Boolean(receipt?.ocrVerifiedAt) && Number(metadata?.totalAmount) > 0
+  const isLegacyReceipt = String(receipt?.id || '').startsWith('legacy-')
 
   return (
     <div className="modal-overlay receipt-ocr-overlay" onClick={onClose}>
@@ -280,6 +312,58 @@ export default function ReceiptOCRDetailsModal({
                 <p>The following key fields were not confidently available: {status.missingFields.join(', ')}.</p>
               </section>
             ) : null}
+
+            {!isCountedTowardSpending && canVerify ? (
+              <section className="receipt-ocr-review-note" aria-labelledby="manual-verify-heading">
+                <h3 id="manual-verify-heading">This receipt isn't counted toward spending yet</h3>
+                {isLegacyReceipt ? (
+                  <p>
+                    This receipt predates receipt tracking and has no verification record to update.
+                    Re-upload it using Scan & Upload so a confirmed total can be attached.
+                  </p>
+                ) : (
+                  <>
+                    <p>
+                      {receipt?.ocrVerifiedAt
+                        ? 'It was verified without a confirmed total amount, so it has not been added to Total Recorded Expenses or Budget Utilization.'
+                        : 'It was uploaded without OCR verification, so it has not been added to Total Recorded Expenses or Budget Utilization.'}
+                      {' '}Confirm the amount printed on the receipt to verify it.
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', flexWrap: 'wrap', marginTop: '10px' }}>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.82rem', fontWeight: 600 }}>
+                        Verified total amount
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={verifyAmount}
+                          onChange={(event) => setVerifyAmount(event.target.value)}
+                          disabled={verifying}
+                          placeholder="0.00"
+                          style={{ padding: '8px 10px', borderRadius: 'var(--radius-control, 8px)', border: '1px solid var(--line)' }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={handleVerify}
+                        disabled={verifying}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <ShieldCheck size={16} aria-hidden="true" />
+                        {verifying ? 'Verifying…' : 'Mark as Verified'}
+                      </button>
+                    </div>
+                    {verifyError ? (
+                      <p className="receipt-ocr-warning" role="alert" style={{ marginTop: '8px' }}>
+                        <AlertTriangle size={16} aria-hidden="true" />
+                        {verifyError}
+                      </p>
+                    ) : null}
+                  </>
+                )}
+              </section>
+            ) : null}
           </div>
         </div>
 
@@ -287,6 +371,7 @@ export default function ReceiptOCRDetailsModal({
           <div>
             {receipt?.ocrVerifiedAt ? `Verified ${new Date(receipt.ocrVerifiedAt).toLocaleString('en-PH')}` : 'No OCR verification timestamp'}
             {receipt?.ocrVerifiedBy ? ` by ${receipt.ocrVerifiedBy}` : ''}
+            {!isCountedTowardSpending ? ' — not counted toward spending' : ''}
           </div>
           <button type="button" className="secondary-button" onClick={onClose}>Close</button>
         </footer>

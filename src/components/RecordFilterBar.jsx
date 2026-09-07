@@ -33,9 +33,21 @@ export default function RecordFilterBar({
           </span>
           <h2 id="record-filter-title">Filters</h2>
         </div>
-        <span className="record-filter-count" aria-live="polite">
-          {resultCount} of {totalCount} {totalCount === 1 ? 'record' : 'records'}
-        </span>
+        <div className="record-filter-heading-actions">
+          <span className="record-filter-count" aria-live="polite">
+            {resultCount} of {totalCount} {totalCount === 1 ? 'record' : 'records'}
+          </span>
+          <button
+            type="button"
+            className="record-filter-reset record-filter-reset--icon"
+            onClick={onReset}
+            disabled={!hasActiveFilters}
+            aria-label="Reset filters"
+            title="Reset filters"
+          >
+            <RotateCcw size={16} aria-hidden="true" />
+          </button>
+        </div>
       </div>
 
       <div className={`record-filter-grid ${onCategoryChange ? '' : 'record-filter-grid--payroll'}`}>
@@ -88,21 +100,11 @@ export default function RecordFilterBar({
         <label className="record-filter-field">
           <span>Status</span>
           <select value={statusValue} onChange={(event) => onStatusChange(event.target.value)}>
-            <option value="All">All statuses</option>
+            <option value="All">All status</option>
             <option value="Ongoing">Ongoing</option>
             <option value="Completed">Completed</option>
           </select>
         </label>
-
-        <button
-          type="button"
-          className="record-filter-reset"
-          onClick={onReset}
-          disabled={!hasActiveFilters}
-        >
-          <RotateCcw size={16} aria-hidden="true" />
-          Reset filters
-        </button>
       </div>
     </section>
   )

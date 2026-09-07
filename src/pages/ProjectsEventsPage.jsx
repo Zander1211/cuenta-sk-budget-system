@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react'
+import { Archive, RotateCcw } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { useBudget } from '../context/BudgetContext'
 import RoleGate from '../components/RoleGate'
@@ -9,9 +10,12 @@ import BudgetBreakdownTable from '../components/BudgetBreakdownTable'
 import RecordFilterBar from '../components/RecordFilterBar'
 import { useNotifications } from '../context/NotificationContext'
 import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
-import { calculateProjectEventFinancials } from '../utils/projectEventFinancials'
+import { calculateProjectEventFinancials, formatUtilization } from '../utils/projectEventFinancials'
 
 const ReceiptScanModal = lazy(() => import('../components/receipts/ReceiptScanModal'))
+// Payroll is a tab here now, but it carries its own tables and scan modal, so it
+// stays out of this bundle until someone opens the tab.
+const PayrollPanel = lazy(() => import('./PayrollPage'))
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -19,15 +23,58 @@ const currency = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 0,
 })
 
+// The header follows the active tab so the Payroll view keeps the wording it
+// had back when it was its own page.
+const TAB_HEADINGS = {
+  projects: {
+    eyebrow: 'Projects & Events Dashboard',
+    title: 'Projects & Events',
+    description: 'Monitor budgets, expenses, and completion status of all approved projects and events.',
+  },
+  events: {
+    eyebrow: 'Projects & Events Dashboard',
+    title: 'Projects & Events',
+    description: 'Monitor budgets, expenses, and completion status of all approved projects and events.',
+  },
+  payroll: {
+    eyebrow: 'Payroll Dashboard',
+    title: 'Approved Payroll',
+    description: 'Monitor budgets, expenses, and status of all approved payroll requests.',
+  },
+  archived: {
+    eyebrow: 'Projects & Events Dashboard',
+    title: 'Archived Projects & Events',
+    description: 'Completed projects and events that were archived. Restore one to move it back to the active lists.',
+  },
+}
+
+// The archive mixes projects and events, so its labels stay type-neutral.
+const TITLE_NOUN = {
+  projects: 'Project',
+  events: 'Event',
+  archived: 'Project / Event',
+  payroll: 'Payroll',
+}
+
+const CARD_HEADINGS = {
+  projects: 'All Approved Projects',
+  events: 'All Approved Events',
+  archived: 'Archived Projects & Events',
+  payroll: 'Approved Payroll',
+}
+
 function ProjectsEventsPage() {
   const { role, user } = useAuth()
-  const { expenses, totals, updateProjectStatus, refreshExpensesFromSupabase, updateExpenseReceipt } = useBudget()
+  const { expenses, verifiedReceiptTotals, updateProjectStatus, refreshExpensesFromSupabase, updateExpenseReceipt, archiveExpense, restoreExpense } = useBudget()
   const { addNotification } = useNotifications()
 
   const [searchParams, setSearchParams] = useSearchParams()
   const highlightId = searchParams.get('highlight')
 
-  const [activeTab, setActiveTab] = useState(() => (searchParams.get('tab') === 'events' ? 'events' : 'projects')) // 'projects' | 'events'
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = searchParams.get('tab')
+    return ['events', 'payroll', 'archived'].includes(tab) ? tab : 'projects'
+  }) // 'projects' | 'events' | 'payroll' | 'archived'
   const [expanded, setExpanded] = useState({})
   const [highlightedId, setHighlightedId] = useState(null)
 
@@ -37,6 +84,7 @@ function ProjectsEventsPage() {
   const [dateFilter, setDateFilter] = useState('')
   const [monthFilter, setMonthFilter] = useState('')
   const [yearFilter, setYearFilter] = useState(currentYear)
+  const [categoryFilter, setCategoryFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState('')
 
   // Arrived here via the dashboard search — jump straight to the matching
@@ -52,8 +100,9 @@ function ProjectsEventsPage() {
     setDateFilter('')
     setMonthFilter('')
     setStatusFilter('')
+    setCategoryFilter('All')
     setYearFilter('')
-    setExpanded((prev) => ({ ...prev, [target.id]: true }))
+    setExpanded((prev) => ({ ...prev, [target.id]: 'view' }))
     setHighlightedId(target.id)
 
     setSearchParams((prev) => {
@@ -78,18 +127,20 @@ function ProjectsEventsPage() {
     return () => clearTimeout(timeout)
   }, [highlightedId])
 
-  const hasActiveFilters = searchFilter || dateFilter || monthFilter || (yearFilter !== currentYear) || statusFilter
+  const hasActiveFilters = searchFilter || dateFilter || monthFilter || (yearFilter !== currentYear) || (categoryFilter !== 'All') || statusFilter
 
   function resetFilters() {
     setSearchFilter('')
     setDateFilter('')
     setMonthFilter('')
     setYearFilter(currentYear)
+    setCategoryFilter('All')
     setStatusFilter('')
   }
 
   const [errorsById, setErrorsById] = useState({})
   const [uploadingId, setUploadingId] = useState(null)
+  const [receiptLinks, setReceiptLinks] = useState({})
   const [scanModalOpen, setScanModalOpen] = useState(false)
   const [scanFile, setScanFile] = useState(null)
   const [scanStatus, setScanStatus] = useState('idle')
@@ -194,18 +245,72 @@ function ProjectsEventsPage() {
     await refreshExpensesFromSupabase()
   }, [refreshExpensesFromSupabase])
 
+  // Fetch receipt counts from receipt_records
+  useEffect(() => {
+    let mounted = true
+    const expenseIds = expenses.map(e => String(e.id))
+    if (!expenseIds.length) return
+
+    ;(async () => {
+      let { data, error } = await supabase
+        .from('receipt_records')
+        .select('record_id, requisition_id')
+        .in('record_id', expenseIds)
+
+      if (error) {
+        const legacy = await supabase
+          .from('receipt_records')
+          .select('record_id')
+          .in('record_id', expenseIds)
+        data = legacy.data
+        error = legacy.error
+      }
+
+      if (!error && data && mounted) {
+        const counts = {}
+        data.forEach(row => {
+          const key = String(row.record_id)
+          counts[key] = (counts[key] || 0) + 1
+          if (row.requisition_id) {
+            const requisitionKey = String(row.requisition_id)
+            counts[requisitionKey] = (counts[requisitionKey] || 0) + 1
+          } else {
+            const legacyRequisition = expenses.find(expense => (
+              expense.isAdditional && String(expense.id) === key
+            ))
+            if (legacyRequisition?.parentProjectId) {
+              const parentKey = String(legacyRequisition.parentProjectId)
+              counts[parentKey] = (counts[parentKey] || 0) + 1
+            }
+          }
+        })
+        setReceiptLinks(counts)
+      }
+    })()
+
+    return () => { mounted = false }
+  }, [expenses])
+
   const baseItems = useMemo(() => {
     return expenses.filter((item) => {
       const isProject = !item.type || item.type === 'Project'
       const isEvent = item.type === 'Event'
       const status = item.status || 'Approved'
-      const isApproved = !item.isAdditional && ['Approved', 'Released'].includes(status) && !item.archivedAt
+      const isApproved = !item.isAdditional && ['Approved', 'Released'].includes(status)
 
-      if (activeTab === 'projects') return isApproved && isProject
-      if (activeTab === 'events') return isApproved && isEvent
+      // The archive holds both kinds together; the active tabs exclude anything
+      // that has been archived.
+      if (activeTab === 'archived') return isApproved && (isProject || isEvent) && Boolean(item.archivedAt)
+      if (activeTab === 'projects') return isApproved && isProject && !item.archivedAt
+      if (activeTab === 'events') return isApproved && isEvent && !item.archivedAt
       return false
     })
   }, [expenses, activeTab])
+
+  const categoryOptions = useMemo(() => {
+    const categories = new Set(baseItems.map((item) => item.category).filter(Boolean))
+    return Array.from(categories).sort()
+  }, [baseItems])
 
   const filteredItems = useMemo(() => {
     return baseItems.filter((item) => {
@@ -219,6 +324,8 @@ function ProjectsEventsPage() {
           return false
         }
       }
+
+      if (categoryFilter && categoryFilter !== 'All' && (item.category || '') !== categoryFilter) return false
 
       if (statusFilter && statusFilter !== 'All' && (item.projectStatus || 'Ongoing') !== statusFilter) return false
 
@@ -244,137 +351,276 @@ function ProjectsEventsPage() {
 
       return true
     })
-  }, [baseItems, searchFilter, statusFilter, dateFilter, monthFilter, yearFilter])
+  }, [baseItems, searchFilter, categoryFilter, statusFilter, dateFilter, monthFilter, yearFilter])
 
-  function toggleDetails(id) {
-    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
+  function toggleDetails(id, mode) {
+    setExpanded((prev) => ({ ...prev, [id]: prev[id] === mode ? null : mode }))
+  }
+
+  const canArchive = role === 'SK Chairman'
+  const [archiveBusyId, setArchiveBusyId] = useState(null)
+
+  // A record is only archivable once its work is done — an ongoing project or
+  // event still accrues expenses and receipts, so it stays in the active list.
+  function isArchivable(item) {
+    return (item.projectStatus || 'Ongoing') === 'Completed'
+  }
+
+  async function handleArchive(item) {
+    const label = item.project || item.event || 'this record'
+    const kind = (item.type || 'Project') === 'Event' ? 'event' : 'project'
+    if (!isArchivable(item)) {
+      addNotification({
+        type: 'system',
+        title: 'Cannot archive yet',
+        message: `"${label}" is still ongoing. Mark the ${kind} as Completed before archiving it.`,
+      })
+      return
+    }
+    if (!window.confirm(`Archive "${label}"? It will move to the Archived tab and can be restored later.`)) return
+
+    setArchiveBusyId(item.id)
+    const { error } = await archiveExpense(item.id)
+    setArchiveBusyId(null)
+
+    addNotification(error
+      ? { type: 'system', title: 'Archive failed', message: `Could not archive "${label}". Please try again.` }
+      : { type: 'system', title: 'Archived', message: `"${label}" was moved to the archive.` })
+  }
+
+  async function handleRestore(item) {
+    const label = item.project || item.event || 'this record'
+    setArchiveBusyId(item.id)
+    const { error } = await restoreExpense(item.id)
+    setArchiveBusyId(null)
+
+    addNotification(error
+      ? { type: 'system', title: 'Restore failed', message: `Could not restore "${label}". Please try again.` }
+      : { type: 'system', title: 'Restored', message: `"${label}" was restored to the active list.` })
   }
 
   function handleTabChange(tab) {
     setActiveTab(tab)
     setExpanded({})
+    // Keep the tab in the URL so a reload, and the /dashboard/payroll redirect,
+    // land back on the same view.
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (tab === 'projects') next.delete('tab')
+      else next.set('tab', tab)
+      return next
+    }, { replace: true })
   }
 
   function renderItemDetails(item, columnCount) {
-    if (!expanded[item.id]) return null
+    const mode = expanded[item.id]
+    if (!mode) return null
 
     const breakdownItems = Array.isArray(item.breakdown) ? item.breakdown : []
     const originalBreakdownItems = breakdownItems.filter(e => !e.isAdditional)
 
-    const verifiedReceiptTotals = totals?.verifiedReceiptTotals || {}
     const financials = calculateProjectEventFinancials(item, expenses, verifiedReceiptTotals)
     const additionalExpenses = financials.linkedExpenses
     const additionalSum = financials.recordedExpenseTotal
+    const totalExpense = financials.totalExpenses
 
     const approvedBudget = financials.approvedBudget
-    const totalExpenses = financials.totalExpenses
-    const remainingBalance = financials.remainingBudget
+    const hasReceipt = receiptLinks[item.id] && receiptLinks[item.id] > 0
+    const receiptCount = receiptLinks[item.id] || 0
+    const isReceiptVerified = financials.verifiedReceiptTotal > 0
 
     return (
       <tr className="details-row">
-        <td colSpan={columnCount}>
-          <div className="details-panel" style={{ backgroundColor: 'var(--surface-color)', padding: '24px', borderTop: '1px solid var(--border-color)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>Summary</h3>
-              </div>
-            
-            <div className="details-grid" style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
-              gap: '16px', 
-              marginBottom: '32px' 
-            }}>
-              {[
-                { label: 'Approved Budget', value: currency.format(approvedBudget) },
-                { label: 'Additional Requisitions', value: currency.format(additionalSum) },
-                { label: 'Remaining Balance', value: currency.format(remainingBalance), highlight: remainingBalance < 0 },
-                { label: 'Date Proposed', value: item.eventDate || item.date ? new Date(item.eventDate || item.date).toLocaleDateString() : '—' },
-                { label: 'Date Approved', value: item.approvedAt ? new Date(item.approvedAt).toLocaleDateString() : '—' }
-              ].map((stat, i) => (
-                <div key={i} style={{ 
-                  backgroundColor: 'var(--background-color, #ffffff)', 
-                  padding: '20px', 
-                  borderRadius: 'var(--radius-surface)', 
-                  border: '1px solid var(--border-color)', 
-                  boxShadow: 'var(--shadow)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px'
-                }}>
-                  <p className="details-label" style={{ 
-                    fontSize: '0.75rem', 
-                    textTransform: 'uppercase', 
-                    color: 'var(--text-secondary)', 
-                    margin: 0,
-                    letterSpacing: '0.5px'
-                  }}>{stat.label}</p>
-                  <p className="details-value" style={{ 
-                    fontSize: '1.25rem', 
-                    fontWeight: '400', 
-                    margin: 0,
-                    color: stat.highlight ? 'var(--danger-color)' : 'var(--text-primary)'
+        <td colSpan={columnCount} style={{ padding: 0 }}>
+          <div className="details-panel" style={{ padding: '32px 24px', background: 'var(--surface-2)', borderBottom: '1px solid var(--line)' }}>
+            {mode === 'view' && (
+              <>
+                {/* Basic Information Section */}
+                <div style={{ marginBottom: '32px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--ink)', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Basic Information</h3>
+                  <div className="details-grid" style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '16px'
                   }}>
-                    {stat.value}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <div className="details-breakdown" style={{ marginBottom: '24px' }}>
-              <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '12px' }}>Requisition Breakdown</p>
-              <BudgetBreakdownTable
-                request={item}
-                breakdownItems={originalBreakdownItems}
-                currency={currency}
-                totalAmount={approvedBudget}
-              />
-            </div>
-
-            <div className="details-breakdown">
-              <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '12px' }}>Additional Requisition Breakdown</p>
-              {additionalExpenses.length > 0 ? (
-                <table className="data-table" style={{ marginTop: '0' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textTransform: 'uppercase' }}>DESCRIPTION</th>
-                      <th style={{ textTransform: 'uppercase' }}>CATEGORY</th>
-                      <th style={{ textTransform: 'uppercase' }}>DATE</th>
-                      <th style={{ textTransform: 'uppercase' }}>REMARKS</th>
-                      <th style={{ textTransform: 'uppercase' }}>QUANTITY</th>
-                      <th style={{ textTransform: 'uppercase' }}>UNIT COST</th>
-                      <th style={{ textTransform: 'uppercase' }}>TOTAL COST</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {additionalExpenses.map((e, index) => (
-                      <tr key={e.id || index}>
-                        <td>{e.itemName || e.description || '—'}</td>
-                        <td>{e.category || item.category || '—'}</td>
-                        <td>{e.date || e.addedAt ? new Date(e.date || e.addedAt).toLocaleDateString() : '—'}</td>
-                        <td>{e.remarks || '—'}</td>
-                        <td>{e.quantity || '—'}</td>
-                        <td>{e.unitCost ? currency.format(e.unitCost) : '—'}</td>
-                        <td style={{ fontWeight: 600, color: 'var(--positive)' }}>{currency.format((Number(e.quantity)||0) * (Number(e.unitCost)||0))}</td>
-                      </tr>
+                    {[
+                      { label: 'Title', value: item.project || item.event || 'Untitled' },
+                      { label: 'Description', value: item.description || 'No description provided.' },
+                      { label: 'Category', value: item.category || '—' },
+                      { label: 'Related Project / Event / Payroll', value: item.event || item.project || item.payrollNumber || '—' },
+                      { label: 'Scheduled Date', value: item.eventDate || item.date ? new Date(item.eventDate || item.date).toLocaleDateString() : '—' },
+                      { label: 'Expense Date', value: item.date || item.approvedAt ? new Date(item.date || item.approvedAt).toLocaleDateString() : '—' },
+                      { label: 'Status', value: item.status || 'Approved' },
+                      { label: 'Created By', value: item.requestedBy || '—' },
+                    ].map((stat, i) => (
+                      <div key={i} style={{
+                        backgroundColor: 'var(--background-color, #ffffff)',
+                        padding: '20px 24px',
+                        borderRadius: 'var(--radius-surface)',
+                        border: '1px solid var(--line)',
+                        boxShadow: 'var(--shadow)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px'
+                      }}>
+                        <p className="details-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink-3)', margin: 0, letterSpacing: '0.5px' }}>{stat.label}</p>
+                        <p className="details-value" style={{ fontSize: '1.05rem', margin: 0, color: 'var(--ink)', lineHeight: '1.4', overflowWrap: 'break-word', wordBreak: 'break-word' }}>{stat.value}</p>
+                      </div>
                     ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <th colSpan="6" style={{ textTransform: 'uppercase' }}>TOTAL ADDITIONAL REQUISITIONS</th>
-                      <th>{currency.format(additionalSum)}</th>
-                    </tr>
-                  </tfoot>
-                </table>
-              ) : (
-                <p className="details-value" style={{ color: 'var(--text-secondary)' }}>No additional requisitions linked to this {activeTab === 'projects' ? 'project' : 'event'}.</p>
-              )}
-            </div>
-            
-            {item.description && (
-              <div style={{ marginTop: '24px' }}>
-                <p className="details-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '4px' }}>Description</p>
-                <p className="details-value">{item.description}</p>
-              </div>
+
+                    {/* Receipt Status Card */}
+                    <div style={{
+                      backgroundColor: 'var(--background-color, #ffffff)',
+                      padding: '20px 24px',
+                      borderRadius: 'var(--radius-surface)',
+                      border: '1px solid var(--line)',
+                      boxShadow: 'var(--shadow)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px'
+                    }}>
+                      <p className="details-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink-3)', margin: 0, letterSpacing: '0.5px' }}>Receipt Status</p>
+                      <div>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: '4px 12px',
+                          borderRadius: '999px',
+                          fontSize: '0.85rem',
+                          fontWeight: 600,
+                          backgroundColor: !hasReceipt ? '#fee2e2' : isReceiptVerified ? '#dcfce7' : '#fef3c7',
+                          color: !hasReceipt ? '#dc2626' : isReceiptVerified ? '#15803d' : '#b45309'
+                        }}>
+                          {!hasReceipt
+                            ? 'Missing'
+                            : `${receiptCount > 1 ? `${receiptCount} Receipts` : '1 Receipt'} ${isReceiptVerified ? 'Verified' : 'Uploaded (Unverified)'}`}
+                        </span>
+                        {hasReceipt && !isReceiptVerified ? (
+                          <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--ink-3)' }}>
+                            Not yet counted toward Total Recorded Expenses. Verify it in Documents → Receipts.
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="details-breakdown">
+                  <BudgetBreakdownTable request={item} breakdownItems={originalBreakdownItems} currency={currency} title="APPROVED ALLOCATION BREAKDOWN" />
+                </div>
+
+                <div className="details-breakdown" style={{ marginTop: '16px' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th className="table-band" colSpan="7">ADDITIONAL REQUISITION BREAKDOWN</th>
+                      </tr>
+                      <tr>
+                        <th style={{ textTransform: 'uppercase' }}>REQUISITION ITEM</th>
+                        <th style={{ textTransform: 'uppercase' }}>CATEGORY</th>
+                        <th style={{ textTransform: 'uppercase' }}>DATE</th>
+                        <th style={{ textTransform: 'uppercase' }}>REMARKS</th>
+                        <th style={{ textTransform: 'uppercase' }}>QUANTITY</th>
+                        <th style={{ textTransform: 'uppercase' }}>UNIT COST</th>
+                        <th style={{ textTransform: 'uppercase' }}>TOTAL COST</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {additionalExpenses.length ? additionalExpenses.map((addEx, index) => (
+                        <tr key={`${item.id}-add-${index}`}>
+                          <td data-label="Requisition Item">{addEx.itemName || addEx.description || addEx.category || '—'}</td>
+                          <td data-label="Category">{addEx.category || '—'}</td>
+                          <td data-label="Date">{(addEx.date || addEx.addedAt) ? new Date(addEx.date || addEx.addedAt).toLocaleDateString() : '—'}</td>
+                          <td data-label="Remarks">{addEx.remarks || '—'}</td>
+                          <td data-label="Quantity">{addEx.quantity || '—'}</td>
+                          <td data-label="Unit Cost">{addEx.unitCost ? currency.format(addEx.unitCost) : '—'}</td>
+                          <td data-label="Total Cost">{currency.format(Number(addEx.amount) || 0)}</td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan="7" style={{ textAlign: 'center', fontStyle: 'italic', color: 'var(--ink-3)' }}>
+                            {financials.verifiedReceiptTotal > 0
+                              ? `Actual spending is based on ${currency.format(financials.verifiedReceiptTotal)} in verified receipts.`
+                              : 'No requisitions recorded under this approved budget.'}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                    {additionalExpenses.length ? (
+                      <tfoot>
+                        <tr>
+                          <th colSpan="6">Total Additional Requisition Cost</th>
+                          <th>{currency.format(additionalSum)}</th>
+                        </tr>
+                      </tfoot>
+                    ) : null}
+                  </table>
+                </div>
+              </>
+            )}
+
+            {mode === 'expenses' && (
+              <>
+                {/* Financial Information Section */}
+                <div style={{ marginBottom: '32px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--ink)', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Financial Information</h3>
+                  <div className="details-grid" style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '16px'
+                  }}>
+                    {[
+                      { label: 'Approved Budget', value: currency.format(approvedBudget), highlight: false },
+                      { label: 'Total Requisitions', value: currency.format(additionalSum), highlight: false },
+                      ...(financials.verifiedReceiptTotal > 0
+                        ? [{ label: 'Verified Receipt Total', value: currency.format(financials.verifiedReceiptTotal), highlight: false }]
+                        : []),
+                      { label: 'Total Recorded Expenses', value: currency.format(totalExpense), highlight: true },
+                      { label: 'Remaining Budget', value: currency.format(financials.remainingBudget), highlight: financials.remainingBudget < 0 },
+                      { label: 'Budget Utilization', value: `${formatUtilization(financials.utilization)}%`, highlight: financials.utilization > 100 },
+                    ].map((stat, i) => (
+                      <div key={i} style={{
+                        backgroundColor: 'var(--background-color, #ffffff)',
+                        padding: '20px 24px',
+                        borderRadius: 'var(--radius-surface)',
+                        border: '1px solid var(--line)',
+                        boxShadow: 'var(--shadow)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px'
+                      }}>
+                        <p className="details-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink-3)', margin: 0, letterSpacing: '0.5px' }}>{stat.label}</p>
+                        <p className="details-value" style={{ fontSize: '1.25rem', fontWeight: stat.highlight ? 600 : 400, margin: 0, color: stat.highlight ? '#059669' : '#111827' }}>{stat.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="details-breakdown" style={{ borderTop: '2px solid #e5e7eb', paddingTop: '16px' }}>
+                  <table className="data-table" style={{ width: '100%', maxWidth: '600px', marginLeft: 'auto' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ fontWeight: 600 }}>Approved Budget Amount</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{currency.format(approvedBudget)}</td>
+                      </tr>
+                      <tr>
+                        <td>Total Recorded Expenses</td>
+                        <td style={{ textAlign: 'right', color: 'var(--ink-2)' }}>- {currency.format(totalExpense)}</td>
+                      </tr>
+                      <tr>
+                        <td>Budget Utilization</td>
+                        <td style={{ textAlign: 'right', color: 'var(--ink-2)' }}>{formatUtilization(financials.utilization)}%</td>
+                      </tr>
+                      <tr style={{ backgroundColor: 'var(--surface-2)' }}>
+                        <td style={{ fontWeight: 700, fontSize: '1.1em' }}>Remaining Balance</td>
+                        <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '1.1em', color: financials.remainingBudget < 0 ? '#ef4444' : '#10b981' }}>
+                          {currency.format(financials.remainingBudget)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         </td>
@@ -387,9 +633,9 @@ function ProjectsEventsPage() {
       <header className="dashboard-header">
         <div className="header-left">
           <div>
-            <p className="eyebrow">Projects & Events Dashboard</p>
-            <h1>Projects & Events</h1>
-            <p>Monitor budgets, expenses, and completion status of all approved projects and events.</p>
+            <p className="eyebrow">{TAB_HEADINGS[activeTab].eyebrow}</p>
+            <h1>{TAB_HEADINGS[activeTab].title}</h1>
+            <p>{TAB_HEADINGS[activeTab].description}</p>
           </div>
         </div>
       </header>
@@ -410,101 +656,187 @@ function ProjectsEventsPage() {
           >
             Events
           </button>
+          <button
+            className={activeTab === 'payroll' ? 'primary-button' : 'secondary-button'}
+            onClick={() => handleTabChange('payroll')}
+            style={{ minWidth: '150px' }}
+          >
+            Payroll
+          </button>
+          <button
+            className={activeTab === 'archived' ? 'primary-button' : 'secondary-button'}
+            onClick={() => handleTabChange('archived')}
+            style={{ minWidth: '150px' }}
+          >
+            Archived
+          </button>
         </div>
 
-        <RecordFilterBar
-          searchValue={searchFilter}
-          onSearchChange={setSearchFilter}
-          searchLabel={`${activeTab === 'projects' ? 'Project' : 'Event'} search`}
-          searchPlaceholder="Search title, purpose, category, or creator"
-          dateValue={dateFilter}
-          onDateChange={setDateFilter}
-          monthValue={monthFilter}
-          onMonthChange={setMonthFilter}
-          yearValue={yearFilter}
-          onYearChange={setYearFilter}
-          statusValue={statusFilter}
-          onStatusChange={setStatusFilter}
-          hasActiveFilters={Boolean(hasActiveFilters)}
-          onReset={resetFilters}
-          resultCount={filteredItems.length}
-          totalCount={baseItems.length}
-        />
+        {activeTab === 'payroll' ? (
+          <Suspense fallback={<p className="form-note">Loading payroll…</p>}>
+            <PayrollPanel embedded />
+          </Suspense>
+        ) : (
+          <>
+          <RecordFilterBar
+            searchValue={searchFilter}
+            onSearchChange={setSearchFilter}
+            searchLabel={`${TITLE_NOUN[activeTab]} search`}
+            searchPlaceholder="Search title, purpose, category, or creator"
+            dateValue={dateFilter}
+            onDateChange={setDateFilter}
+            monthValue={monthFilter}
+            onMonthChange={setMonthFilter}
+            yearValue={yearFilter}
+            onYearChange={setYearFilter}
+            categoryValue={categoryFilter}
+            onCategoryChange={setCategoryFilter}
+            categoryOptions={categoryOptions}
+            statusValue={statusFilter}
+            onStatusChange={setStatusFilter}
+            hasActiveFilters={Boolean(hasActiveFilters)}
+            onReset={resetFilters}
+            resultCount={filteredItems.length}
+            totalCount={baseItems.length}
+          />
 
-        <div className="overview-card">
-          <p className="eyebrow">Overview</p>
-          <h2>{activeTab === 'projects' ? 'All Approved Projects' : 'All Approved Events'}</h2>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{activeTab === 'projects' ? 'Project Title' : 'Event Title'}</th>
-                <th>Category</th>
-                <th>Date Proposed</th>
-                <th>Total Budget</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.length ? (
-                filteredItems.map((item) => {
-                  const additionalExpenses = expenses.filter(e => e.isAdditional && e.parentProjectId === item.id && !e.archivedAt)
-                  const additionalSum = additionalExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
-                  const approvedBudget = Number(item.amount || 0)
-                  
-                  return (
-                    <Fragment key={item.id}>
-                      <tr
-                        id={`project-row-${item.id}`}
-                        className={item.id === highlightedId ? 'row-highlighted' : undefined}
-                      >
-                        <td data-label={activeTab === 'projects' ? 'Project Title' : 'Event Title'}>{item.project || item.event || 'Untitled'}</td>
-                        <td data-label="Category">{item.category || '—'}</td>
-                        <td data-label="Date Proposed">{item.eventDate || item.date ? new Date(item.eventDate || item.date).toLocaleDateString() : '—'}</td>
-                        <td data-label="Total Budget">{currency.format(approvedBudget)}</td>
-                        <td data-label="Status">
-                          {role === 'SK Chairman' ? (
-                            <select
-                              className="project-status-select"
-                              value={item.projectStatus || 'Ongoing'}
-                              onChange={(e) => updateProjectStatus(item.requestId || item.id, e.target.value)}
-                              aria-label={`Update ${activeTab === 'projects' ? 'Project' : 'Event'} Status`}
-                            >
-                              <option value="Ongoing">Ongoing</option>
-                              <option value="Completed">Completed</option>
-                            </select>
-                          ) : (
-                            <span className={`status-pill status-${(item.projectStatus || 'Ongoing').toLowerCase()}`}>
-                              {item.projectStatus || 'Ongoing'}
-                            </span>
-                          )}
-                        </td>
-                        <td data-label="Actions" className="table-actions">
-                          <button
-                            className="secondary-button"
-                            type="button"
-                            onClick={() => toggleDetails(item.id)}
-                          >
-                            {expanded[item.id] ? 'Hide Details' : 'View Details'}
-                          </button>
-                        </td>
-                      </tr>
-                      {renderItemDetails(item, 7)}
-                    </Fragment>
-                  )
-                })
-              ) : (
+          <div className="overview-card">
+            <p className="eyebrow">Overview</p>
+            <h2>{CARD_HEADINGS[activeTab]}</h2>
+            <div className="table-scroll">
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <td colSpan="7" className="empty-state">
-                    {hasActiveFilters
-                      ? `No ${activeTab === 'projects' ? 'projects' : 'events'} match the selected filters.`
-                      : `No approved ${activeTab === 'projects' ? 'projects' : 'events'} yet.`}
-                  </td>
+                  <th>{TITLE_NOUN[activeTab]} Title</th>
+                  <th>Category</th>
+                  <th>Date Proposed</th>
+                  <th>Total Budget</th>
+                  <th>Status</th>
+                  <th>Receipt</th>
+                  <th>Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filteredItems.length ? (
+                  filteredItems.map((item) => {
+                    const additionalExpenses = expenses.filter(e => e.isAdditional && e.parentProjectId === item.id && !e.archivedAt)
+                    const additionalSum = additionalExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
+                    const approvedBudget = Number(item.amount || 0)
+                    const hasReceipt = item.receiptUrl || item.receipt_url || receiptLinks[item.id]
+                    const isReceiptVerified = calculateProjectEventFinancials(
+                      item, expenses, verifiedReceiptTotals
+                    ).verifiedReceiptTotal > 0
+
+                    return (
+                      <Fragment key={item.id}>
+                        <tr
+                          id={`project-row-${item.id}`}
+                          className={item.id === highlightedId ? 'row-highlighted' : undefined}
+                        >
+                          <td data-label={`${TITLE_NOUN[activeTab]} Title`}>{item.project || item.event || 'Untitled'}</td>
+                          <td data-label="Category">{item.category || '—'}</td>
+                          <td data-label="Date Proposed">{item.eventDate || item.date ? new Date(item.eventDate || item.date).toLocaleDateString() : '—'}</td>
+                          <td data-label="Total Budget">{currency.format(approvedBudget)}</td>
+                          <td data-label="Status">
+                            {item.archivedAt ? (
+                              <span className="status-pill status-cancelled">Archived</span>
+                            ) : role === 'SK Chairman' ? (
+                              <select
+                                className="project-status-select"
+                                value={item.projectStatus || 'Ongoing'}
+                                onChange={(e) => updateProjectStatus(item.requestId || item.id, e.target.value)}
+                                aria-label={`Update ${activeTab === 'projects' ? 'Project' : 'Event'} Status`}
+                              >
+                                <option value="Ongoing">Ongoing</option>
+                                <option value="Completed">Completed</option>
+                              </select>
+                            ) : (
+                              <span className={`status-pill status-${(item.projectStatus || 'Ongoing').toLowerCase()}`}>
+                                {item.projectStatus || 'Ongoing'}
+                              </span>
+                            )}
+                          </td>
+                          <td data-label="Receipt">
+                            {hasReceipt && isReceiptVerified ? (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, backgroundColor: 'var(--positive-soft)', color: 'var(--positive)', whiteSpace: 'nowrap' }}>
+                                ✅ Verified
+                              </span>
+                            ) : hasReceipt ? (
+                              <span
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, backgroundColor: '#fef3c7', color: '#b45309', whiteSpace: 'nowrap' }}
+                                title="Uploaded but not yet verified — does not count toward Total Recorded Expenses"
+                              >
+                                ⏳ Unverified
+                              </span>
+                            ) : (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, backgroundColor: 'var(--negative-soft)', color: 'var(--negative)', whiteSpace: 'nowrap' }}>
+                                ❌ Missing
+                              </span>
+                            )}
+                          </td>
+                          <td data-label="Actions" className="table-actions">
+                            <button
+                              className="secondary-button"
+                              type="button"
+                              onClick={() => toggleDetails(item.id, 'view')}
+                            >
+                              {expanded[item.id] === 'view' ? 'Hide' : 'View'}
+                            </button>
+                            <button
+                              className="secondary-button"
+                              type="button"
+                              onClick={() => toggleDetails(item.id, 'expenses')}
+                            >
+                              {expanded[item.id] === 'expenses' ? 'Hide' : 'Expenses'}
+                            </button>
+                            {canArchive && (item.archivedAt ? (
+                              <button
+                                className="icon-button"
+                                type="button"
+                                disabled={archiveBusyId === item.id}
+                                onClick={() => handleRestore(item)}
+                                title="Restore to the active list"
+                                aria-label={`Restore ${item.project || item.event || 'record'}`}
+                              >
+                                <RotateCcw size={16} aria-hidden="true" />
+                              </button>
+                            ) : (
+                              <button
+                                className="icon-button"
+                                type="button"
+                                disabled={!isArchivable(item) || archiveBusyId === item.id}
+                                onClick={() => handleArchive(item)}
+                                title={isArchivable(item)
+                                  ? 'Archive this completed record'
+                                  : 'Only completed projects and events can be archived'}
+                                aria-label={`Archive ${item.project || item.event || 'record'}`}
+                              >
+                                <Archive size={16} aria-hidden="true" />
+                              </button>
+                            ))}
+                          </td>
+                        </tr>
+                        {renderItemDetails(item, 7)}
+                      </Fragment>
+                    )
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="7" className="empty-state">
+                      {hasActiveFilters
+                        ? `No ${activeTab === 'archived' ? 'archived records' : activeTab} match the selected filters.`
+                        : activeTab === 'archived'
+                          ? 'No archived projects or events yet. Completed records you archive will appear here.'
+                          : `No approved ${activeTab} yet.`}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            </div>
+          </div>
+          </>
+        )}
       </section>
 
       <Suspense fallback={null}>

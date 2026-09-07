@@ -7,51 +7,9 @@ import {
 import RoleGate from '../components/RoleGate'
 import PaginationControls from '../components/PaginationControls'
 import { useAuditLog } from '../context/AuditLogContext'
+import { ACTION_TYPE_GROUPS, MODULE_OPTIONS, RECORD_TYPE_OPTIONS, ROLE_OPTIONS } from '../utils/auditFilters'
 
 // ── Constants ────────────────────────────────────────────────────
-
-const ACTION_TYPES = [
-  'All',
-  // Authentication
-  'User Login', 'User Logout', 'Password Changed', 'Password Updated via OTP',
-  'Email Address Updated', 'Profile Updated',
-  // Budget
-  'Budget Created', 'Budget Updated', 'Budget Deleted',
-  // Requests
-  'Request Created', 'Request Updated', 'Request Submitted',
-  'Request Approved', 'Request Rejected', 'Request Cancelled',
-  'Request Archived', 'Request Restored',
-  // Projects / Events / Payroll
-  'Project Created', 'Project Updated', 'Project Archived', 'Project Restored',
-  'Event Created', 'Event Updated', 'Event Archived', 'Event Restored',
-  'Payroll Created', 'Payroll Updated', 'Payroll Archived', 'Payroll Restored',
-  'Status Changed',
-  // Expenses
-  'Expense Added', 'Expense Updated', 'Expense Deleted',
-  // Documents / Receipts
-  'Document Generated', 'Document Updated', 'Document Archived', 'Document Restored',
-  'Receipt Uploaded', 'Receipt Updated', 'Receipt Deleted',
-  // Backup
-  'Backup Generated', 'Restore Started', 'Restore Completed', 'Restore Failed',
-  // Users
-  'User Created', 'User Updated', 'User Activated', 'User Deactivated', 'User Deleted',
-]
-
-const MODULES = [
-  'All',
-  'Authentication', 'Monthly Budget', 'Budget Requests',
-  'Projects', 'Events', 'Payroll', 'Expenses',
-  'Documents', 'Receipts', 'Backup & Restore', 'User Management',
-]
-
-const RECORD_TYPES = [
-  'All',
-  'User', 'Budget', 'Budget Request', 'Project', 'Event', 'Payroll',
-  'Expense', 'Document', 'Receipt', 'Backup',
-]
-
-const ROLES = ['All', 'SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']
-const STATUSES = ['All', 'Success', 'Failed']
 
 // ── Badge helper ─────────────────────────────────────────────────
 
@@ -171,7 +129,6 @@ const DEFAULT_FILTERS = {
   actionType: 'All',
   module:     'All',
   recordType: 'All',
-  status:     'All',
   dateFrom:   '',
   dateTo:     '',
 }
@@ -179,6 +136,7 @@ const DEFAULT_FILTERS = {
 function AuditTrailPage() {
   const {
     logs,
+    actorOptions,
     isLoadingLogs,
     totalCount,
     totalPages,
@@ -204,12 +162,15 @@ function AuditTrailPage() {
       })
     : '—'
 
-  // Unique user names for filter dropdown (from loaded page)
+  // Every actor in the trail, not only the ones on the page currently loaded —
+  // otherwise the filter can only offer the users you can already see. Names
+  // from the loaded page are merged in so a just-written entry is selectable
+  // before the list is refetched.
   const uniqueActors = useMemo(() => {
-    const s = new Set()
-    logs.forEach(l => { if (l.user_name) s.add(l.user_name) })
-    return Array.from(s).sort()
-  }, [logs])
+    const names = new Set(actorOptions)
+    logs.forEach(l => { if (l.user_name) names.add(l.user_name) })
+    return Array.from(names).sort((a, b) => a.localeCompare(b))
+  }, [actorOptions, logs])
 
   function handleFilterChange(key, value) {
     setLocalFilters(prev => ({ ...prev, [key]: value }))
@@ -360,8 +321,9 @@ function AuditTrailPage() {
                 value={localFilters.userRole}
                 onChange={e => handleFilterChange('userRole', e.target.value)}
               >
-                {ROLES.map(r => (
-                  <option key={r} value={r}>{r === 'All' ? 'All Roles' : r}</option>
+                <option value="All">All Roles</option>
+                {ROLE_OPTIONS.map(r => (
+                  <option key={r} value={r}>{r}</option>
                 ))}
               </select>
 
@@ -371,8 +333,13 @@ function AuditTrailPage() {
                 value={localFilters.actionType}
                 onChange={e => handleFilterChange('actionType', e.target.value)}
               >
-                {ACTION_TYPES.map(t => (
-                  <option key={t} value={t}>{t === 'All' ? 'All Action Types' : t}</option>
+                <option value="All">All Action Types</option>
+                {ACTION_TYPE_GROUPS.map(section => (
+                  <optgroup key={section.group} label={section.group}>
+                    {section.options.map(option => (
+                      <option key={option.label} value={option.label}>{option.label}</option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
 
@@ -382,8 +349,9 @@ function AuditTrailPage() {
                 value={localFilters.module}
                 onChange={e => handleFilterChange('module', e.target.value)}
               >
-                {MODULES.map(m => (
-                  <option key={m} value={m}>{m === 'All' ? 'All Modules' : m}</option>
+                <option value="All">All Modules</option>
+                {MODULE_OPTIONS.map(m => (
+                  <option key={m.label} value={m.label}>{m.label}</option>
                 ))}
               </select>
 
@@ -393,19 +361,9 @@ function AuditTrailPage() {
                 value={localFilters.recordType}
                 onChange={e => handleFilterChange('recordType', e.target.value)}
               >
-                {RECORD_TYPES.map(rt => (
-                  <option key={rt} value={rt}>{rt === 'All' ? 'All Record Types' : rt}</option>
-                ))}
-              </select>
-
-              <select
-                className="panel-select"
-                id="audit-status-filter"
-                value={localFilters.status}
-                onChange={e => handleFilterChange('status', e.target.value)}
-              >
-                {STATUSES.map(s => (
-                  <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>
+                <option value="All">All Record Types</option>
+                {RECORD_TYPE_OPTIONS.map(rt => (
+                  <option key={rt.label} value={rt.label}>{rt.label}</option>
                 ))}
               </select>
             </div>

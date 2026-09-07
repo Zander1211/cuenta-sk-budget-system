@@ -32,7 +32,7 @@ import {
 import { useAnalysisAI } from '../../hooks/useAnalysisAI'
 import { AnalysisLayout, AnalysisFilterBar } from '../../components/analysis/AnalysisLayout'
 import { MetricCard } from '../../components/analysis/AnalysisUI'
-import { buildOverviewInsights } from '../../utils/insights'
+import { buildOverviewInsights, rollUpHealth } from '../../utils/insights'
 import {
   formatCurrency,
   formatPercentage,
@@ -52,7 +52,7 @@ const SEVERITY_META = {
   low: { label: 'Low Risk', Icon: CheckCircle2, colorClass: 'low' },
 }
 
-export default function AnalysisOverviewPage() {
+export default function AnalysisOverviewPage({ embedded = false }) {
   const navigate = useNavigate()
   const { filters, setFilter } = useAnalysisFilters()
 
@@ -99,42 +99,84 @@ export default function AnalysisOverviewPage() {
 
   const ai = useAnalysisAI(aiPayload, { fallback: fallbackInsights, enabled: hasData })
 
-  // Top 4 summary metric cards for desktop (4-col), tablet (2-col), mobile (1-col)
-  const metricCards = [
-    {
-      icon: Wallet,
-      label: 'Total Budget',
-      value: formatCurrency(summary.totalBudget),
-      meta: `Allocated for ${label}`,
-      tone: 'neutral',
-    },
-    {
-      icon: Receipt,
-      label: 'Total Expenses',
-      value: formatCurrency(summary.totalExpenses),
-      meta: 'Approved spending',
-      chip: summary.hasBudgetData ? `${formatPercentage(summary.utilizationRate, 0)} used` : null,
-      tone: summary.utilizationRate > 80 ? 'warning' : 'positive',
-    },
-    {
-      icon: PiggyBank,
-      label: 'Remaining Budget',
-      value: formatCurrency(summary.remainingBalance),
-      meta: summary.remainingBalance < 0 ? 'Over budget' : 'Available to spend',
-      chip: summary.remainingBalance < 0 ? 'Deficit' : 'Surplus',
-      tone: summary.remainingBalance < 0 ? 'danger' : 'positive',
-    },
-    {
-      icon: Clock,
-      label: 'Pending Approvals',
-      value: `${summary.pendingRequests.length} Pending`,
-      meta: summary.missingReceipts > 0
-        ? `${summary.missingReceipts} missing receipts`
-        : 'All receipts attached',
-      chip: summary.pendingRequests.length > 0 ? 'Action required' : 'Up to date',
-      tone: summary.pendingRequests.length > 0 ? 'warning' : 'positive',
-    },
-  ]
+  // Top 4 summary metric cards for desktop (4-col), tablet (2-col), mobile (1-col).
+  //
+  // Scoped to one project these report that record's own budget against its
+  // verified spending, so they agree with Projects & Events and the record
+  // analysis. At period level they report how much of the monthly envelope has
+  // been committed — a different question, so it is labelled as commitment
+  // rather than as spending.
+  const metricCards = summary.isProjectScoped
+    ? [
+        {
+          icon: Wallet,
+          label: 'Approved Budget',
+          value: formatCurrency(summary.totalBudget),
+          meta: `Allocated to ${filters.project}`,
+          tone: 'neutral',
+        },
+        {
+          icon: Receipt,
+          label: 'Actual Spending',
+          value: formatCurrency(summary.totalExpenses),
+          meta: 'From verified receipts',
+          chip: summary.hasBudgetData ? `${formatPercentage(summary.utilizationRate, 0)} used` : null,
+          tone: summary.performance.tone,
+        },
+        {
+          icon: PiggyBank,
+          label: 'Remaining Budget',
+          value: formatCurrency(summary.remainingBalance),
+          meta: summary.remainingBalance < 0 ? 'Over budget' : 'Available to spend',
+          chip: summary.remainingBalance < 0 ? 'Deficit' : 'Surplus',
+          tone: summary.remainingBalance < 0 ? 'danger' : 'positive',
+        },
+        {
+          icon: Clock,
+          label: 'Pending Approvals',
+          value: `${summary.pendingRequests.length} Pending`,
+          meta: summary.missingReceipts > 0
+            ? `${summary.missingReceipts} missing receipts`
+            : 'All receipts attached',
+          chip: summary.pendingRequests.length > 0 ? 'Action required' : 'Up to date',
+          tone: summary.pendingRequests.length > 0 ? 'warning' : 'positive',
+        },
+      ]
+    : [
+        {
+          icon: Wallet,
+          label: 'Total Budget',
+          value: formatCurrency(summary.totalBudget),
+          meta: `Allocated for ${label}`,
+          tone: 'neutral',
+        },
+        {
+          icon: Receipt,
+          label: 'Approved Allocations',
+          value: formatCurrency(summary.totalExpenses),
+          meta: `${formatCurrency(summary.actualExpenses)} actually spent`,
+          chip: summary.hasBudgetData ? `${formatPercentage(summary.utilizationRate, 0)} committed` : null,
+          tone: summary.performance.tone,
+        },
+        {
+          icon: PiggyBank,
+          label: 'Uncommitted Budget',
+          value: formatCurrency(summary.remainingBalance),
+          meta: summary.remainingBalance < 0 ? 'Over budget' : 'Available to allocate',
+          chip: summary.remainingBalance < 0 ? 'Deficit' : 'Surplus',
+          tone: summary.remainingBalance < 0 ? 'danger' : 'positive',
+        },
+        {
+          icon: Clock,
+          label: 'Pending Approvals',
+          value: `${summary.pendingRequests.length} Pending`,
+          meta: summary.missingReceipts > 0
+            ? `${summary.missingReceipts} missing receipts`
+            : 'All receipts attached',
+          chip: summary.pendingRequests.length > 0 ? 'Action required' : 'Up to date',
+          tone: summary.pendingRequests.length > 0 ? 'warning' : 'positive',
+        },
+      ]
 
   // Severity counts for AI summary
   const severityCounts = useMemo(() => {
@@ -148,15 +190,11 @@ export default function AnalysisOverviewPage() {
     )
   }, [ai.insights])
 
-  const overallHealth = useMemo(() => {
-    if (severityCounts.high > 0 || summary.remainingBalance < 0) {
-      return { label: 'Action Needed', tone: 'danger' }
-    }
-    if (severityCounts.medium > 0 || summary.utilizationRate > 80) {
-      return { label: 'Monitor Closely', tone: 'warning' }
-    }
-    return { label: 'Healthy Status', tone: 'positive' }
-  }, [severityCounts, summary.remainingBalance, summary.utilizationRate])
+  const overallHealth = useMemo(() => rollUpHealth({
+    severityCounts,
+    remainingBalance: summary.remainingBalance,
+    utilizationRate: summary.utilizationRate,
+  }), [severityCounts, summary.remainingBalance, summary.utilizationRate])
 
   // Chart data
   const bvaData = useMemo(() => {
@@ -204,7 +242,7 @@ export default function AnalysisOverviewPage() {
       },
       {
         icon: Layers,
-        label: 'Budget Utilization Rate',
+        label: summary.isProjectScoped ? 'Budget Utilization Rate' : 'Budget Committed Rate',
         value: formatPercentage(summary.utilizationRate, 1),
         sub: summary.hasBudgetData
           ? `${formatCurrency(summary.totalExpenses)} of ${formatCurrency(summary.totalBudget)}`
@@ -398,6 +436,7 @@ export default function AnalysisOverviewPage() {
 
   return (
     <AnalysisLayout
+      embedded={embedded}
       breadcrumb={BREADCRUMB}
       title="Financial Analysis & AI Insights"
       description="Consolidated intelligence on budgets, spending velocity, category concentrations, and AI-driven risk detection."
@@ -469,7 +508,10 @@ export default function AnalysisOverviewPage() {
 
             <p className="an-ai-summary-text">
               {ai.summary?.trim() ||
-                `For ${label}, total allocated budget is ${formatCurrency(summary.totalBudget)} with ${formatCurrency(summary.totalExpenses)} in approved disbursements (${formatPercentage(summary.utilizationRate, 1)} utilization). ${severityCounts.high} high-priority, ${severityCounts.medium} medium-priority, and ${severityCounts.low} informational insights detected.`}
+                (summary.isProjectScoped
+                  ? `For ${label}, ${filters.project} holds an approved budget of ${formatCurrency(summary.totalBudget)} with ${formatCurrency(summary.totalExpenses)} in verified spending (${formatPercentage(summary.utilizationRate, 1)} utilized), leaving ${formatCurrency(summary.remainingBalance)}.`
+                  : `For ${label}, total allocated budget is ${formatCurrency(summary.totalBudget)} with ${formatCurrency(summary.totalExpenses)} committed to approved projects and events (${formatPercentage(summary.utilizationRate, 1)} committed) and ${formatCurrency(summary.actualExpenses)} actually spent against verified receipts.`)
+                + ` ${severityCounts.high} high-priority, ${severityCounts.medium} medium-priority, and ${severityCounts.low} informational insights detected.`}
             </p>
 
             <div className="an-ai-counts-row">

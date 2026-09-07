@@ -24,9 +24,12 @@ function getPayrollTotal(breakdown = []) {
   }, 0)
 }
 
-function PayrollPage() {
+// Rendered standalone on its own route and, since the Payroll view moved under
+// Projects & Events, embedded as a tab there. Embedded mode drops the page
+// header and the role gate because the host page already supplies both.
+function PayrollPage({ embedded = false }) {
   const { role, user } = useAuth()
-  const { expenses, totals, updateProjectStatus, refreshExpensesFromSupabase, updateExpenseReceipt } = useBudget()
+  const { expenses, verifiedReceiptTotals, updateProjectStatus, refreshExpensesFromSupabase, updateExpenseReceipt } = useBudget()
   const { addNotification } = useNotifications()
 
   const [expanded, setExpanded] = useState({})
@@ -256,7 +259,6 @@ function PayrollPage() {
     const originalBreakdownItems = breakdownItems.filter(e => !e.isAdditional)
     const breakdownTotal = getPayrollTotal(originalBreakdownItems)
 
-    const verifiedReceiptTotals = totals?.verifiedReceiptTotals || {}
     const financials = calculateProjectEventFinancials(project, expenses, verifiedReceiptTotals)
     
     const additionalExpenses = financials.linkedExpenses
@@ -409,17 +411,19 @@ function PayrollPage() {
     )
   }
 
-  return (
-    <RoleGate allow={['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']}>
-      <header className="dashboard-header">
-        <div className="header-left">
-          <div>
-            <p className="eyebrow">Payroll Dashboard</p>
-            <h1>Approved Payroll</h1>
-            <p>Monitor budgets, expenses, and status of all approved payroll requests.</p>
+  const content = (
+    <>
+      {!embedded && (
+        <header className="dashboard-header">
+          <div className="header-left">
+            <div>
+              <p className="eyebrow">Payroll Dashboard</p>
+              <h1>Approved Payroll</h1>
+              <p>Monitor budgets, expenses, and status of all approved payroll requests.</p>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
       <section className="dashboard-content">
         <RecordFilterBar
@@ -564,6 +568,14 @@ function PayrollPage() {
           </div>
         </div>
       ) : null}
+    </>
+  )
+
+  if (embedded) return content
+
+  return (
+    <RoleGate allow={['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']}>
+      {content}
     </RoleGate>
   )
 }

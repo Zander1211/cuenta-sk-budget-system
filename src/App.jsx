@@ -20,7 +20,6 @@ import NarrativeReportPage from './pages/NarrativeReportPage'
 import AnnualReportPage from './pages/AnnualReportPage'
 import ExpenseSummaryPage from './pages/ExpenseSummaryPage'
 import NewRequestPage from './pages/NewRequestPage'
-import PayrollPage from './pages/PayrollPage'
 import UpdateDetailsPage from './pages/UpdateDetailsPage'
 import BiodataPage from './pages/BiodataPage'
 import ChangePasswordPage from './pages/ChangePasswordPage'
@@ -37,7 +36,6 @@ import { NotificationProvider } from './context/NotificationContext'
 import PublicTransparencyPage from './pages/PublicTransparencyPage'
 
 // Analysis module (lazy-loaded so its charts/hooks don't weigh down other routes)
-const AnalysisOverviewPage = lazy(() => import('./pages/analysis/AnalysisOverviewPage'))
 const BudgetVsActualPage = lazy(() => import('./pages/analysis/BudgetVsActualPage'))
 const ExpensesByCategoryPage = lazy(() => import('./pages/analysis/ExpensesByCategoryPage'))
 const MonthlySpendingPage = lazy(() => import('./pages/analysis/MonthlySpendingPage'))
@@ -73,16 +71,10 @@ function AppRoutes() {
           <Route path="request/new" element={<NewRequestPage />} />
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="approvals" element={<ApprovalsPage />} />
-          {/* Backwards-compatible redirect: old AI Analysis route now points at the Analysis module */}
-          <Route path="ai-analysis" element={<Navigate to="/dashboard/analysis" replace />} />
-          <Route
-            path="analysis"
-            element={
-              <Suspense fallback={<LoadingScreen />}>
-                <AnalysisOverviewPage />
-              </Suspense>
-            }
-          />
+          {/* Analysis overview merged into the Budgets page (now a tab there);
+              keep old bookmarks and the drill-down breadcrumbs working. */}
+          <Route path="ai-analysis" element={<Navigate to="/dashboard/budgets?tab=analysis" replace />} />
+          <Route path="analysis" element={<Navigate to="/dashboard/budgets?tab=analysis" replace />} />
           <Route
             path="analysis/budget-vs-actual"
             element={
@@ -129,7 +121,9 @@ function AppRoutes() {
           <Route path="backup-restore" element={<BackupRestorePage />} />
           <Route path="user-management" element={<UserManagementPage />} />
           <Route path="budget-requests" element={<BudgetRequestsPage />} />
-          <Route path="payroll" element={<PayrollPage />} />
+          {/* Payroll merged into the Projects & Events page (now a tab there);
+              keep old bookmarks working. */}
+          <Route path="payroll" element={<Navigate to="/dashboard/projects-events?tab=payroll" replace />} />
           <Route path="expense-summary" element={<ExpenseSummaryPage />} />
           <Route path="narrative-report" element={<NarrativeReportPage />} />
           <Route path="annual-report" element={<AnnualReportPage />} />

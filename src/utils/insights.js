@@ -9,22 +9,50 @@ function push(list, cond, insight) {
 
 // Short, human-readable justification for a computed budget/utilization severity.
 // Keeps the "Why" line deterministic and consistent with the severity rules.
-function budgetWhy(severity) {
+export function budgetWhy(severity) {
   if (severity === 'high') return 'Spending has exceeded the selected budget threshold.'
   if (severity === 'medium') return 'Spending is approaching the approved budget limit.'
   return 'Budget usage is within a healthy range.'
 }
 
+// The one place a performance tone becomes an insight severity. Every builder
+// goes through this so the same utilization rate cannot be graded "high" on
+// one screen and "medium" on another.
+export function severityForTone(tone) {
+  if (tone === 'danger') return 'high'
+  if (tone === 'warning') return 'medium'
+  return 'low'
+}
+
+// The headline status shown beside "Executive Financial Summary". Rolled up
+// from the insights actually raised rather than from the rate alone, and
+// shared so a record cannot read "Action Needed" on one screen while the same
+// findings read as merely "Fully Utilized" on another.
+export function rollUpHealth({ severityCounts, remainingBalance, utilizationRate }) {
+  if (severityCounts.high > 0 || remainingBalance < 0) {
+    return { label: 'Action Needed', tone: 'danger' }
+  }
+  if (severityCounts.medium > 0 || utilizationRate > 80) {
+    return { label: 'Monitor Closely', tone: 'warning' }
+  }
+  return { label: 'Healthy Status', tone: 'positive' }
+}
+
 export function buildOverviewInsights(summary) {
-  const { utilizationRate, performance, remainingBalance, missingReceipts, pendingRequests, highestCategory, returnedBudget, returnedRecordCount } = summary
+  const { utilizationRate, performance, remainingBalance, missingReceipts, pendingRequests, highestCategory, returnedBudget, returnedRecordCount, isProjectScoped } = summary
   const out = []
-  const perfSeverity = performance.tone === 'danger' ? 'high' : performance.tone === 'warning' ? 'medium' : 'low'
+  const perfSeverity = severityForTone(performance.tone)
+  // Scoped to a project the rate is verified spending against that record's
+  // own budget; at period level it is allocation against the monthly budget.
+  const rateSubject = isProjectScoped
+    ? 'of this record’s approved budget has been spent against verified receipts'
+    : 'of the monthly budget has been committed to approved projects and events'
   out.push({
     type: 'budget',
     severity: perfSeverity,
     title: `Budget performance: ${performance.label}`,
     why: budgetWhy(perfSeverity),
-    detail: `${formatPercentage(utilizationRate)} of approved working budgets has been used. ${performance.message}`,
+    detail: `${formatPercentage(utilizationRate)} ${rateSubject}. ${performance.message}`,
   })
   push(out, remainingBalance < 0, {
     type: 'budget', severity: 'high', title: 'Spending exceeds allocation',

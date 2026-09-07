@@ -102,7 +102,7 @@ function fitImageBox(image, maxWidth, maxHeight) {
 
 // ── Report Header ──────────────────────────────────────────────────────────────
 
-function drawReportHeader(doc, { title, year, month, view = 'yearly', generatedAt }) {
+function drawReportHeader(doc, { title, year, month, view = 'yearly', generatedAt, meta }) {
   let y = MARGIN
 
   // Brand bar
@@ -133,7 +133,7 @@ function drawReportHeader(doc, { title, year, month, view = 'yearly', generatedA
   doc.setFont('Roboto', 'normal')
   setColor(doc, COLORS.muted)
   const selectedMonth = view === 'monthly' && month ? MONTHS_FULL[Number(month) - 1] : 'All months'
-  const metaLine = `Month: ${selectedMonth}  •  Year: ${year}  •  Generated: ${generatedAt}`
+  const metaLine = meta || `Month: ${selectedMonth}  •  Year: ${year}  •  Generated: ${generatedAt}`
   doc.text(metaLine, MARGIN, y)
 
   y += 4
@@ -634,4 +634,129 @@ export async function exportAiAnalysisPdf({ chartRef, distribution, total, total
 
   const periodSlug = filters.view === 'monthly' ? `${filters.year}-${String(filters.month).padStart(2, '0')}` : filters.year
   doc.save(`category-budget-distribution-${periodSlug}.pdf`)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PUBLIC: Export the Expenses page's quarterly Monthly Breakdown
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// `months` mirrors what the Monthly Breakdown cards show on screen: one entry
+// per month of the selected quarter, already totalled by the page so the PDF
+// and the UI can never disagree.
+export function exportMonthlyBreakdownPdf({ months, quarter, year, totals, preparedBy }) {
+  const doc = initPdfDoc('portrait')
+  const generatedAt = new Date().toLocaleString()
+
+  let y = drawReportHeader(doc, {
+    title: 'Monthly Expense Breakdown',
+    year,
+    view: 'yearly',
+    generatedAt,
+    meta: `Quarter ${quarter}  •  Year: ${year}  •  Generated: ${generatedAt}`,
+  })
+
+  // ── Quarter summary ──
+  y = drawSummaryBox(doc, {
+    title: `Quarter ${quarter} ${year} Summary`,
+    startY: y,
+    items: [
+      { label: 'Approved Working Budget', value: formatCurrency(totals.budget, { detailed: true }) },
+      { label: 'Total Spending', value: formatCurrency(totals.spending, { detailed: true }) },
+      {
+        label: 'Remaining Budget',
+        value: formatCurrency(totals.remaining, { detailed: true }),
+        color: totals.remaining < 0 ? COLORS.danger : COLORS.brand,
+      },
+      { label: 'Budget Utilization', value: formatPercentage(totals.utilization, 2) },
+      { label: 'Transactions', value: String(totals.transactions) },
+      { label: 'Receipts Uploaded', value: String(totals.receipts) },
+    ],
+  })
+
+  // ── Month-by-month table ──
+  y = checkPageBreak(doc, y, 24)
+  doc.setFontSize(11)
+  doc.setFont('Roboto', 'bold')
+  setColor(doc, COLORS.dark)
+  doc.text('Monthly Breakdown', MARGIN, y)
+  y += 6
+
+  y = drawDataTable(doc, {
+    startY: y,
+    columns: [
+      { key: 'label', header: 'Month', width: 30 },
+      { key: 'baseAmount', header: 'Expenses', align: 'right', width: 30, format: (r) => formatCurrency(r.baseAmount, { detailed: true }) },
+      { key: 'additionalAmount', header: 'Requisitions', align: 'right', width: 30, format: (r) => formatCurrency(r.additionalAmount, { detailed: true }) },
+      { key: 'total', header: 'Total Spending', align: 'right', width: 32, format: (r) => formatCurrency(r.total, { detailed: true }) },
+      { key: 'transactions', header: 'Txns', align: 'right', width: 16, format: (r) => String(r.transactions) },
+      { key: 'receipts', header: 'Receipts', align: 'right', width: 20, format: (r) => String(r.receipts) },
+      { key: 'utilization', header: 'Utilization', align: 'right', width: 26, format: (r) => (r.budget > 0 ? formatPercentage(r.utilization, 0) : '—') },
+    ],
+    rows: months,
+  })
+
+  // ── Per-month detail: categories, then the transactions behind them ──
+  months.forEach((month) => {
+    if (!month.transactions) return
+
+    y = checkPageBreak(doc, y, 30)
+    y += 4
+    doc.setFontSize(11)
+    doc.setFont('Roboto', 'bold')
+    setColor(doc, COLORS.brand)
+    doc.text(`${month.label} — Expense Details`, MARGIN, y)
+    y += 6
+
+    if (month.categories.length) {
+      doc.setFontSize(9)
+      doc.setFont('Roboto', 'bold')
+      setColor(doc, COLORS.dark)
+      doc.text('Expenses by Category', MARGIN, y)
+      y += 5
+      y = drawDataTable(doc, {
+        startY: y,
+        columns: [
+          { key: 'name', header: 'Category', width: 74 },
+          { key: 'count', header: 'Transactions', align: 'right', width: 34, format: (r) => String(r.count) },
+          { key: 'amount', header: 'Amount', align: 'right', width: 36, format: (r) => formatCurrency(r.amount, { detailed: true }) },
+          { key: 'share', header: 'Share', align: 'right', width: 30, format: (r) => formatPercentage(r.share, 2) },
+        ],
+        rows: month.categories,
+      })
+    }
+
+    doc.setFontSize(9)
+    doc.setFont('Roboto', 'bold')
+    setColor(doc, COLORS.dark)
+    y = checkPageBreak(doc, y, 16)
+    doc.text('Transactions Breakdown', MARGIN, y)
+    y += 5
+    y = drawDataTable(doc, {
+      startY: y,
+      columns: [
+        { key: 'title', header: 'Record', width: 54 },
+        { key: 'date', header: 'Date', width: 26 },
+        { key: 'budget', header: 'Budget', align: 'right', width: 32, format: (r) => formatCurrency(r.budget, { detailed: true }) },
+        { key: 'expenses', header: 'Expenses', align: 'right', width: 32, format: (r) => formatCurrency(r.expenses, { detailed: true }) },
+        { key: 'remaining', header: 'Remaining', align: 'right', width: 30, format: (r) => formatCurrency(r.remaining, { detailed: true }), highlightNegative: true },
+      ],
+      rows: month.items,
+    })
+  })
+
+  if (preparedBy) {
+    y = checkPageBreak(doc, y, 16)
+    doc.setFontSize(8.5)
+    doc.setFont('Roboto', 'normal')
+    setColor(doc, COLORS.muted)
+    doc.text(`Exported by ${preparedBy}`, MARGIN, y + 4)
+  }
+
+  const totalPages = doc.internal.getNumberOfPages()
+  for (let page = 1; page <= totalPages; page += 1) {
+    doc.setPage(page)
+    addFooter(doc, page, totalPages)
+  }
+
+  doc.save(`monthly-expense-breakdown-${year}-Q${quarter}.pdf`)
 }

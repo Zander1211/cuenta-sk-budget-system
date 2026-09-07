@@ -20,6 +20,12 @@ import { monthOptions } from '../../utils/analytics'
 // Splitting it out keeps that weight off users who only view receipts.
 const ReceiptScanModal = lazy(() => import('../../components/receipts/ReceiptScanModal'))
 
+const currency = new Intl.NumberFormat('en-PH', {
+  style: 'currency',
+  currency: 'PHP',
+  maximumFractionDigits: 0,
+})
+
 function ReceiptsPanel() {
   const { user, role } = useAuth()
   const { addNotification } = useNotifications()
@@ -282,6 +288,59 @@ function ReceiptsPanel() {
     }
   }, [approvedExpenses, receiptOwnerByRecordId, receiptSourceExpenses])
 
+  async function verifyReceipt(expense, receipt, amount) {
+    if (String(receipt.id).startsWith('legacy-')) {
+      throw new Error('This receipt predates receipt tracking and cannot be verified here. Re-upload it via Scan & Upload instead.')
+    }
+
+    const mergedMetadata = { ...(receipt.ocrMetadata || {}), totalAmount: amount }
+    const verifiedAt = new Date().toISOString()
+    const verifiedBy = user?.user_metadata?.full_name || user?.email || 'Unknown'
+
+    const { error } = await supabase
+      .from('receipt_records')
+      .update({
+        ocr_metadata: mergedMetadata,
+        ocr_verified_at: verifiedAt,
+        ocr_verified_by: verifiedBy,
+      })
+      .eq('id', receipt.id)
+
+    if (error) throw new Error(error.message || 'Could not verify this receipt.')
+
+    setReceiptLinks((prev) => ({
+      ...prev,
+      [expense.id]: (prev[expense.id] || []).map((entry) =>
+        entry.id === receipt.id
+          ? { ...entry, ocrMetadata: mergedMetadata, ocrVerifiedAt: verifiedAt, ocrVerifiedBy: verifiedBy }
+          : entry
+      ),
+    }))
+
+    setOcrViewer((prev) => (
+      prev && prev.receipt.id === receipt.id
+        ? { ...prev, receipt: { ...prev.receipt, ocrMetadata: mergedMetadata, ocrVerifiedAt: verifiedAt, ocrVerifiedBy: verifiedBy } }
+        : prev
+    ))
+
+    await refreshExpensesFromSupabase()
+
+    const recordName = expense.event || expense.project || 'the selected record'
+    const message = `Receipt verified for ${recordName} at ${currency.format(amount)}.`
+    setFeedback({ type: 'success', message })
+    addNotification({ type: 'system', title: 'Receipt Verified', message })
+    addLog({
+      action: 'Receipt Verified',
+      actionType: 'Receipt Verified',
+      module: 'Receipts',
+      recordType: expense.type || 'Expense',
+      recordId: String(expense.id),
+      description: `Manually verified receipt for ${recordName}`,
+      status: 'Success',
+      remarks: `Verified amount: ${currency.format(amount)}`,
+    })
+  }
+
   function triggerCamera(expense) {
     if (expense?.archivedAt) {
       addNotification({
@@ -413,7 +472,7 @@ function ReceiptsPanel() {
       addNotification({ type: 'system', title: 'Receipt Scanned', message })
       addLog({
         action: 'Receipt Scanned',
-        actionType: 'Upload',
+        actionType: 'Receipt Uploaded',
         module: 'Receipts',
         recordType: expense.type || 'Expense',
         recordId: String(expense.id),
@@ -915,6 +974,8 @@ function ReceiptsPanel() {
           receipt={ocrViewer.receipt}
           expenses={expenses}
           verifiedReceiptTotals={receiptFinancialTotals}
+          canVerify={['SK Chairman', 'SK Treasurer'].includes(role)}
+          onVerify={(amount) => verifyReceipt(ocrViewer.expense, ocrViewer.receipt, amount)}
           onClose={() => setOcrViewer(null)}
         />
       ) : null}

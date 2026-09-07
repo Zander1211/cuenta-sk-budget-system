@@ -113,14 +113,20 @@ export function useFinancialSummary(filters) {
     const targetMonth = filters?.view === 'yearly' ? null : (filters?.month ?? null)
     const targetYear = filters?.year ?? null
     const monthlyBudget = getBudgetTotalForPeriod(budgets, targetMonth, targetYear)
-    // Monthly Remaining Balance = Monthly Budget − Total Approved Allocations
-    const remainingBalance = monthlyBudget - totalApprovedAllocations
-    // totalBudget = monthlyBudget for consistent budget comparisons
-    const totalBudget = monthlyBudget
-    // totalExpenses = approved allocations (what's been officially committed)
-    const totalExpenses = totalApprovedAllocations
-    // utilizationRate = how much of the monthly budget has been allocated
-    const utilizationRate = monthlyBudget > 0 ? safeDivide(totalApprovedAllocations, monthlyBudget) * 100 : 0
+
+    // Filtering to one project narrows the numerator but not the monthly
+    // budget, so measuring that project against the whole barangay's envelope
+    // answers no real question. Scoped to a project, the record's own approved
+    // allocation becomes the denominator and verified receipts the numerator —
+    // matching what Projects & Events and the record analysis report.
+    const isProjectScoped = Boolean(filters?.project) && filters.project !== 'all'
+
+    const totalBudget = isProjectScoped ? totalApprovedAllocations : monthlyBudget
+    // Committed allocations at period level; actual verified spending when
+    // scoped to a single project.
+    const totalExpenses = isProjectScoped ? actualExpenses : totalApprovedAllocations
+    const remainingBalance = totalBudget - totalExpenses
+    const utilizationRate = totalBudget > 0 ? safeDivide(totalExpenses, totalBudget) * 100 : 0
     const performance = getPerformance(utilizationRate)
 
     const prevTotalExpenses = data.previousFinancials.totalApprovedBudget
@@ -145,7 +151,9 @@ export function useFinancialSummary(filters) {
       monthlyBudget,
       totalBudget,
       totalExpenses,
+      totalApprovedAllocations,
       actualExpenses,
+      isProjectScoped,
       remainingBalance,
       utilizationRate,
       performance,
@@ -153,7 +161,7 @@ export function useFinancialSummary(filters) {
       expensesChangePct,
       returnedBudget,
       returnedRecordCount: returnedRecords.length,
-      hasBudgetData: monthlyBudget > 0,
+      hasBudgetData: totalBudget > 0,
     }
   }, [data, budgets, filters])
 }
@@ -382,5 +390,5 @@ export function useBudgetVsActual(filters) {
       highestUtilization,
       hasData: rowsWithData.length > 0,
     }
-  }, [expenses, verifiedReceiptTotals, filters])
+  }, [budgets, expenses, verifiedReceiptTotals, filters])
 }

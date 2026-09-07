@@ -1027,6 +1027,15 @@ function BudgetProvider({ children }) {
     }
   }
 
+  // Budget requests carry the singular type ("Project"), but the audit trail's
+  // module column uses the plural module names.
+  function requestModule(type) {
+    if (type === 'Project') return 'Projects'
+    if (type === 'Event') return 'Events'
+    if (type === 'Payroll') return 'Payroll'
+    return 'Budget Requests'
+  }
+
   async function archiveRequest(requestId, archivedBy) {
     const request = requests.find((item) => String(item.id) === String(requestId))
     if (!request || request.archivedAt) {
@@ -1075,7 +1084,7 @@ function BudgetProvider({ children }) {
     addLog({
       action: `Request Archived — ${request.event}`,
       actionType: 'Request Archived',
-      module: request.type || 'Budget Requests',
+      module: requestModule(request.type),
       recordType: 'Budget Request',
       recordId: requestId,
       description: `Archived budget request for ${request.event}`,
@@ -1131,7 +1140,7 @@ function BudgetProvider({ children }) {
     addLog({
       action: `Request Restored — ${request.event}`,
       actionType: 'Request Restored',
-      module: request.type || 'Budget Requests',
+      module: requestModule(request.type),
       recordType: 'Budget Request',
       recordId: requestId,
       description: `Restored archived budget request for ${request.event}`,
@@ -1557,7 +1566,8 @@ function BudgetProvider({ children }) {
     if (!requestRecord && !expenseRecord) return
 
     const record = requestRecord || expenseRecord
-    const moduleName = record.type === 'Payroll' ? 'Payroll' : record.type === 'Event' ? 'Event' : 'Project'
+    // Plural, to match the module name every other writer uses.
+    const moduleName = record.type === 'Payroll' ? 'Payroll' : record.type === 'Event' ? 'Events' : 'Projects'
 
     // Only approved Project/Event parents take part in the unused-budget
     // return; payroll, requisitions and pending-only requests keep the plain
@@ -1761,7 +1771,7 @@ function BudgetProvider({ children }) {
 
     addLog({
       action: `Additional Requisition Added — ${parentExpense.event || parentExpense.project}`,
-      actionType: 'Record Updated',
+      actionType: 'Requisition Added',
       module: 'Expenses',
       recordType: 'Expense',
       recordId: parentProjectId,

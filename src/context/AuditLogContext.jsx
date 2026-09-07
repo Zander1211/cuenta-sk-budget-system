@@ -25,12 +25,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from './AuthContext'
 import { supabase } from '../supabase/supabaseClient'
+import { resolveActionTypeValues, resolveModuleValues, resolveRecordTypeValues } from '../utils/auditFilters'
 import { logAuditEvent } from '../utils/auditLogger'
 import { getDeviceInfo } from '../utils/deviceInfo'
 
 const AuditLogContext = createContext(null)
 
 const PAGE_SIZE = 15
+// Names are deduplicated client-side; the trail has no distinct-value endpoint.
+const ACTOR_SCAN_LIMIT = 5000
 
 const DEFAULT_FILTERS = {
   search:     '',
@@ -50,6 +53,9 @@ function AuditLogProvider({ children }) {
   const [totalCount, setTotalCount]   = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
   const [activeFilters, setActiveFiltersState] = useState(DEFAULT_FILTERS)
+  // Every name that appears anywhere in the trail, not just on the page that
+  // happens to be loaded — the user filter is built from this.
+  const [actorOptions, setActorOptions] = useState([])
 
   const { user, profileName, role, isAuthenticated } = useAuth()
 
@@ -90,14 +96,26 @@ function AuditLogProvider({ children }) {
       if (filters.userName && filters.userName !== 'All') {
         query = query.eq('user_name', filters.userName)
       }
-      if (filters.actionType && filters.actionType !== 'All') {
-        query = query.ilike('action_type', `%${filters.actionType}%`)
+      // Each option maps to the exact action_type strings it covers (including
+      // the legacy spelling of anything that has since been renamed), so the
+      // filter can no longer half-match or silently miss older rows.
+      const actionTypeValues = resolveActionTypeValues(filters.actionType)
+      if (actionTypeValues) {
+        query = actionTypeValues.length === 1
+          ? query.eq('action_type', actionTypeValues[0])
+          : query.in('action_type', actionTypeValues)
       }
-      if (filters.module && filters.module !== 'All') {
-        query = query.eq('module', filters.module)
+      const moduleValues = resolveModuleValues(filters.module)
+      if (moduleValues) {
+        query = moduleValues.length === 1
+          ? query.eq('module', moduleValues[0])
+          : query.in('module', moduleValues)
       }
-      if (filters.recordType && filters.recordType !== 'All') {
-        query = query.eq('record_type', filters.recordType)
+      const recordTypeValues = resolveRecordTypeValues(filters.recordType)
+      if (recordTypeValues) {
+        query = recordTypeValues.length === 1
+          ? query.eq('record_type', recordTypeValues[0])
+          : query.in('record_type', recordTypeValues)
       }
       if (filters.status && filters.status !== 'All') {
         query = query.eq('status', filters.status)
@@ -132,6 +150,23 @@ function AuditLogProvider({ children }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // ── Distinct actors for the user filter ──────────────────────
+  const fetchActorOptions = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('audit_trail')
+        .select('user_name')
+        .not('user_name', 'is', null)
+        .order('user_name', { ascending: true })
+        .limit(ACTOR_SCAN_LIMIT)
+
+      if (error) throw error
+      setActorOptions([...new Set(data.map((row) => row.user_name).filter(Boolean))])
+    } catch (err) {
+      console.warn('[AuditLogContext] Actor list fetch error:', err)
+    }
+  }, [])
+
   // Apply new filters and reset to page 1
   const setActiveFilters = useCallback((newFilters) => {
     setActiveFiltersState(newFilters)
@@ -142,10 +177,12 @@ function AuditLogProvider({ children }) {
   useEffect(() => {
     if (isAuthenticated) {
       fetchLogs(DEFAULT_FILTERS, 1)
+      fetchActorOptions()
     } else {
       setLogs([])
       setTotalCount(0)
       setCurrentPage(1)
+      setActorOptions([])
     }
 
     const handleRollback = () => {
@@ -157,7 +194,7 @@ function AuditLogProvider({ children }) {
     return () => {
       window.removeEventListener('cuenta:rollback-complete', handleRollback)
     }
-  }, [isAuthenticated, fetchLogs])
+  }, [isAuthenticated, fetchLogs, fetchActorOptions])
 
   // ── Add a log entry ──────────────────────────────────────────
   /**
@@ -263,10 +300,11 @@ function AuditLogProvider({ children }) {
       goToPage,
       activeFilters,
       setActiveFilters,
+      actorOptions,
       PAGE_SIZE,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [logs, fetchLogs, isLoadingLogs, totalCount, totalPages, currentPage, goToPage, activeFilters, setActiveFilters]
+    [logs, fetchLogs, isLoadingLogs, totalCount, totalPages, currentPage, goToPage, activeFilters, setActiveFilters, actorOptions]
   )
 
   return (
