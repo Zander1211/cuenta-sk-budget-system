@@ -29,23 +29,23 @@ function NewRequestPage() {
   const { requests, budgets, addRequest, resubmitRequest } = useBudget()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  
+
   const typeParam = searchParams.get('type') || 'Project'
   const editId = searchParams.get('editId')
-  
+
   const [requestType, setRequestType] = useState(typeParam)
-  
+
   const [event, setEvent] = useState('')
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('')
   const [eventDate, setEventDate] = useState('')
   const [venue, setVenue] = useState('')
   const [description, setDescription] = useState('')
-  
+
   const [breakdownItems, setBreakdownItems] = useState([
     { itemName: '', quantity: 1, unitCost: 0 },
   ])
-  
+
   const [payrollBreakdown, setPayrollBreakdown] = useState([
     { name: '', position: '', honoraria: '', serviceRendered: '', cbcLbf: '' }
   ])
@@ -65,7 +65,7 @@ function NewRequestPage() {
         setVenue(existing.venue || '')
         setDescription(existing.description || '')
         setRejectionReason(existing.rejectionReason || 'No reason provided')
-        
+
         if ((existing.type || 'Project') === 'Payroll') {
           setPayrollBreakdown(existing.breakdown?.length ? existing.breakdown : [{ name: '', position: '', honoraria: '', serviceRendered: '', cbcLbf: '' }])
         } else {
@@ -143,7 +143,7 @@ function NewRequestPage() {
           .select('amount')
           .eq('month', selectedMonth)
           .eq('year', selectedYear)
-        
+
         if (error) {
           throw error
         }
@@ -164,12 +164,17 @@ function NewRequestPage() {
 
   const { totalExpenses: totalApproved } = useBudgetCalculations(selectedMonth, selectedYear)
   const remainingBudget = remoteBudgetAmount - totalApproved;
-  const currentRequestedAmount = requestType === 'Payroll' 
-    ? totalFromPayroll 
+  const currentRequestedAmount = requestType === 'Payroll'
+    ? totalFromPayroll
     : (Number(amount) > 0 ? Number(amount) : totalFromBreakdown);
 
   const showNoBudgetWarning = isValidDate && remoteBudgetAmount <= 0 && !isCheckingBudget;
   const showInsufficientBudgetWarning = isValidDate && !showNoBudgetWarning && currentRequestedAmount > remainingBudget && !isCheckingBudget;
+
+  // The rail only has real figures once a date has picked out a month and that
+  // month has a budget to measure against; until then it shows the running
+  // request total and says what is missing.
+  const hasBudgetFigures = isValidDate && remoteBudgetAmount > 0 && !isCheckingBudget
 
 
   function addPayrollRow() {
@@ -197,7 +202,7 @@ function NewRequestPage() {
         .select('amount')
         .eq('month', selectedMonth)
         .eq('year', selectedYear)
-      
+
       if (error) throw error
 
       latestRemoteBudgetAmount = data && data.length > 0 ? Math.max(...data.map(b => Number(b.amount) || 0)) : 0
@@ -313,88 +318,104 @@ function NewRequestPage() {
         </div>
       </header>
 
+      {/* Two columns: the form fills the main column in a two-up field grid,
+          and the budget check plus the submit buttons ride along in a sticky
+          rail on the right. The old single column of full-width fields ran
+          past the fold with the right half of the card empty. */}
       <section className="dashboard-content">
-        <div className="overview-card">
-          <form className="overview-form" onSubmit={handleSubmit}>
+        <form className="req-form" onSubmit={handleSubmit}>
+          <div className="req-main">
             {editId && rejectionReason && (
-              <div style={{ backgroundColor: 'var(--negative-soft)', color: 'var(--negative)', padding: '12px 16px', borderRadius: 'var(--radius-control)', marginBottom: '16px', border: '1px solid #fca5a5' }}>
-                <strong style={{ display: 'block', marginBottom: '4px' }}>Editing Rejected Request</strong>
+              <div className="req-notice">
+                <strong style={{ display: 'block', marginBottom: '4px' }}>Editing rejected request</strong>
                 <span>Reason for rejection: {rejectionReason}</span>
               </div>
             )}
-            
-            <div className="form-row">
-              <label className="field">
-                <span>{requestType === 'Payroll' ? 'Payroll Title' : 'Title'}</span>
-                <input
-                  type="text"
-                  value={event}
-                  onChange={(e) => setEvent(e.target.value)}
-                  placeholder={requestType === 'Payroll' ? 'e.g. March 2026 Honorarium' : 'e.g. Youth Leadership Summit'}
-                  required
-                />
-              </label>
-              <label className="field">
-                <span>Date</span>
-                <input
-                  type="date"
-                  value={eventDate}
-                  onChange={(e) => setEventDate(e.target.value)}
-                  required
-                />
-              </label>
-              
-              {requestType !== 'Payroll' && (
-                <>
-                  <label className="field">
-                    <span>Venue</span>
-                    <input
-                      type="text"
-                      value={venue}
-                      onChange={(e) => setVenue(e.target.value)}
-                      placeholder="Barangay Covered Court"
-                      required
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Category</span>
-                    <select
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      required
-                    >
-                      <option value="">Select category</option>
-                      {categories.map((item) => (
-                        <option key={item} value={item}>{item}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>Total amount (PHP)</span>
-                    <CurrencyInput
-                      value={amount}
-                      onValueChange={(val) => setAmount(val)}
-                      placeholder="30,000"
-                    />
-                  </label>
-                </>
-              )}
-              
-              <label className="field" style={{ gridColumn: requestType === 'Payroll' ? '1 / -1' : 'auto' }}>
-                <span>Purpose / Description</span>
-                <textarea
-                  rows="3"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe the goals and outcomes"
-                />
-              </label>
+
+            <div className="overview-card">
+              <h2 className="req-section-title req-card-title">
+                {requestType === 'Payroll' ? 'Payroll information' : 'Project information'}
+              </h2>
+
+              <div className="req-grid">
+                <label className="field req-span">
+                  <span>{requestType === 'Payroll' ? 'Payroll Title' : 'Title'}</span>
+                  <input
+                    type="text"
+                    value={event}
+                    onChange={(e) => setEvent(e.target.value)}
+                    placeholder={requestType === 'Payroll' ? 'e.g. March 2026 Honorarium' : 'e.g. Youth Leadership Summit'}
+                    required
+                  />
+                </label>
+
+                <label className={`field ${requestType === 'Payroll' ? 'req-span' : ''}`}>
+                  <span>Date</span>
+                  <input
+                    type="date"
+                    value={eventDate}
+                    onChange={(e) => setEventDate(e.target.value)}
+                    required
+                  />
+                </label>
+
+                {requestType !== 'Payroll' && (
+                  <>
+                    <label className="field">
+                      <span>Venue</span>
+                      <input
+                        type="text"
+                        value={venue}
+                        onChange={(e) => setVenue(e.target.value)}
+                        placeholder="Barangay Covered Court"
+                        required
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Category</span>
+                      <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        required
+                      >
+                        <option value="">Select category</option>
+                        {categories.map((item) => (
+                          <option key={item} value={item}>{item}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Total amount (PHP)</span>
+                      <CurrencyInput
+                        value={amount}
+                        onValueChange={(val) => setAmount(val)}
+                        placeholder="30,000"
+                      />
+                    </label>
+                  </>
+                )}
+
+                <label className="field req-span">
+                  <span>Purpose / Description</span>
+                  <textarea
+                    rows="3"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Describe the goals and outcomes"
+                  />
+                </label>
+              </div>
             </div>
 
             {requestType === 'Payroll' ? (
-              <div className="overview-card" style={{ marginTop: '24px', boxShadow: 'none', border: '1px solid var(--border)', background: 'var(--bone)' }}>
-                <p className="eyebrow">Budget breakdown</p>
-                <h2>Payroll Entries</h2>
+              <div className="overview-card">
+                <div className="req-section-head">
+                  <h2 className="req-section-title req-card-title">Payroll entries</h2>
+                  <button type="button" className="secondary-button req-add-btn" onClick={addPayrollRow}>
+                    <PlusCircle size={16} /> Add row
+                  </button>
+                </div>
+
                 <div style={{ overflowX: 'auto' }}>
                   <table className="add-row-table">
                     <thead>
@@ -415,24 +436,24 @@ function NewRequestPage() {
                         const net = hon - cbc;
                         return (
                           <tr key={index}>
-                            <td>
+                            <td data-label="Name">
                               <input type="text" value={row.name} onChange={(e) => updatePayrollRow(index, 'name', e.target.value)} placeholder="Full name" />
                             </td>
-                            <td>
+                            <td data-label="Position">
                               <input type="text" value={row.position} onChange={(e) => updatePayrollRow(index, 'position', e.target.value)} placeholder="Position" />
                             </td>
-                            <td>
+                            <td data-label="Honoraria">
                               <CurrencyInput value={row.honoraria} onValueChange={(val) => updatePayrollRow(index, 'honoraria', Number(val))} />
                             </td>
-                            <td>
+                            <td data-label="Service">
                               <input type="text" value={row.serviceRendered} onChange={(e) => updatePayrollRow(index, 'serviceRendered', e.target.value)} />
                             </td>
-                            <td>
+                            <td data-label="CBC/LBF">
                               <CurrencyInput value={row.cbcLbf} onValueChange={(val) => updatePayrollRow(index, 'cbcLbf', Number(val))} />
                             </td>
-                            <td className="computed-cell">{currency.format(net)}</td>
+                            <td className="computed-cell" data-label="Net amount">{currency.format(net)}</td>
                             <td>
-                              <button type="button" className="remove-row-btn" onClick={() => removePayrollRow(index)}><Trash2 size={14} /></button>
+                              <button type="button" className="remove-row-btn" onClick={() => removePayrollRow(index)} aria-label="Remove row"><Trash2 size={14} /></button>
                             </td>
                           </tr>
                         )
@@ -440,42 +461,44 @@ function NewRequestPage() {
                     </tbody>
                   </table>
                 </div>
-                <div className="content-actions" style={{ marginTop: '16px' }}>
-                  <button type="button" className="add-row-btn" onClick={addPayrollRow}>
-                    <PlusCircle size={16} /> Add Row
-                  </button>
-                  <div className="form-note">
-                    Total Payroll Budget: {currency.format(totalFromPayroll)}
-                  </div>
-                </div>
+
+                <p className="req-total">
+                  <span>Total payroll budget</span>
+                  <strong>{currency.format(totalFromPayroll)}</strong>
+                </p>
               </div>
             ) : (
-              <div className="overview-card" style={{ marginTop: '24px', boxShadow: 'none', border: '1px solid var(--border)', background: 'var(--bone)' }}>
-                <p className="eyebrow">Budget breakdown</p>
-                <h2>Requisition</h2>
+              <div className="overview-card">
+                <div className="req-section-head">
+                  <h2 className="req-section-title req-card-title">Requisition</h2>
+                  <button type="button" className="secondary-button req-add-btn" onClick={addBreakdownRow}>
+                    <PlusCircle size={16} /> Add requisition
+                  </button>
+                </div>
+
                 <table className="data-table">
                   <thead>
                     <tr>
                       <th>Requisition</th>
-                      <th>Quantity</th>
-                      <th>Unit cost</th>
-                      <th>Total cost</th>
-                      <th></th>
+                      <th style={{ width: '110px' }}>Quantity</th>
+                      <th style={{ width: '150px' }}>Unit cost</th>
+                      <th style={{ width: '130px' }}>Total cost</th>
+                      <th style={{ width: '90px' }}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {breakdownItems.map((item, index) => (
                       <tr key={`row-${index}`}>
-                        <td>
+                        <td data-label="Requisition">
                           <input type="text" value={item.itemName} onChange={(e) => updateBreakdownItem(index, 'itemName', e.target.value)} placeholder="Requisition" />
                         </td>
-                        <td>
+                        <td data-label="Quantity">
                           <input type="number" min="0" value={item.quantity} onChange={(e) => updateBreakdownItem(index, 'quantity', e.target.value)} />
                         </td>
-                        <td>
+                        <td data-label="Unit cost">
                           <CurrencyInput value={item.unitCost} onValueChange={(val) => updateBreakdownItem(index, 'unitCost', val)} />
                         </td>
-                        <td>{currency.format((item.quantity || 0) * (item.unitCost || 0))}</td>
+                        <td data-label="Total cost">{currency.format((item.quantity || 0) * (item.unitCost || 0))}</td>
                         <td>
                           <button type="button" className="text-button" onClick={() => removeBreakdownRow(index)} disabled={breakdownItems.length === 1}>Remove</button>
                         </td>
@@ -483,52 +506,86 @@ function NewRequestPage() {
                     ))}
                   </tbody>
                 </table>
-                <div className="content-actions">
-                  <button type="button" className="secondary-button" onClick={addBreakdownRow}>Add requisition</button>
-                  <div className="form-note">Total cost from breakdown: {currency.format(totalFromBreakdown)}</div>
-                </div>
-              </div>
-            )}
 
-            {isValidDate && remoteBudgetAmount > 0 && !isCheckingBudget && (
-              <div className="overview-card" style={{ marginTop: '24px', boxShadow: 'none', border: '1px solid var(--border)', background: 'var(--bone)', padding: '16px' }}>
-                <h3 style={{ margin: '0 0 12px 0', fontSize: '0.9rem', color: 'var(--ink)' }}>Budget Availability</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.85rem' }}>
-                  <div>Monthly Budget:</div>
-                  <div style={{ textAlign: 'right' }}>{currency.format(remoteBudgetAmount)}</div>
-                  <div>Total Approved:</div>
-                  <div style={{ textAlign: 'right', color: 'var(--ink-soft)' }}>- {currency.format(totalApproved)}</div>
-                  <div style={{ fontWeight: '600', paddingTop: '8px', borderTop: '1px solid var(--border)' }}>Remaining Available:</div>
-                  <div style={{ fontWeight: '600', textAlign: 'right', paddingTop: '8px', borderTop: '1px solid var(--border)', color: remainingBudget < 0 ? '#b91c1c' : 'inherit' }}>{currency.format(remainingBudget)}</div>
-                  <div>Requested Amount:</div>
-                  <div style={{ textAlign: 'right', color: currentRequestedAmount > remainingBudget ? '#b91c1c' : 'inherit' }}>{currency.format(currentRequestedAmount)}</div>
-                </div>
+                <p className="req-total">
+                  <span>Total cost from breakdown</span>
+                  <strong>{currency.format(totalFromBreakdown)}</strong>
+                </p>
               </div>
             )}
+          </div>
 
-            {showNoBudgetWarning && (
-              <div className="form-error" style={{ padding: '12px', backgroundColor: 'var(--negative-soft)', color: 'var(--negative)', borderRadius: 'var(--radius-bar)', marginBottom: '16px', border: '1px solid var(--negative)', marginTop: '16px' }}>
-                No Monthly Budget has been allocated for {monthName}. Please add the Monthly Budget for this month before creating a budget request.
+          <aside className="req-side">
+            <div className="overview-card">
+              <p className="eyebrow">Budget check</p>
+              <h2 className="req-section-title">
+                {isValidDate ? `${monthName} ${selectedYear}` : 'No date selected'}
+              </h2>
+
+              {hasBudgetFigures ? (
+                <dl className="req-summary-rows">
+                  <div>
+                    <dt>Monthly budget</dt>
+                    <dd>{currency.format(remoteBudgetAmount)}</dd>
+                  </div>
+                  <div>
+                    <dt>Total approved</dt>
+                    <dd>− {currency.format(totalApproved)}</dd>
+                  </div>
+                  <div className="is-total">
+                    <dt>Remaining available</dt>
+                    <dd className={remainingBudget < 0 ? 'is-negative' : ''}>
+                      {currency.format(remainingBudget)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>This request</dt>
+                    <dd className={currentRequestedAmount > remainingBudget ? 'is-negative' : ''}>
+                      {currency.format(currentRequestedAmount)}
+                    </dd>
+                  </div>
+                </dl>
+              ) : (
+                <>
+                  <dl className="req-summary-rows">
+                    <div>
+                      <dt>This request</dt>
+                      <dd>{currency.format(currentRequestedAmount)}</dd>
+                    </div>
+                  </dl>
+                  <p className="req-hint">
+                    {isCheckingBudget
+                      ? 'Checking the monthly budget…'
+                      : 'Pick a request date to see how much of that month’s budget is still available.'}
+                  </p>
+                </>
+              )}
+
+              {showNoBudgetWarning && (
+                <p className="req-notice">
+                  No Monthly Budget has been allocated for {monthName}. Please add the Monthly Budget for this month before creating a budget request.
+                </p>
+              )}
+
+              {showInsufficientBudgetWarning && (
+                <p className="req-notice">
+                  Insufficient Monthly Budget. The requested amount exceeds the remaining available budget for the selected month. Please reduce the requested amount or increase the Monthly Budget before submitting this request.
+                </p>
+              )}
+
+              {formError && <p className="req-notice">{formError}</p>}
+
+              <div className="req-actions">
+                <button type="submit" className="primary-button" disabled={showNoBudgetWarning || showInsufficientBudgetWarning || isCheckingBudget}>
+                  {editId ? 'Resubmit Request' : 'Submit Request'}
+                </button>
+                <button type="button" className="secondary-button" onClick={() => navigate('/dashboard/request')}>
+                  Cancel
+                </button>
               </div>
-            )}
-            
-            {showInsufficientBudgetWarning && (
-              <div className="form-error" style={{ padding: '12px', backgroundColor: 'var(--negative-soft)', color: 'var(--negative)', borderRadius: 'var(--radius-bar)', marginBottom: '16px', border: '1px solid var(--negative)', marginTop: '16px' }}>
-                Insufficient Monthly Budget. The requested amount exceeds the remaining available budget for the selected month. Please reduce the requested amount or increase the Monthly Budget before submitting this request.
-              </div>
-            )}
-            {formError && <p className="form-error">{formError}</p>}
-            
-            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-              <button type="submit" className="primary-button" disabled={showNoBudgetWarning || showInsufficientBudgetWarning || isCheckingBudget}>
-                {editId ? 'Resubmit Request' : 'Submit Request'}
-              </button>
-              <button type="button" className="secondary-button" onClick={() => navigate('/dashboard/request')}>
-                Cancel
-              </button>
             </div>
-          </form>
-        </div>
+          </aside>
+        </form>
       </section>
     </RoleGate>
   )

@@ -86,30 +86,6 @@ function ProjectDesignForm({ profileName, role, selectedRequest, onPreview }) {
     setBeneficiaries((prev) => prev.filter((_, i) => i !== index))
   }
 
-  function updateBudgetItem(index, field, value) {
-    setBudgetItems((prev) =>
-      prev.map((item, i) => {
-        if (i !== index) return item
-        const updated = { ...item, [field]: value }
-        if (field === 'qty' || field === 'unitCost') {
-          updated.amount = (Number(updated.qty) || 0) * (Number(updated.unitCost) || 0)
-        }
-        return updated
-      })
-    )
-  }
-
-  function addBudgetItem() {
-    setBudgetItems((prev) => [
-      ...prev,
-      { qty: 1, unitOfIssue: 'pc', description: '', unitCost: 0, amount: 0 },
-    ])
-  }
-
-  function removeBudgetItem(index) {
-    setBudgetItems((prev) => prev.filter((_, i) => i !== index))
-  }
-
   const totalBudget = budgetItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
 
   function handlePreview() {
@@ -259,9 +235,15 @@ function ProjectDesignForm({ profileName, role, selectedRequest, onPreview }) {
         </div>
       </div>
 
-      {/* Budgetary Requirements */}
+      {/* Budgetary Requirements — read-only. This is the approved requisition
+          breakdown; once approved it's final, so nothing here can add,
+          remove, or edit a line. Expenses incurred later belong in the
+          record's own Additional Requisition Breakdown instead. */}
       <div className="doc-form-section">
         <h3>VIII. Budgetary Requirements</h3>
+        <p className="form-note" style={{ marginTop: 0 }}>
+          These items come from the approved budget request and cannot be edited here.
+        </p>
         <div style={{ overflowX: 'auto' }}>
           <table className="add-row-table">
             <thead>
@@ -271,51 +253,16 @@ function ProjectDesignForm({ profileName, role, selectedRequest, onPreview }) {
                 <th>Item Description</th>
                 <th style={{ width: '110px' }}>Est. Unit Cost</th>
                 <th style={{ width: '120px' }}>Est. Amount</th>
-                <th style={{ width: '40px' }}></th>
               </tr>
             </thead>
             <tbody>
               {budgetItems.map((item, idx) => (
                 <tr key={idx}>
-                  <td>
-                    <input
-                      type="number"
-                      min="0"
-                      value={item.qty}
-                      onChange={(e) => updateBudgetItem(idx, 'qty', e.target.value)}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={item.unitOfIssue}
-                      onChange={(e) => updateBudgetItem(idx, 'unitOfIssue', e.target.value)}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={item.description}
-                      onChange={(e) => updateBudgetItem(idx, 'description', e.target.value)}
-                    />
-                  </td>
-                  <td>
-                    <CurrencyInput
-                      value={item.unitCost}
-                      onValueChange={(val) => updateBudgetItem(idx, 'unitCost', Number(val))}
-                    />
-                  </td>
+                  <td>{item.qty}</td>
+                  <td>{item.unitOfIssue || '—'}</td>
+                  <td>{item.description || '—'}</td>
+                  <td>{currency.format(item.unitCost || 0)}</td>
                   <td className="computed-cell">{currency.format(item.amount || 0)}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="remove-row-btn"
-                      onClick={() => removeBudgetItem(idx)}
-                      title="Remove"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </td>
                 </tr>
               ))}
               {budgetItems.length ? (
@@ -324,22 +271,16 @@ function ProjectDesignForm({ profileName, role, selectedRequest, onPreview }) {
                     TOTAL
                   </td>
                   <td className="computed-cell">{currency.format(totalBudget)}</td>
-                  <td></td>
                 </tr>
               ) : (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', color: 'var(--ink-soft)' }}>
-                    Select a request to auto-fill or add items manually.
+                  <td colSpan={5} style={{ textAlign: 'center', color: 'var(--ink-soft)' }}>
+                    Select an approved request above to load its requisition items.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
-        </div>
-        <div className="add-row-actions">
-          <button type="button" className="add-row-btn" onClick={addBudgetItem}>
-            <PlusCircle size={16} /> Add item
-          </button>
         </div>
         <label className="field" style={{ marginTop: '8px' }}>
           <span>Source of Fund</span>

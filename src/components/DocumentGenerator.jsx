@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useBudget } from '../context/BudgetContext'
 import { useAuth } from '../context/AuthContext'
 import { useDocuments } from '../context/DocumentContext'
@@ -15,7 +16,6 @@ import ItineraryOfTravelForm from './documents/ItineraryOfTravelForm'
 import ItineraryOfTravelPreview from './documents/ItineraryOfTravelPreview'
 import TransmittalLetterForm from './documents/TransmittalLetterForm'
 import TransmittalLetterPreview from './documents/TransmittalLetterPreview'
-import CurrencyInput from './CurrencyInput'
 import './DocumentGenerator.css'
 
 const currency = new Intl.NumberFormat('en-PH', {
@@ -31,10 +31,15 @@ const DOC_TYPES = [
   { id: 'project', label: 'Project Design' },
   { id: 'itinerary', label: 'Itinerary of Travel' },
   { id: 'transmittal', label: 'Transmittal Letter' },
+  // No inline form — see the docType === 'narrative' branch below, which
+  // hands off to the full Narrative Report builder instead.
+  { id: 'narrative', label: 'Narrative & Photo Documentation' },
 ]
 
 // Document types that use the request auto-fill dropdown
 const REQUEST_LINKED_DOCS = ['pr', 'project', 'payroll']
+
+const RECORD_KIND_LABEL = { project: 'Project', event: 'Event', payroll: 'Payroll' }
 
 const DEFAULTS = {
   barangay: 'UPPER GLAD 2',
@@ -92,13 +97,36 @@ async function getNextPrNumber() {
   }
 }
 
-function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
+// `presetRecord` launches the generator already linked to one Project, Event,
+// or Payroll (an approved `expenses` row from Projects & Events / Payroll) —
+// the "Generate Documents" button on those pages. `recordKind` says which
+// kind it is ('project' | 'event' | 'payroll'), which decides both the
+// allowed document list (Project Design is Project-only; Payroll pages only
+// offer the Payroll document) and how the saved document gets linked.
+// `allowedDocTypes` restricts the type selector; omit it to show everything,
+// as the standalone Documents → Create Document flow still does.
+function DocumentGenerator({
+  initialDocType = 'pr',
+  onCancel,
+  presetRecord = null,
+  recordKind = null,
+  allowedDocTypes = null,
+  onSaved,
+}) {
   const { requests } = useBudget()
   const { profileName, role } = useAuth()
   const { addDocument } = useDocuments()
   const activeChairmanName = useActiveSkChairmanName()
+  const navigate = useNavigate()
 
-  const [docType, setDocType] = useState(initialDocType)
+  const visibleDocTypes = useMemo(
+    () => (allowedDocTypes ? DOC_TYPES.filter((dt) => allowedDocTypes.includes(dt.id)) : DOC_TYPES),
+    [allowedDocTypes]
+  )
+
+  const [docType, setDocType] = useState(() =>
+    visibleDocTypes.some((dt) => dt.id === initialDocType) ? initialDocType : (visibleDocTypes[0]?.id || 'pr')
+  )
   const [selectedRequestId, setSelectedRequestId] = useState('')
   const [preview, setPreview] = useState(null)
   const [generatingNumber, setGeneratingNumber] = useState(false)
@@ -112,6 +140,11 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
   const [requestedByName, setRequestedByName] = useState('')
   const [approvedByName, setApprovedByName] = useState('')
   const [items, setItems] = useState([])
+  // Which preset record's fields the PR item-breakdown state currently
+  // reflects — lets the derivation below run exactly once per record,
+  // adjusted during render rather than in an effect (presetRecord is a prop
+  // available from the first render, so there is nothing to wait on).
+  const [appliedPresetId, setAppliedPresetId] = useState(null)
 
   // Default "Approved By" to the active SK Chairman's name, editable.
   useEffect(() => {
@@ -140,19 +173,56 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
   )
 
   useEffect(() => {
+    if (presetRecord) return
     if (docType === 'payroll' && eligibleRequests.length === 1 && !selectedRequestId) {
       setSelectedRequestId(eligibleRequests[0].id)
     }
-  }, [docType, eligibleRequests, selectedRequestId])
+  }, [presetRecord, docType, eligibleRequests, selectedRequestId])
 
-  const selectedRequest = useMemo(
-    () => (selectedRequestId ? requests.find((r) => r.id === selectedRequestId) : null),
-    [selectedRequestId, requests]
-  )
+  // A preset record IS the selected request — it comes from the Project/Event
+  // or Payroll row that opened this generator, so there is nothing to pick.
+  const selectedRequest = useMemo(() => {
+    if (presetRecord) return presetRecord
+    return selectedRequestId ? requests.find((r) => r.id === selectedRequestId) : null
+  }, [presetRecord, selectedRequestId, requests])
 
   const totalAmount = items.reduce((sum, item) => sum + (Number(item.total) || 0), 0)
 
-  const showRequestSelector = REQUEST_LINKED_DOCS.includes(docType)
+  const showRequestSelector = !presetRecord && REQUEST_LINKED_DOCS.includes(docType)
+
+  // Same item/date mapping the "Select existing request" dropdown applies on
+  // pick, run once for the preset record so the Purchase Request form (the
+  // only doc type with its own item-breakdown state) starts pre-filled.
+  if (presetRecord && presetRecord.id !== appliedPresetId) {
+    setAppliedPresetId(presetRecord.id)
+
+    const breakdown = Array.isArray(presetRecord.breakdown) ? presetRecord.breakdown : []
+    const mappedItems = breakdown
+      .filter((item) => item.itemName || item.quantity > 0)
+      .map((item) => ({
+        itemName: item.itemName || '',
+        quantity: Number(item.quantity) || 0,
+        unitOfIssue: 'pc',
+        unit: 'pc',
+        unitCost: Number(item.unitCost) || 0,
+        total: (Number(item.quantity) || 0) * (Number(item.unitCost) || 0),
+      }))
+
+    if (!mappedItems.length && presetRecord.amount > 0) {
+      mappedItems.push({
+        itemName: presetRecord.event || presetRecord.description || 'Budget allocation',
+        quantity: 1,
+        unitOfIssue: 'lot',
+        unit: 'lot',
+        unitCost: Number(presetRecord.amount) || 0,
+        total: Number(presetRecord.amount) || 0,
+      })
+    }
+
+    setItems(mappedItems)
+    setDocDate(presetRecord.eventDate || todayISO())
+    setRequestedByName((prev) => prev || profileName || presetRecord.requestedBy || '')
+  }
 
   function handleSelectRequest(e) {
     const requestId = e.target.value
@@ -192,30 +262,6 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
     setItems(mappedItems)
     setDocDate(request.eventDate || todayISO())
     setRequestedByName(profileName || request.requestedBy || '')
-  }
-
-  function updateItem(index, field, value) {
-    setItems((prev) =>
-      prev.map((item, i) => {
-        if (i !== index) return item
-        const updated = { ...item, [field]: value }
-        if (field === 'quantity' || field === 'unitCost') {
-          updated.total = (Number(updated.quantity) || 0) * (Number(updated.unitCost) || 0)
-        }
-        return updated
-      })
-    )
-  }
-
-  function addItemRow() {
-    setItems((prev) => [
-      ...prev,
-      { itemName: '', quantity: 1, unitOfIssue: 'pc', unit: 'pc', unitCost: 0, total: 0 },
-    ])
-  }
-
-  function removeItemRow(index) {
-    setItems((prev) => prev.filter((_, i) => i !== index))
   }
 
   async function handlePreview(e) {
@@ -264,21 +310,36 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
 
     let name = 'Document'
     const typeLabel = DOC_TYPES.find(d => d.id === docType)?.label || 'Document'
-    
+
     if (docType === 'dv' && previewData.data.dvNumber) name = `Disbursement Voucher ${previewData.data.dvNumber}`
     else if (docType === 'payroll' && previewData.data.payrollNumber) name = `Payroll ${previewData.data.payrollNumber}`
     else if (docType === 'pr' && previewData.data.prNumber) name = `Purchase Request ${previewData.data.prNumber}`
     else name = typeLabel
 
-    await addDocument({
+    // A document generated from a specific Project/Event/Payroll links to
+    // that record's own id and kind, not to the underlying budget request —
+    // that is what lets the Documents page (and, eventually, that record's
+    // own history) look the reference up directly instead of by title text.
+    const saved = await addDocument({
       name,
       project: selectedRequest ? selectedRequest.event : '',
       generatedBy: profileName || role,
       type: typeLabel,
       data: previewData,
-      relatedEntityType: selectedRequest ? (docType === 'payroll' ? 'payroll' : 'request') : null,
-      relatedEntityId: selectedRequest?.id || null,
+      relatedEntityType: presetRecord ? recordKind : (selectedRequest ? (docType === 'payroll' ? 'payroll' : 'request') : null),
+      relatedEntityId: presetRecord ? presetRecord.id : (selectedRequest?.id || null),
     })
+
+    if (onSaved) onSaved(saved)
+  }
+
+  // Narrative & Photo Documentation has its own multi-section builder with
+  // photo uploads (NarrativeReportPage) rather than an inline form here.
+  // Hand off to it, carrying the underlying request id so it can auto-select
+  // and pre-fill the same record instead of asking the user to pick again.
+  function handleOpenNarrativeReport() {
+    const requestId = presetRecord ? (presetRecord.requestId || presetRecord.id) : selectedRequest?.id
+    navigate(`/dashboard/narrative-report${requestId ? `?requestId=${encodeURIComponent(requestId)}` : ''}`)
   }
 
   // Render the form for the current doc type
@@ -294,7 +355,9 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
           />
         )
       case 'payroll':
-        if (eligibleRequests.length === 0) return null;
+        // The "no eligible request" guard only applies to the standalone
+        // dropdown flow — a preset record IS already an approved payroll row.
+        if (!presetRecord && eligibleRequests.length === 0) return null;
         return (
           <PayrollForm
             profileName={profileName}
@@ -328,6 +391,10 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
             onPreview={handleNewDocPreview}
           />
         )
+      case 'narrative':
+        // Rendered as a call-to-action card in the main return instead —
+        // see handleOpenNarrativeReport.
+        return null
       default:
         // PR / PO — render the existing inline form
         return null
@@ -357,24 +424,62 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
   }
 
   const isPrOrPo = docType === 'pr'
+  const recordTitle = presetRecord ? (presetRecord.event || presetRecord.project || 'this record') : ''
 
   return (
     <div className="doc-gen-section">
-      {/* Document type toggle */}
+      {/* Document type toggle — a single-option list (Payroll pages) shows a
+          static label instead of a one-item dropdown. */}
       <div className="doc-type-toggle" style={{ marginBottom: '16px', display: 'block' }}>
-        <label className="field">
-          <span>Select Document Type</span>
-          <select className="panel-select" style={{ width: '100%', maxWidth: '400px' }} value={docType} onChange={(e) => setDocType(e.target.value)}>
-            {DOC_TYPES.map((dt) => (
-              <option key={dt.id} value={dt.id}>
-                {dt.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {visibleDocTypes.length > 1 ? (
+          <label className="field">
+            <span>Select Document Type</span>
+            <select className="panel-select" style={{ width: '100%', maxWidth: '400px' }} value={docType} onChange={(e) => setDocType(e.target.value)}>
+              {visibleDocTypes.map((dt) => (
+                <option key={dt.id} value={dt.id}>
+                  {dt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <div className="field">
+            <span>Document Type</span>
+            <p style={{ margin: '4px 0 0', fontWeight: 600, color: 'var(--text-primary)' }}>
+              {visibleDocTypes[0]?.label || 'Document'}
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Select existing request — only for request-linked docs */}
+      {/* Launched from a specific Project/Event/Payroll: say so instead of
+          asking the user to pick the request again — that's the whole point
+          of generating from the record directly. */}
+      {presetRecord ? (
+        <div
+          className="doc-gen-linked-banner"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '12px 16px',
+            marginBottom: '16px',
+            borderRadius: 'var(--radius-control)',
+            background: 'var(--accent-soft, var(--surface-2))',
+            border: '1px solid var(--line)',
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Linked to</span>
+          <strong style={{ color: 'var(--text-primary)' }}>{recordTitle}</strong>
+          <span className="status-pill status-completed" style={{ marginLeft: 'auto' }}>
+            {RECORD_KIND_LABEL[recordKind] || 'Record'}
+          </span>
+        </div>
+      ) : null}
+
+      {/* Select existing request — only for request-linked docs, and only
+          when this generator was not opened from a specific record. */}
       {showRequestSelector ? (
         <div className="doc-gen-form" style={{ marginBottom: isPrOrPo ? 0 : '16px' }}>
           {docType === 'payroll' && eligibleRequests.length === 0 ? (
@@ -467,10 +572,18 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
             </label>
           </div>
 
-          {/* Item breakdown editor */}
+          {/* Approved requisition items — read-only. Once a budget request is
+              approved this breakdown is final: nothing here may add, remove,
+              or edit a row, so what prints on the Purchase Request always
+              matches what the SK Chairman actually approved. Expenses
+              incurred afterward belong in the record's own Additional
+              Requisition Breakdown, not here. */}
           <div className="overview-card doc-breakdown-editor">
             <p className="eyebrow">Item breakdown</p>
-            <h2>Requisition items</h2>
+            <h2>Approved requisition items</h2>
+            <p className="form-note" style={{ marginTop: 0 }}>
+              These items come from the approved budget request and cannot be edited here.
+            </p>
             <table className="data-table">
               <thead>
                 <tr>
@@ -480,7 +593,6 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
                   <th>Qty</th>
                   <th>Unit Cost</th>
                   <th>Total</th>
-                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -488,64 +600,23 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
                   items.map((item, index) => (
                     <tr key={index}>
                       <td>{index + 1}</td>
-                      <td>
-                        <input
-                          type="text"
-                          value={item.unitOfIssue || item.unit || ''}
-                          onChange={(e) =>
-                            updateItem(index, 'unitOfIssue', e.target.value)
-                          }
-                          style={{ width: '60px' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          value={item.itemName}
-                          onChange={(e) => updateItem(index, 'itemName', e.target.value)}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.quantity}
-                          onChange={(e) => updateItem(index, 'quantity', e.target.value)}
-                          style={{ width: '70px' }}
-                        />
-                      </td>
-                      <td>
-                        <CurrencyInput
-                          value={item.unitCost}
-                          onValueChange={(val) => updateItem(index, 'unitCost', val)}
-                          style={{ width: '90px' }}
-                        />
-                      </td>
+                      <td>{item.unitOfIssue || item.unit || '—'}</td>
+                      <td>{item.itemName || '—'}</td>
+                      <td>{item.quantity}</td>
+                      <td>{currency.format(item.unitCost || 0)}</td>
                       <td>{currency.format(item.total || 0)}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="text-button"
-                          onClick={() => removeItemRow(index)}
-                        >
-                          Remove
-                        </button>
-                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="7" className="empty-state">
-                      Select a request above or add items manually.
+                    <td colSpan="6" className="empty-state">
+                      Select an approved request above to load its requisition items.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
-            <div className="content-actions" style={{ marginTop: '8px' }}>
-              <button type="button" className="secondary-button" onClick={addItemRow}>
-                Add item
-              </button>
+            <div className="content-actions" style={{ marginTop: '8px', justifyContent: 'flex-end' }}>
               <div className="form-note">
                 Total: {currency.format(totalAmount)}
               </div>
@@ -567,7 +638,25 @@ function DocumentGenerator({ initialDocType = 'pr', onCancel }) {
       ) : null}
 
       {/* New document type forms */}
-      {!isPrOrPo ? renderForm() : null}
+      {!isPrOrPo && docType !== 'narrative' ? renderForm() : null}
+
+      {/* Narrative & Photo Documentation hands off to its own multi-section
+          builder rather than rendering inline here. */}
+      {docType === 'narrative' ? (
+        <div className="overview-card" style={{ boxShadow: 'none', border: '1px solid var(--border)', background: 'var(--bone)' }}>
+          <p className="eyebrow">Narrative & Photo Documentation</p>
+          <h2>Continue in the Narrative Report builder</h2>
+          <p className="form-note">
+            This document has its own multi-section builder with photo uploads.
+            {presetRecord ? ` It will open pre-linked to "${recordTitle}".` : ''}
+          </p>
+          <div className="doc-gen-actions">
+            <button type="button" className="primary-button" onClick={handleOpenNarrativeReport}>
+              Open Narrative & Photo Documentation
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Preview overlay */}
       {renderPreview()}

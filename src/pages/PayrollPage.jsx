@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, useEffect, useRef } from 'react'
+import { FileText } from 'lucide-react'
 import { useBudget } from '../context/BudgetContext'
 import RoleGate from '../components/RoleGate'
 import { useAuth } from '../context/AuthContext'
@@ -6,6 +7,7 @@ import { supabase } from '../supabase/supabaseClient'
 
 import CurrencyInput from '../components/CurrencyInput'
 import RecordFilterBar from '../components/RecordFilterBar'
+import GenerateDocumentsModal from '../components/documents/GenerateDocumentsModal'
 import { useNotifications } from '../context/NotificationContext'
 import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
 import { calculateProjectEventFinancials } from '../utils/projectEventFinancials'
@@ -33,6 +35,12 @@ function PayrollPage({ embedded = false }) {
   const { addNotification } = useNotifications()
 
   const [expanded, setExpanded] = useState({})
+
+  // Same gate as the Documents page's own "Create Document" and the Projects
+  // & Events "Documents" button: full generation access is Chairman/
+  // Treasurer only.
+  const canGenerateDocs = ['SK Chairman', 'SK Treasurer'].includes(role)
+  const [docGenTarget, setDocGenTarget] = useState(null) // the payroll record, or null
 
   const currentYear = new Date().getFullYear()
 
@@ -496,6 +504,15 @@ function PayrollPage({ embedded = false }) {
                           >
                             {expanded[project.id] ? 'Hide Details' : 'View Details'}
                           </button>
+                          {canGenerateDocs && (
+                            <button
+                              className="secondary-button"
+                              type="button"
+                              onClick={() => setDocGenTarget(project)}
+                            >
+                              <FileText size={14} /> Payroll Documents
+                            </button>
+                          )}
                         </td>
                       </tr>
                       {renderPayrollDetails(project, 6)}
@@ -568,6 +585,14 @@ function PayrollPage({ embedded = false }) {
           </div>
         </div>
       ) : null}
+
+      {docGenTarget && (
+        <GenerateDocumentsModal
+          record={docGenTarget}
+          kind="payroll"
+          onClose={() => setDocGenTarget(null)}
+        />
+      )}
     </>
   )
 

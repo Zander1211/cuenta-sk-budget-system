@@ -4888,6 +4888,72 @@ td.nr-info-label {
 	justify-content: flex-end;
 }
 
+/* ---------- Row actions menu (RowActionsMenu) ----------
+   A table row's secondary actions collapsed behind a single "⋮" trigger —
+   used where View/Expenses/etc. stay as their own buttons but every extra
+   action past that would force the row into a horizontal scroll just to
+   reach it. Same visual language as .request-dropdown-menu (surface, line,
+   shadow, radius); a separate pair of classes because that one is a header
+   trigger's dropdown, not a per-row one, and the two contexts position
+   differently. */
+.row-menu-wrap {
+	position: relative;
+	display: inline-flex;
+}
+
+.row-menu {
+	position: absolute;
+	top: 100%;
+	right: 0;
+	margin-top: 6px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-control);
+	box-shadow: var(--shadow-lift);
+	z-index: 20;
+	min-width: 190px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	padding: 6px;
+	gap: 2px;
+}
+
+.row-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 9px 10px;
+	text-align: left;
+	background: transparent;
+	border: none;
+	border-radius: var(--radius-bar);
+	cursor: pointer;
+	color: var(--ink);
+	font-size: 0.88rem;
+	font-weight: 600;
+	font-family: inherit;
+	transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.row-menu-item:hover:not(:disabled) {
+	background: var(--surface-2);
+}
+
+.row-menu-item:disabled {
+	color: var(--ink-3);
+	cursor: not-allowed;
+}
+
+.row-menu-item.is-danger {
+	color: var(--negative);
+}
+
+.row-menu-item.is-danger:hover:not(:disabled) {
+	background: var(--negative-soft);
+}
+
 /* ═══════════════════════════════════════════════════════ */
 /*  COMPREHENSIVE RESPONSIVE OVERRIDES                     */
 /* ═══════════════════════════════════════════════════════ */
@@ -8719,5 +8785,223 @@ td.nr-info-label {
 
 	.record-filter-field--search {
 		grid-column: auto;
+	}
+}
+
+
+/* ── Request form (New / Revise request) ──────────────────────────────
+   The form was one column of full-width inputs, so a five-field request
+   ran well past the fold with the right half of the card empty. It is now
+   a two-up field grid in a main column beside a sticky rail that carries
+   the budget check and the submit buttons — the figures the treasurer is
+   checking against stay in view while the form is filled, and the whole
+   request fits a laptop screen without scrolling. */
+.req-form {
+	display: grid;
+	gap: var(--space-6);
+	align-items: start;
+}
+
+.req-main,
+.req-side {
+	/* minmax(0, 1fr) elsewhere in this file for the same reason: a bare
+	   auto minimum lets the requisition table inflate its track past the
+	   viewport. */
+	display: grid;
+	gap: var(--space-5);
+	min-width: 0;
+}
+
+/* 1180px, not 1024: the app's own 264px nav sidebar comes off the viewport
+   first, so splitting any earlier leaves the field columns too narrow to
+   read a project title in. */
+@media (min-width: 1180px) {
+	.req-form {
+		grid-template-columns: minmax(0, 1fr) 280px;
+	}
+
+	.req-side {
+		position: sticky;
+		top: var(--space-6);
+	}
+}
+
+/* Tighter than the page default — three stacked cards at the full card pad
+   is most of the height this layout is trying to win back. */
+.req-form .overview-card {
+	padding: var(--space-6);
+}
+
+.req-form .overview-card:hover {
+	box-shadow: var(--shadow);
+}
+
+.req-section-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-4);
+	flex-wrap: wrap;
+	margin-bottom: var(--space-5);
+}
+
+/* One line per card, not an eyebrow stacked over a heading — the page header
+   already says which request this is. */
+.req-card-title {
+	margin: 0 0 var(--space-5);
+}
+
+.req-section-head .req-card-title {
+	margin-bottom: 0;
+}
+
+.req-section-title {
+	margin: 2px 0 0;
+	font-family: var(--font-display);
+	font-size: var(--text-subsection-title);
+	font-weight: var(--weight-section);
+	color: var(--ink);
+	line-height: 1.3;
+}
+
+/* Two fields to a row; the title and the description take the full width
+   because their content is long. */
+.req-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--space-5);
+}
+
+.req-grid .req-span {
+	grid-column: 1 / -1;
+}
+
+.req-total {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-4);
+	margin: var(--space-5) 0 0;
+	padding-top: var(--space-4);
+	border-top: 1px solid var(--line);
+	font-size: var(--text-small);
+	color: var(--ink-2);
+}
+
+.req-total strong {
+	font-size: var(--text-body);
+	color: var(--ink);
+	font-variant-numeric: tabular-nums;
+}
+
+/* ── Summary rail ── */
+.req-summary-rows {
+	display: grid;
+	gap: var(--space-3);
+	margin: var(--space-5) 0 0;
+}
+
+.req-summary-rows>div {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-3);
+	font-size: var(--text-small);
+}
+
+.req-summary-rows dt {
+	color: var(--ink-2);
+}
+
+.req-summary-rows dd {
+	margin: 0;
+	font-weight: 600;
+	color: var(--ink);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.req-summary-rows .is-total {
+	margin-top: var(--space-1);
+	padding-top: var(--space-3);
+	border-top: 1px solid var(--line);
+}
+
+.req-summary-rows .is-total dt {
+	color: var(--ink);
+	font-weight: 600;
+}
+
+.req-summary-rows dd.is-negative {
+	color: var(--negative);
+}
+
+.req-hint {
+	margin: var(--space-4) 0 0;
+	font-size: var(--text-small);
+	color: var(--ink-3);
+	line-height: 1.5;
+}
+
+.req-notice {
+	margin: var(--space-4) 0 0;
+	padding: var(--space-3) var(--space-4);
+	border-radius: var(--radius-control);
+	background: var(--negative-soft);
+	border: 1px solid var(--negative);
+	color: var(--negative);
+	font-size: var(--text-small);
+	line-height: 1.5;
+}
+
+.req-main>.req-notice {
+	margin: 0;
+}
+
+.req-actions {
+	display: grid;
+	gap: var(--space-3);
+	margin-top: var(--space-5);
+}
+
+.req-actions .primary-button,
+.req-actions .secondary-button {
+	width: 100%;
+}
+
+/* On a phone the shared .data-table rule turns each row into a card with the
+   label left and the value right. That reads well for a figure, but it leaves
+   a requisition's text box squeezed into whatever is left of the row. Cells
+   holding an input put it on its own line at full width instead; the computed
+   cells keep the label/value pairing. */
+@media (max-width: 600px) {
+
+	.req-form .data-table td:has(input) {
+		flex-direction: column;
+		align-items: stretch;
+		text-align: left;
+		gap: 6px;
+	}
+
+	.req-form .data-table td:has(input)::before {
+		min-width: 0;
+	}
+}
+
+/* ── Narrow: one field per row, and the rail returns to the page flow ── */
+@media (max-width: 760px) {
+	.req-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.req-section-head {
+		align-items: stretch;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+
+	.req-section-head .req-add-btn {
+		width: 100%;
+		justify-content: center;
 	}
 }

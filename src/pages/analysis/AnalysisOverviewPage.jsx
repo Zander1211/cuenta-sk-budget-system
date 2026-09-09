@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
@@ -20,6 +20,10 @@ import {
   Lightbulb,
   BarChart3,
   Layers,
+  PieChart as PieChartIcon,
+  FileText,
+  Bot,
+  LayoutDashboard,
 } from 'lucide-react'
 import { useAnalysisFilters } from '../../hooks/useAnalysisFilters'
 import {
@@ -32,6 +36,7 @@ import {
 import { useAnalysisAI } from '../../hooks/useAnalysisAI'
 import { AnalysisLayout, AnalysisFilterBar } from '../../components/analysis/AnalysisLayout'
 import { MetricCard } from '../../components/analysis/AnalysisUI'
+import { Accordion, AccordionSection } from '../../components/analysis/AnalysisAccordion'
 import { buildOverviewInsights, rollUpHealth } from '../../utils/insights'
 import {
   formatCurrency,
@@ -41,20 +46,33 @@ import {
   CHART_INK,
   pesoTick,
   assignCategoryColors,
+  isMissingReceipt,
 } from '../../utils/analytics'
 
 
 const BREADCRUMB = [{ label: 'Home', to: '/dashboard' }, { label: 'Financial Analysis' }]
 
 const SEVERITY_META = {
-  high: { label: 'High Risk', Icon: AlertTriangle, colorClass: 'high' },
-  medium: { label: 'Medium Risk', Icon: Info, colorClass: 'medium' },
-  low: { label: 'Low Risk', Icon: CheckCircle2, colorClass: 'low' },
+  // `colorClass` drives the card's left-border accent (`.an-risk-card.high`
+  // etc.); `chipTone` is separate because `.an-chip` only ships danger/
+  // warning/positive/neutral variants, not high/medium/low ones.
+  high: { label: 'High Risk', Icon: AlertTriangle, colorClass: 'high', chipTone: 'danger' },
+  medium: { label: 'Medium Risk', Icon: Info, colorClass: 'medium', chipTone: 'warning' },
+  low: { label: 'Low Risk', Icon: CheckCircle2, colorClass: 'low', chipTone: 'positive' },
 }
 
 export default function AnalysisOverviewPage({ embedded = false }) {
   const navigate = useNavigate()
   const { filters, setFilter } = useAnalysisFilters()
+
+  // Which report is expanded, or null for none. A single value rather than a
+  // set: opening one collapses whatever was open, which is what keeps the page
+  // to one report at a time.
+  const [openSection, setOpenSection] = useState(null)
+
+  function toggleSection(key) {
+    setOpenSection((current) => (current === key ? null : key))
+  }
 
   const summary = useFinancialSummary(filters)
   const category = useCategoryAnalysis(filters)
@@ -190,6 +208,18 @@ export default function AnalysisOverviewPage({ embedded = false }) {
     )
   }, [ai.insights])
 
+  // Same insights, bucketed by severity — feeds the "High/Medium/Low Risk
+  // Alerts" groups in the combined AI Risk & Strategic Analysis panel so each
+  // group renders only the cards that belong to it.
+  const insightsBySeverity = useMemo(() => {
+    const buckets = { high: [], medium: [], low: [] }
+    ai.insights.forEach((item) => {
+      const sev = item.severity === 'high' || item.severity === 'medium' ? item.severity : 'low'
+      buckets[sev].push(item)
+    })
+    return buckets
+  }, [ai.insights])
+
   const overallHealth = useMemo(() => rollUpHealth({
     severityCounts,
     remainingBalance: summary.remainingBalance,
@@ -214,6 +244,42 @@ export default function AnalysisOverviewPage({ embedded = false }) {
       Spending: r.total,
     }))
   }, [trend.rows])
+
+  // Receipt tracker: documentation status across the period's approved
+  // allocations. `isMissingReceipt` is the same predicate the summary counts
+  // with, so the tracker and the "missing receipts" metric never disagree.
+  const receiptsTracker = useMemo(() => {
+    const expenses = summary.periodExpenses || []
+    let uploaded = 0
+    let verified = 0
+    let missing = 0
+    let byProject = 0
+    let byEvent = 0
+    let byPayroll = 0
+
+    expenses.forEach((e) => {
+      if (isMissingReceipt(e)) {
+        missing += 1
+        return
+      }
+      uploaded += 1
+      if (e.hasVerifiedReceipt) verified += 1
+      if (e.type === 'Project') byProject += 1
+      else if (e.type === 'Event') byEvent += 1
+      else if (e.type === 'Payroll') byPayroll += 1
+    })
+
+    return {
+      total: expenses.length,
+      uploaded,
+      verified,
+      missing,
+      pendingReview: Math.max(0, uploaded - verified),
+      byProject,
+      byEvent,
+      byPayroll,
+    }
+  }, [summary.periodExpenses])
 
   // Spending Highlights 4 compact cards
   const spendingHighlights = useMemo(() => {
@@ -378,6 +444,57 @@ export default function AnalysisOverviewPage({ embedded = false }) {
     return `${highest.name} received the highest approved budget allocation for this period, accounting for ${highPct}% of the total approved budget. ${lowest.name} has the lowest allocation, representing ${lowPct}% of the total approved budget.`
   }, [dist.distribution, dist.total])
 
+  // The full financial picture for the period, in one readable list. Every
+  // figure here is already on the page somewhere; this is the consolidated
+  // read for anyone writing it up.
+  const summaryReportRows = useMemo(() => {
+    const rows = [
+      { label: 'Reporting period', value: label },
+      {
+        label: summary.isProjectScoped ? 'Approved budget' : 'Total monthly budget',
+        value: formatCurrency(summary.totalBudget),
+      },
+      { label: 'Approved allocations', value: formatCurrency(summary.totalApprovedAllocations) },
+      { label: 'Actual spending (verified receipts)', value: formatCurrency(summary.actualExpenses) },
+      {
+        label: summary.isProjectScoped ? 'Remaining budget' : 'Uncommitted budget',
+        value: formatCurrency(summary.remainingBalance),
+        tone: summary.remainingBalance < 0 ? 'danger' : 'positive',
+      },
+      {
+        label: summary.isProjectScoped ? 'Budget utilization rate' : 'Budget committed rate',
+        value: formatPercentage(summary.utilizationRate, 1),
+      },
+      {
+        label: 'Budget performance',
+        value: summary.performance.label,
+        tone: summary.performance.tone,
+      },
+      {
+        label: 'Unused budget recovered',
+        value: `${formatCurrency(summary.returnedBudget || 0)}${summary.returnedRecordCount ? ` (${summary.returnedRecordCount} completed)` : ''}`,
+      },
+      { label: 'Approved records in period', value: String(summary.approvedBudgetRecords.length) },
+      { label: 'Categories funded', value: String(dist.distribution.length) },
+      {
+        label: 'Pending approvals',
+        value: String(summary.pendingRequests.length),
+        tone: summary.pendingRequests.length > 0 ? 'warning' : 'positive',
+      },
+      {
+        label: 'Missing receipts',
+        value: String(summary.missingReceipts),
+        tone: summary.missingReceipts > 0 ? 'danger' : 'positive',
+      },
+      { label: 'Spending trend', value: trend.trend.direction },
+      {
+        label: 'Highest allocation category',
+        value: dist.distribution.length ? dist.distribution[0].name : 'None',
+      },
+    ]
+    return rows
+  }, [summary, dist.distribution, trend.trend.direction, label])
+
   const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
     if (percent < 0.05) return null; // Hide label for very small slices
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
@@ -527,301 +644,449 @@ export default function AnalysisOverviewPage({ embedded = false }) {
             </div>
           </section>
 
-          {/* 3. Budget & Spending Charts (2-Column Dedicated Cards) */}
-          <section className="an-section" aria-label="Budget charts">
-            <div className="an-section-header">
-              <div className="an-section-title-group">
-                <span className="an-section-icon"><BarChart3 size={18} /></span>
-                <div>
-                  <h2 className="an-section-title">Budget & Spending Analytics</h2>
-                  <p className="an-section-desc">Visual comparison of allocated budgets vs actual disbursements over time.</p>
-                </div>
-              </div>
-            </div>
+          {/* 3. Report accordion — one open at a time.
+              Every chart, tracker and AI panel below the executive summary now
+              lives in a collapsible row. Nothing was dropped: each panel keeps
+              its own chart, its "view full report" link, and the period from
+              the filter bar above. */}
+          <Accordion label="Analytics reports">
+            {/* AI Risk & Strategic Analysis — Risk & Anomaly Analysis and
+                Strategic Recommendations combined into one report. They used
+                to be two separate accordion rows; they read the same AI
+                response and are always consulted together, so splitting them
+                only cost an extra click. */}
+            <AccordionSection
+              id="an-acc-risk-strategic"
+              icon={Bot}
+              title="AI Risk & Strategic Analysis"
+              description="AI-detected anomalies, compliance gaps, and strategic recommendations for this period."
+              meta={`${ai.insights.length} ${ai.insights.length === 1 ? 'finding' : 'findings'} · ${normalizedRecommendations.length} ${normalizedRecommendations.length === 1 ? 'action' : 'actions'}`}
+              open={openSection === 'risk-strategic'}
+              onToggle={() => toggleSection('risk-strategic')}
+            >
+              <div className="an-acc-report">
+                {/* AI Risk & Anomaly Analysis */}
+                <div className="an-acc-subsection">
+                  <div className="an-acc-subhead">
+                    <span className="an-acc-subhead-icon"><ShieldAlert size={16} /></span>
+                    <div>
+                      <h3 className="an-acc-subhead-title">AI Risk &amp; Anomaly Analysis</h3>
+                      <p className="an-acc-subhead-desc">
+                        Identified spending anomalies, compliance gaps, and category concentration risks.
+                      </p>
+                    </div>
+                  </div>
 
-            <div className="an-charts-grid">
-              {/* Card 1: Budget vs Actual */}
-              <div className="an-chart-card">
-                <div className="an-chart-head">
-                  <div>
-                    <h3 className="an-chart-title">Budget vs Actual Spending</h3>
-                    <p className="an-chart-desc">Monthly comparison across active periods</p>
+                  <div className="an-risk-glance">
+                    <div className="an-risk-glance-item">
+                      <span className="an-risk-glance-label">Risk Level</span>
+                      <span className={`an-status-badge ${overallHealth.tone}`}>{overallHealth.label}</span>
+                    </div>
+                    <div className="an-risk-glance-item">
+                      <span className="an-risk-glance-label">Budget Consumption Status</span>
+                      <span className={`an-status-badge ${summary.performance.tone}`}>
+                        {summary.performance.label} · {formatPercentage(summary.utilizationRate, 1)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {ai.insights && ai.insights.length ? (
+                    <>
+                      <h4 className="an-risk-section-title">Detected Budget Anomalies</h4>
+                      <div className="an-risk-groups">
+                        {[
+                          { key: 'high', label: 'High Risk Alerts', items: insightsBySeverity.high },
+                          { key: 'medium', label: 'Medium Risk Alerts', items: insightsBySeverity.medium },
+                          { key: 'low', label: 'Low Risk Status', items: insightsBySeverity.low },
+                        ].map((group) => {
+                          const meta = SEVERITY_META[group.key]
+                          const GroupIcon = meta.Icon
+                          return (
+                            <div key={group.key} className="an-risk-group">
+                              <div className="an-risk-group-head">
+                                <span className={`an-chip ${meta.chipTone}`}>
+                                  <GroupIcon size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: '-1px' }} />
+                                  {group.label}
+                                </span>
+                                <span className="an-risk-group-count">{group.items.length}</span>
+                              </div>
+
+                              {group.items.length ? (
+                                <div className="an-risk-grid">
+                                  {group.items.map((item, index) => (
+                                    <div key={`${item.title}-${index}`} className={`an-risk-card ${meta.colorClass}`}>
+                                      <div className="an-risk-card-head">
+                                        <h3 className="an-risk-card-title">{item.title}</h3>
+                                        <span className={`an-chip ${meta.chipTone}`}>
+                                          <GroupIcon size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: '-1px' }} />
+                                          {meta.label}
+                                        </span>
+                                      </div>
+
+                                      {item.why ? (
+                                        <p className="an-risk-why">
+                                          <span className="an-risk-why-tag">Why:</span>
+                                          {item.why}
+                                        </p>
+                                      ) : null}
+
+                                      {item.detail ? (
+                                        <p className="an-risk-detail">{item.detail}</p>
+                                      ) : null}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="an-risk-group-empty">No {group.label.toLowerCase()} for this period.</p>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="an-card" style={{ textAlign: 'center', color: 'var(--ink-3)' }}>
+                      No risks or anomalies detected for this period.
+                    </div>
+                  )}
+                </div>
+
+                {/* AI Strategic Recommendations */}
+                <div className="an-acc-subsection">
+                  <div className="an-acc-subhead">
+                    <span className="an-acc-subhead-icon"><Lightbulb size={16} /></span>
+                    <div>
+                      <h3 className="an-acc-subhead-title">AI Strategic Recommendations</h3>
+                      <p className="an-acc-subhead-desc">
+                        Actionable steps to optimize budget allocation, mitigate risks, and enhance audit compliance.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="an-reco-grid">
+                    {normalizedRecommendations.map((rec, index) => {
+                      const sev = rec.priority === 'High' ? 'danger' : rec.priority === 'Medium' ? 'warning' : 'positive'
+                      return (
+                        <div key={`${rec.title}-${index}`} className="an-reco-card">
+                          <div className="an-reco-card-top">
+                            <span className="an-reco-icon-wrap">
+                              <Lightbulb size={18} />
+                            </span>
+                            <span className={`an-chip ${sev}`}>{rec.priority} Priority</span>
+                          </div>
+
+                          <div>
+                            <h3 className="an-reco-title">{rec.title}</h3>
+                            <p className="an-reco-desc" style={{ marginTop: '8px' }}>
+                              {rec.description}
+                            </p>
+                          </div>
+
+                          <div className="an-reco-footer">
+                            <span className="an-reco-category">{rec.category}</span>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--accent)' }}>
+                              Recommendation #{index + 1}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
-
-                <div className="an-chart-body">
-                  {bvaData.length ? (
-                    <ResponsiveContainer width="100%" height={250}>
-                      <BarChart data={bvaData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }} barGap={4}>
-                        <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
-                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 11, fill: CHART_INK.tick }} axisLine={false} tickLine={false} tickFormatter={pesoTick} width={56} />
-                        <Tooltip formatter={(v, k) => [formatCurrency(v), k]} cursor={{ fill: CHART_INK.cursor }} />
-                        <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                        <Bar dataKey="Budget" fill={CHART_COLORS.budget} radius={[4, 4, 0, 0]} maxBarSize={22} />
-                        <Bar dataKey="Spending" fill={CHART_COLORS.actual} radius={[4, 4, 0, 0]} maxBarSize={22} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: 'var(--ink-3)' }}>
-                      No budget vs actual data available
-                    </div>
-                  )}
-                </div>
-
-                <div className="an-chart-footer">
-                  <span style={{ fontSize: '0.84rem', color: 'var(--ink-3)' }}>Updated for {label}</span>
-                  <button
-                    type="button"
-                    className="an-chart-link"
-                    onClick={() => navigate('/dashboard/analysis/budget-vs-actual')}
-                  >
-                    View full report <ArrowRight size={14} />
-                  </button>
-                </div>
               </div>
+            </AccordionSection>
 
-              {/* Card 2: Approved Budget Distribution (Pie Chart) */}
-              <div className="an-chart-card">
-                <div className="an-chart-head">
-                  <div>
-                    <h3 className="an-chart-title">Approved Budget Distribution</h3>
-                    <p className="an-chart-desc">Breakdown by category for the selected period</p>
+            {/* Financial Analytics Dashboard — Budget vs Approved Allocations,
+                Monthly Spending Trend, and Category Budget Distribution
+                combined into one report. They used to be three separate
+                accordion rows; they're the same three period charts a reader
+                checks together, so splitting them only cost extra clicks. */}
+            <AccordionSection
+              id="an-acc-financial-dashboard"
+              icon={LayoutDashboard}
+              title="Financial Analytics Dashboard"
+              description="Budget vs approved allocations, spending trend, and category distribution for this period."
+              meta={label}
+              open={openSection === 'financial-dashboard'}
+              onToggle={() => toggleSection('financial-dashboard')}
+            >
+              <div className="an-acc-report">
+                {/* Budget vs Approved Allocations */}
+                <div className="an-acc-subsection">
+                  <div className="an-acc-subhead">
+                    <span className="an-acc-subhead-icon"><BarChart3 size={16} /></span>
+                    <div>
+                      <h3 className="an-acc-subhead-title">Budget vs Approved Allocations</h3>
+                      <p className="an-acc-subhead-desc">
+                        Allocated budget against approved disbursements, month by month.
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="an-chart-body" style={{ padding: '0 12px' }}>
-                  {distPieData.length ? (
-                    <div className="an-pie-inner">
-                      <div style={{ height: '260px' }}>
-                        <ResponsiveContainer width="100%" height={250}>
-                          <PieChart>
-                            <Pie
-                              data={distPieData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={65}
-                              outerRadius={105}
-                              paddingAngle={2}
-                              dataKey="value"
-                              nameKey="name"
-                              label={renderCustomizedLabel}
-                              labelLine={false}
-                            >
-                              {distPieData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
-                              ))}
-                            </Pie>
-                            <Tooltip content={<CustomPieTooltip />} cursor={{ fill: CHART_INK.cursor }} />
-                          </PieChart>
-                        </ResponsiveContainer>
+
+                  <div className="an-chart-body">
+                    {bvaData.length ? (
+                      <ResponsiveContainer width="100%" height={280}>
+                        <BarChart data={bvaData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }} barGap={4}>
+                          <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
+                          <XAxis dataKey="month" tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 11, fill: CHART_INK.tick }} axisLine={false} tickLine={false} tickFormatter={pesoTick} width={56} />
+                          <Tooltip formatter={(v, k) => [formatCurrency(v), k]} cursor={{ fill: CHART_INK.cursor }} />
+                          <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                          <Bar dataKey="Budget" fill={CHART_COLORS.budget} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                          <Bar dataKey="Spending" fill={CHART_COLORS.actual} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="an-chart-empty" style={{ minHeight: '200px' }}>
+                        No budget vs actual data available
                       </div>
-                      <div style={{ maxHeight: '260px', overflowY: 'auto', paddingRight: '8px' }}>
-                        {renderDetailedLegend({ payload: distPieData.map(d => ({ value: d.name, color: d.color })) })}
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', fontSize: '0.9rem' }}>
-                      No approved budget data available
-                    </div>
-                  )}
-                </div>
-                <div className="an-chart-footer" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '16px', background: 'var(--surface-50)' }}>
-                  {distAiSummary && (
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--ink-2)', lineHeight: 1.5 }}>
-                      <strong>AI Summary:</strong> {distAiSummary}
-                    </p>
-                  )}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--ink-4)' }}>Updated for {label}</span>
+                    )}
+                  </div>
+
+                  <div className="an-chart-footer">
+                    <span style={{ fontSize: '0.84rem', color: 'var(--ink-3)' }}>Updated for {label}</span>
                     <button
                       type="button"
                       className="an-chart-link"
-                      onClick={handleViewFullReport}
-                      disabled={!dist.hasData}
+                      onClick={() => navigate('/dashboard/analysis/budget-vs-actual')}
                     >
                       View full report <ArrowRight size={14} />
                     </button>
                   </div>
                 </div>
-              </div>
 
-              {/* Card 3: Monthly Spending Trend */}
-              <div className="an-chart-card an-chart-card--wide">
-                <div className="an-chart-head">
-                  <div>
-                    <h3 className="an-chart-title">Monthly Spending Trend</h3>
-                    <p className="an-chart-desc">Historical trajectory and disbursement momentum</p>
+                {/* Monthly Spending Trend */}
+                <div className="an-acc-subsection">
+                  <div className="an-acc-subhead">
+                    <span className="an-acc-subhead-icon"><TrendingUp size={16} /></span>
+                    <div>
+                      <h3 className="an-acc-subhead-title">Monthly Spending Trend</h3>
+                      <p className="an-acc-subhead-desc">
+                        Historical trajectory and disbursement momentum across the year.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="an-chart-body">
+                    {trendData.length ? (
+                      <ResponsiveContainer width="100%" height={280}>
+                        <LineChart data={trendData} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+                          <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
+                          <XAxis dataKey="month" tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 11, fill: CHART_INK.tick }} axisLine={false} tickLine={false} tickFormatter={pesoTick} width={56} />
+                          <Tooltip formatter={(v) => [formatCurrency(v), 'Expenses']} />
+                          <Line
+                            type="monotone"
+                            dataKey="Spending"
+                            stroke={CHART_COLORS.primaryLine}
+                            strokeWidth={2.5}
+                            dot={{ r: 3.5, fill: CHART_INK.surface, strokeWidth: 2, stroke: CHART_COLORS.primaryLine }}
+                            activeDot={{ r: 6, fill: CHART_COLORS.primaryLine, stroke: CHART_INK.surface, strokeWidth: 2 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="an-chart-empty" style={{ minHeight: '200px' }}>
+                        No trend data available
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="an-chart-footer">
+                    <span style={{ fontSize: '0.84rem', color: 'var(--ink-3)' }}>Velocity: {trend.trend.direction}</span>
+                    <button
+                      type="button"
+                      className="an-chart-link"
+                      onClick={() => navigate('/dashboard/analysis/monthly-spending')}
+                    >
+                      View detailed trend <ArrowRight size={14} />
+                    </button>
                   </div>
                 </div>
 
-                <div className="an-chart-body">
-                  {trendData.length ? (
-                    <ResponsiveContainer width="100%" height={250}>
-                      <LineChart data={trendData} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
-                        <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
-                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: CHART_INK.tick }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 11, fill: CHART_INK.tick }} axisLine={false} tickLine={false} tickFormatter={pesoTick} width={56} />
-                        <Tooltip formatter={(v) => [formatCurrency(v), 'Expenses']} />
-                        <Line
-                          type="monotone"
-                          dataKey="Spending"
-                          stroke={CHART_COLORS.primaryLine}
-                          strokeWidth={2.5}
-                          dot={{ r: 3.5, fill: CHART_INK.surface, strokeWidth: 2, stroke: CHART_COLORS.primaryLine }}
-                          activeDot={{ r: 6, fill: CHART_COLORS.primaryLine, stroke: CHART_INK.surface, strokeWidth: 2 }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: 'var(--ink-3)' }}>
-                      No trend data available
+                {/* Category Budget Distribution */}
+                <div className="an-acc-subsection">
+                  <div className="an-acc-subhead">
+                    <span className="an-acc-subhead-icon"><PieChartIcon size={16} /></span>
+                    <div>
+                      <h3 className="an-acc-subhead-title">Category Budget Distribution</h3>
+                      <p className="an-acc-subhead-desc">
+                        How the approved budget for this period is split across categories.
+                      </p>
                     </div>
-                  )}
+                  </div>
+
+                  <div className="an-chart-body">
+                    {distPieData.length ? (
+                      <div className="an-pie-inner">
+                        <div style={{ height: '280px' }}>
+                          <ResponsiveContainer width="100%" height={280}>
+                            <PieChart>
+                              <Pie
+                                data={distPieData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={70}
+                                outerRadius={115}
+                                paddingAngle={2}
+                                dataKey="value"
+                                nameKey="name"
+                                label={renderCustomizedLabel}
+                                labelLine={false}
+                              >
+                                {distPieData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                              </Pie>
+                              <Tooltip content={<CustomPieTooltip />} cursor={{ fill: CHART_INK.cursor }} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div style={{ maxHeight: '280px', overflowY: 'auto', paddingRight: '8px' }}>
+                          {renderDetailedLegend({ payload: distPieData.map(d => ({ value: d.name, color: d.color })) })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="an-chart-empty" style={{ minHeight: '200px' }}>
+                        No approved budget data available
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="an-chart-footer" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
+                    {distAiSummary && (
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--ink-2)', lineHeight: 1.5 }}>
+                        <strong>AI Summary:</strong> {distAiSummary}
+                      </p>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.84rem', color: 'var(--ink-3)' }}>Updated for {label}</span>
+                      <button
+                        type="button"
+                        className="an-chart-link"
+                        onClick={handleViewFullReport}
+                        disabled={!dist.hasData}
+                      >
+                        View full report <ArrowRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </AccordionSection>
+
+            {/* Receipt Tracker */}
+            <AccordionSection
+              id="an-acc-receipts"
+              icon={Receipt}
+              title="Receipt Tracker"
+              description="Supporting documentation status across the period's approved allocations."
+              meta={receiptsTracker.missing > 0
+                ? `${receiptsTracker.missing} missing`
+                : receiptsTracker.total > 0 ? 'All documented' : 'No records'}
+              open={openSection === 'receipts'}
+              onToggle={() => toggleSection('receipts')}
+            >
+              <div className="an-acc-report">
+                <div className="an-metric-grid">
+                  <MetricCard
+                    icon={Receipt}
+                    label="Total Uploaded"
+                    value={String(receiptsTracker.uploaded)}
+                    meta={`${receiptsTracker.byProject} Project, ${receiptsTracker.byEvent} Event, ${receiptsTracker.byPayroll} Payroll`}
+                    tone="neutral"
+                  />
+                  <MetricCard
+                    icon={CheckCircle2}
+                    label="Verified Receipts"
+                    value={String(receiptsTracker.verified)}
+                    meta="Approved and confirmed"
+                    tone="positive"
+                  />
+                  <MetricCard
+                    icon={Clock}
+                    label="Pending Review"
+                    value={String(receiptsTracker.pendingReview)}
+                    meta="Uploaded but not yet verified"
+                    tone={receiptsTracker.pendingReview > 0 ? 'warning' : 'positive'}
+                  />
+                  <MetricCard
+                    icon={AlertTriangle}
+                    label="Missing Receipts"
+                    value={String(receiptsTracker.missing)}
+                    meta="Expenses without documentation"
+                    tone={receiptsTracker.missing > 0 ? 'danger' : 'positive'}
+                  />
                 </div>
 
-                <div className="an-chart-footer">
-                  <span style={{ fontSize: '0.84rem', color: 'var(--ink-3)' }}>Velocity: {trend.trend.direction}</span>
+                <div className="an-chart-footer" style={{ marginTop: '18px' }}>
+                  <span style={{ fontSize: '0.84rem', color: 'var(--ink-3)' }}>
+                    {receiptsTracker.total} approved {receiptsTracker.total === 1 ? 'record' : 'records'} for {label}
+                  </span>
                   <button
                     type="button"
                     className="an-chart-link"
-                    onClick={() => navigate('/dashboard/analysis/monthly-spending')}
+                    onClick={() => navigate('/dashboard/documents')}
                   >
-                    View detailed trend <ArrowRight size={14} />
+                    View full report <ArrowRight size={14} />
                   </button>
                 </div>
               </div>
-            </div>
-          </section>
+            </AccordionSection>
 
-          {/* 4. Spending Highlights (4 Compact Cards) */}
-          <section className="an-section" aria-label="Spending highlights">
-            <div className="an-section-header">
-              <div className="an-section-title-group">
-                <span className="an-section-icon"><TrendingUp size={18} /></span>
-                <div>
-                  <h2 className="an-section-title">Spending Highlights & Metrics</h2>
-                  <p className="an-section-desc">Key drivers, category concentrations, and budget compliance metrics.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="an-highlight-grid">
-              {spendingHighlights.map((item) => {
-                const IconComponent = item.icon
-                return (
-                  <div key={item.label} className="an-highlight-item">
-                    <div className="an-highlight-top">
-                      <span className="an-highlight-label">{item.label}</span>
-                      <span className="an-highlight-icon">
-                        <IconComponent size={16} color={CHART_COLORS.primaryLine} />
-                      </span>
-                    </div>
-                    <div className="an-highlight-value" title={item.value}>
-                      {item.value}
-                    </div>
-                    <div className="an-highlight-sub">{item.sub}</div>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-
-          {/* 5. AI Risk & Anomaly Analysis (Individual Modular Cards) */}
-          <section className="an-section" aria-label="AI risk analysis">
-            <div className="an-section-header">
-              <div className="an-section-title-group">
-                <span className="an-section-icon"><ShieldAlert size={18} /></span>
-                <div>
-                  <h2 className="an-section-title">AI Risk & Anomaly Analysis</h2>
-                  <p className="an-section-desc">
-                    Identified spending anomalies, compliance gaps, and category concentration risks.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="an-risk-grid">
-              {ai.insights && ai.insights.length ? (
-                ai.insights.map((item, index) => {
-                  const sev = item.severity === 'high' || item.severity === 'medium' ? item.severity : 'low'
-                  const meta = SEVERITY_META[sev]
-                  const Icon = meta.Icon
-
+            {/* Financial Summary Report */}
+            <AccordionSection
+              id="an-acc-summary-report"
+              icon={FileText}
+              title="Financial Summary Report"
+              description="The complete financial picture for the selected period, with spending highlights."
+              meta={label}
+              open={openSection === 'summary-report'}
+              onToggle={() => toggleSection('summary-report')}
+            >
+              <div className="an-highlight-grid" style={{ marginBottom: '22px' }}>
+                {spendingHighlights.map((item) => {
+                  const IconComponent = item.icon
                   return (
-                    <div key={`${item.title}-${index}`} className={`an-risk-card ${meta.colorClass}`}>
-                      <div className="an-risk-card-head">
-                        <h3 className="an-risk-card-title">{item.title}</h3>
-                        <span className={`an-chip ${sev}`}>
-                          <Icon size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: '-1px' }} />
-                          {meta.label}
+                    <div key={item.label} className="an-highlight-item">
+                      <div className="an-highlight-top">
+                        <span className="an-highlight-label">{item.label}</span>
+                        <span className="an-highlight-icon">
+                          <IconComponent size={16} color={CHART_COLORS.primaryLine} />
                         </span>
                       </div>
-
-                      {item.why ? (
-                        <p className="an-risk-why">
-                          <span className="an-risk-why-tag">Why:</span>
-                          {item.why}
-                        </p>
-                      ) : null}
-
-                      {item.detail ? (
-                        <p className="an-risk-detail">{item.detail}</p>
-                      ) : null}
+                      <div className="an-highlight-value" title={item.value}>
+                        {item.value}
+                      </div>
+                      <div className="an-highlight-sub">{item.sub}</div>
                     </div>
                   )
-                })
-              ) : (
-                <div className="an-card" style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--ink-3)' }}>
-                  No risks or anomalies detected for this period.
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* 6. AI Strategic Recommendations (List of Recommendation Cards) */}
-          <section className="an-section" aria-label="AI recommendations">
-            <div className="an-section-header">
-              <div className="an-section-title-group">
-                <span className="an-section-icon"><Lightbulb size={18} /></span>
-                <div>
-                  <h2 className="an-section-title">AI Strategic Recommendations</h2>
-                  <p className="an-section-desc">
-                    Actionable steps to optimize budget allocation, mitigate risks, and enhance audit compliance.
-                  </p>
-                </div>
+                })}
               </div>
-            </div>
 
-            <div className="an-reco-grid">
-              {normalizedRecommendations.map((rec, index) => {
-                const sev = rec.priority === 'High' ? 'danger' : rec.priority === 'Medium' ? 'warning' : 'positive'
-                return (
-                  <div key={`${rec.title}-${index}`} className="an-reco-card">
-                    <div className="an-reco-card-top">
-                      <span className="an-reco-icon-wrap">
-                        <Lightbulb size={18} />
-                      </span>
-                      <span className={`an-chip ${sev}`}>{rec.priority} Priority</span>
-                    </div>
-
-                    <div>
-                      <h3 className="an-reco-title">{rec.title}</h3>
-                      <p className="an-reco-desc" style={{ marginTop: '8px' }}>
-                        {rec.description}
-                      </p>
-                    </div>
-
-                    <div className="an-reco-footer">
-                      <span className="an-reco-category">{rec.category}</span>
-                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--accent)' }}>
-                        Recommendation #{index + 1}
-                      </span>
-                    </div>
+              <dl className="an-summary-rows">
+                {summaryReportRows.map((row) => (
+                  <div key={row.label} className="an-summary-row">
+                    <dt>{row.label}</dt>
+                    <dd className={row.tone || ''}>{row.value}</dd>
                   </div>
-                )
-              })}
-            </div>
-          </section>
+                ))}
+              </dl>
+
+              <div className="an-chart-footer" style={{ marginTop: '18px' }}>
+                <span style={{ fontSize: '0.84rem', color: 'var(--ink-3)' }}>
+                  {summary.isProjectScoped ? `Scoped to ${filters.project}` : 'All projects and events'}
+                </span>
+                <button
+                  type="button"
+                  className="an-chart-link"
+                  onClick={() => navigate('/dashboard/analysis/budget-utilization')}
+                >
+                  View full report <ArrowRight size={14} />
+                </button>
+              </div>
+            </AccordionSection>
+          </Accordion>
         </>
       )}
     </AnalysisLayout>

@@ -239,6 +239,39 @@ export function formatOcrMetadataNote(metadata) {
 }
 
 /**
+ * Deletes a receipt: its storage object(s) first, then its `receipt_records`
+ * row. Storage before database — if the row delete failed after the file was
+ * already gone, retrying would 404 on a file that no longer exists; the
+ * reverse order leaves an orphaned file behind instead, which is recoverable
+ * (a stray object) rather than the row silently pointing at nothing.
+ *
+ * `originalPath` is optional — legacy uploads and non-scanned receipts never
+ * had a separate photograph.
+ *
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {{ id: string|number, path: string, originalPath?: string|null }} receipt
+ * @returns {Promise<{ error: Error|null }>}
+ */
+export async function deleteReceiptRecord(supabase, { id, path, originalPath }) {
+  const pathsToRemove = [path, originalPath].filter(Boolean)
+  if (pathsToRemove.length) {
+    const { error: storageError } = await supabase.storage.from('receipts').remove(pathsToRemove)
+    // Missing-file storage errors are not fatal here — the row is the source
+    // of truth for "does this receipt still exist"; a file already gone
+    // (cleaned up some other way) should not block removing its record.
+    if (storageError) console.warn('Could not remove receipt file(s) from storage:', storageError)
+  }
+
+  // A synthetic "legacy-*" id (see ReceiptsPanel) has no receipt_records row
+  // to delete — it was reconstructed from the expense's own receipt_url
+  // column, which the caller clears separately.
+  if (String(id).startsWith('legacy-')) return { error: null }
+
+  const { error } = await supabase.from('receipt_records').delete().eq('id', id)
+  return { error: error || null }
+}
+
+/**
  * Inserts a receipt record into the database, providing robust linking and metadata.
  * Requires the file path and user session data.
  */

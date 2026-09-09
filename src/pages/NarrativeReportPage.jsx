@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, PlusCircle, Trash2, Image, Upload } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
@@ -25,6 +25,7 @@ const DEFAULTS = {
 
 function NarrativeReportPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { requests, expenses } = useBudget()
   const { addDocument } = useDocuments()
   const { profileName, role } = useAuth()
@@ -125,8 +126,10 @@ function NarrativeReportPage() {
     }
   }, [selectedRequest, expenses])
 
-  async function handleSelectRequest(e) {
-    const id = e.target.value
+  // Shared by the manual dropdown (below) and the auto-select effect that
+  // runs when this page is opened via a Project/Event's "Documents" button
+  // (DocumentGenerator's "Narrative & Photo Documentation" hand-off).
+  async function selectRequestById(id) {
     setSelectedRequestId(id)
 
     if (!id) {
@@ -143,7 +146,7 @@ function NarrativeReportPage() {
     setVenue(request.venue || '')
     setRationale(request.description || '')
     setTargetParticipants(request.notes || '')
-    
+
     // Reset manual fields so they don't bleed into the newly selected project
     setAcknowledgment('')
     setObjectives([''])
@@ -170,6 +173,31 @@ function NarrativeReportPage() {
       setIsLoadingPhotos(false)
     }
   }
+
+  async function handleSelectRequest(e) {
+    await selectRequestById(e.target.value)
+  }
+
+  // Arrived here via a Project/Event's "Documents" button — auto-select the
+  // same request so the user isn't asked to pick it again. If the id doesn't
+  // match anything (e.g. the underlying request row was later removed), this
+  // silently no-ops and the dropdown below is still there as a fallback.
+  useEffect(() => {
+    const presetId = searchParams.get('requestId')
+    if (!presetId || selectedRequestId || !requests.length) return
+    if (!requests.some((r) => r.id === presetId)) return
+
+    selectRequestById(presetId)
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('requestId')
+      return next
+    }, { replace: true })
+    // selectRequestById reads from `requests`/component state directly and is
+    // redefined each render; keying off `requests` + the param is what
+    // actually determines whether this needs to run again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, requests, selectedRequestId])
 
   // ── Objective helpers ──
   function updateObjective(index, value) {

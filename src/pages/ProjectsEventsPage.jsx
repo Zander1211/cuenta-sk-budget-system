@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react'
-import { Archive, RotateCcw } from 'lucide-react'
+import { Archive, RotateCcw, FileText, Receipt as ReceiptIcon } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { useBudget } from '../context/BudgetContext'
 import RoleGate from '../components/RoleGate'
@@ -8,6 +8,9 @@ import { supabase } from '../supabase/supabaseClient'
 import CurrencyInput from '../components/CurrencyInput'
 import BudgetBreakdownTable from '../components/BudgetBreakdownTable'
 import RecordFilterBar from '../components/RecordFilterBar'
+import GenerateDocumentsModal from '../components/documents/GenerateDocumentsModal'
+import RecordReceiptsModal from '../components/receipts/RecordReceiptsModal'
+import RowActionsMenu from '../components/RowActionsMenu'
 import { useNotifications } from '../context/NotificationContext'
 import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
 import { calculateProjectEventFinancials, formatUtilization } from '../utils/projectEventFinancials'
@@ -78,6 +81,17 @@ function ProjectsEventsPage() {
   const [expanded, setExpanded] = useState({})
   const [highlightedId, setHighlightedId] = useState(null)
 
+  // Full document-generation access is Chairman/Treasurer only, matching the
+  // Documents page's own "Create Document" gate; Kagawad and Barangay
+  // Treasurer keep view-only access through the main Documents page.
+  const canGenerateDocs = ['SK Chairman', 'SK Treasurer'].includes(role)
+  const [docGenTarget, setDocGenTarget] = useState(null) // { record, kind } | null
+
+  // Receipts is open to every role on this page — Kagawad and Barangay
+  // Treasurer get the same view-only access the main Receipts page already
+  // gives them; RecordReceiptsModal itself gates Scan & Upload and Delete.
+  const [receiptsTarget, setReceiptsTarget] = useState(null) // the record, or null
+
   const currentYear = new Date().getFullYear()
 
   const [searchFilter, setSearchFilter] = useState('')
@@ -95,7 +109,9 @@ function ProjectsEventsPage() {
     const target = expenses.find((item) => String(item.id) === String(highlightId))
     if (!target) return
 
-    setActiveTab(target.type === 'Event' ? 'events' : 'projects')
+    // Payroll wasn't handled here before — a highlight link to a Payroll
+    // record landed on the Projects tab, where that record never appears.
+    setActiveTab(target.type === 'Event' ? 'events' : target.type === 'Payroll' ? 'payroll' : 'projects')
     setSearchFilter('')
     setDateFilter('')
     setMonthFilter('')
@@ -789,31 +805,51 @@ function ProjectsEventsPage() {
                             >
                               {expanded[item.id] === 'expenses' ? 'Hide' : 'Expenses'}
                             </button>
-                            {canArchive && (item.archivedAt ? (
+                            {/* Documents, Receipts, and Archive/Restore collapse
+                                behind one "⋮" trigger — View and Expenses are the
+                                two actions people reach for on every row, so
+                                those stay one click away; the rest no longer force
+                                the row into a horizontal scroll to get to them. */}
+                            <RowActionsMenu label={`More actions for ${item.project || item.event || 'this record'}`}>
+                              {canGenerateDocs && (
+                                <button
+                                  type="button"
+                                  className="row-menu-item"
+                                  onClick={() => setDocGenTarget({ record: item, kind: item.type === 'Event' ? 'event' : 'project' })}
+                                >
+                                  <FileText size={14} aria-hidden="true" /> Documents
+                                </button>
+                              )}
                               <button
-                                className="icon-button"
                                 type="button"
-                                disabled={archiveBusyId === item.id}
-                                onClick={() => handleRestore(item)}
-                                title="Restore to the active list"
-                                aria-label={`Restore ${item.project || item.event || 'record'}`}
+                                className="row-menu-item"
+                                onClick={() => setReceiptsTarget(item)}
                               >
-                                <RotateCcw size={16} aria-hidden="true" />
+                                <ReceiptIcon size={14} aria-hidden="true" /> Receipts
                               </button>
-                            ) : (
-                              <button
-                                className="icon-button"
-                                type="button"
-                                disabled={!isArchivable(item) || archiveBusyId === item.id}
-                                onClick={() => handleArchive(item)}
-                                title={isArchivable(item)
-                                  ? 'Archive this completed record'
-                                  : 'Only completed projects and events can be archived'}
-                                aria-label={`Archive ${item.project || item.event || 'record'}`}
-                              >
-                                <Archive size={16} aria-hidden="true" />
-                              </button>
-                            ))}
+                              {canArchive && (item.archivedAt ? (
+                                <button
+                                  type="button"
+                                  className="row-menu-item"
+                                  disabled={archiveBusyId === item.id}
+                                  onClick={() => handleRestore(item)}
+                                >
+                                  <RotateCcw size={14} aria-hidden="true" /> Restore
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="row-menu-item"
+                                  disabled={!isArchivable(item) || archiveBusyId === item.id}
+                                  onClick={() => handleArchive(item)}
+                                  title={isArchivable(item)
+                                    ? undefined
+                                    : 'Only completed projects and events can be archived'}
+                                >
+                                  <Archive size={14} aria-hidden="true" /> Archive
+                                </button>
+                              ))}
+                            </RowActionsMenu>
                           </td>
                         </tr>
                         {renderItemDetails(item, 7)}
@@ -848,6 +884,21 @@ function ProjectsEventsPage() {
           />
         )}
       </Suspense>
+
+      {docGenTarget && (
+        <GenerateDocumentsModal
+          record={docGenTarget.record}
+          kind={docGenTarget.kind}
+          onClose={() => setDocGenTarget(null)}
+        />
+      )}
+
+      {receiptsTarget && (
+        <RecordReceiptsModal
+          record={receiptsTarget}
+          onClose={() => setReceiptsTarget(null)}
+        />
+      )}
     </RoleGate>
   )
 }

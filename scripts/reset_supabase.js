@@ -1,7 +1,15 @@
+// ⚠️  DESTRUCTIVE. Empties 14 tables and 2 storage buckets. There is no undo.
+//
+// The whole team shares one set of Supabase credentials, so the project this
+// points at is the LIVE database everyone depends on. It therefore refuses to
+// run until you retype the project ref, which forces you to read which project
+// you are about to wipe. Use --force only in scripted contexts you control.
+
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
+import { createInterface } from 'node:readline/promises';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,6 +34,39 @@ const keyToUse = serviceRoleKey || anonKey;
 if (!supabaseUrl || !keyToUse) {
   console.error("Missing Supabase URL or Key in .env.local");
   process.exit(1);
+}
+
+// Pull the project ref out of https://<ref>.supabase.co so the prompt can name
+// the exact project, not just say "are you sure".
+const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || supabaseUrl;
+
+async function confirmDestruction() {
+  if (process.argv.includes('--force')) {
+    console.warn(`--force given; skipping confirmation for project "${projectRef}".`);
+    return;
+  }
+
+  if (!process.stdin.isTTY) {
+    console.error(
+      `\nRefusing to wipe "${projectRef}" from a non-interactive shell.\n` +
+      `Re-run in a terminal, or pass --force if you are certain.\n`
+    );
+    process.exit(1);
+  }
+
+  console.log(`\n  This will PERMANENTLY DELETE all data in Supabase project:\n`);
+  console.log(`      ${projectRef}\n`);
+  console.log(`  ${targetTables.length} tables plus the receipts and project_photos buckets.`);
+  console.log(`  The team shares this project. If it is the live database, the data is gone for good.\n`);
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await rl.question(`  Type the project ref "${projectRef}" to proceed, or anything else to abort: `);
+  rl.close();
+
+  if (answer.trim() !== projectRef) {
+    console.log('\nAborted. Nothing was deleted.\n');
+    process.exit(0);
+  }
 }
 
 console.log("Connecting to Supabase using:", serviceRoleKey ? "SERVICE ROLE KEY (RLS Bypassed)" : "ANON KEY");
@@ -77,6 +118,8 @@ async function deleteFromTable(table) {
 }
 
 async function resetSupabase() {
+  await confirmDestruction();
+
   console.log("Starting full system data cleanup...");
 
   // 1. Delete rows from operational tables

@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react'
-import CurrencyInput from '../CurrencyInput';
-import { PlusCircle, Trash2 } from 'lucide-react'
 import { supabase } from '../../supabase/supabaseClient'
 import { useActiveSkChairmanName } from '../../hooks/useActiveSkChairmanName'
 
@@ -24,16 +22,6 @@ function getCurrentMonthRange() {
   const year = now.getFullYear()
   const lastDay = new Date(year, now.getMonth() + 1, 0).getDate()
   return `${month} 1-${lastDay}, ${year}`
-}
-
-function createEmptyRow() {
-  return {
-    name: '',
-    position: '',
-    honoraria: '',
-    serviceRendered: '',
-    cbcLbf: '',
-  }
 }
 
 async function getNextPayrollNumber() {
@@ -76,7 +64,7 @@ function PayrollForm({ profileName, role, selectedRequest, onPreview }) {
   const activeChairmanName = useActiveSkChairmanName()
   const [payrollNumber, setPayrollNumber] = useState('')
   const [periodCovered, setPeriodCovered] = useState(getCurrentMonthRange())
-  const [rows, setRows] = useState(() => Array.from({ length: 5 }, createEmptyRow))
+  const [rows, setRows] = useState([])
   const [skKagawad, setSkKagawad] = useState('')
   const [skTreasurer, setSkTreasurer] = useState('')
   const [skChairman, setSkChairman] = useState('')
@@ -111,24 +99,12 @@ function PayrollForm({ profileName, role, selectedRequest, onPreview }) {
         }))
         setRows(mapped)
       } else {
-        setRows(Array.from({ length: 5 }, createEmptyRow))
+        // No approved breakdown to show — an empty read-only table, not
+        // blank editable rows; there is nothing here to fill in by hand.
+        setRows([])
       }
     }
   }, [selectedRequest])
-
-  function updateRow(index, field, value) {
-    setRows((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row))
-    )
-  }
-
-  function addRow() {
-    setRows((prev) => [...prev, createEmptyRow()])
-  }
-
-  function removeRow(index) {
-    setRows((prev) => prev.filter((_, i) => i !== index))
-  }
 
   function getNetAmount(row) {
     const hon = Number(row.honoraria) || 0
@@ -203,9 +179,15 @@ function PayrollForm({ profileName, role, selectedRequest, onPreview }) {
         </label>
       </div>
 
-      {/* Payroll rows */}
+      {/* Payroll rows — read-only. This is the approved payroll breakdown;
+          once approved it's final, so nothing here can add, remove, or edit
+          an entry. Expenses incurred later belong in the record's own
+          Additional Requisition Breakdown instead. */}
       <div className="doc-form-section">
         <h3>Payroll Entries</h3>
+        <p className="form-note" style={{ marginTop: 0 }}>
+          These entries come from the approved budget request and cannot be edited here.
+        </p>
         <div style={{ overflowX: 'auto' }}>
           <table className="add-row-table">
             <thead>
@@ -217,73 +199,41 @@ function PayrollForm({ profileName, role, selectedRequest, onPreview }) {
                 <th style={{ width: '120px' }}>Service Rendered</th>
                 <th style={{ width: '100px' }}>CBC/LBF</th>
                 <th style={{ width: '110px' }}>Net Amount</th>
-                <th style={{ width: '40px' }}></th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, index) => (
-                <tr key={index}>
-                  <td style={{ textAlign: 'center', fontWeight: 600 }}>{index + 1}</td>
-                  <td>
-                    <input
-                      type="text"
-                      value={row.name}
-                      onChange={(e) => updateRow(index, 'name', e.target.value)}
-                      placeholder="Full name"
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={row.position}
-                      onChange={(e) => updateRow(index, 'position', e.target.value)}
-                      placeholder="Position"
-                    />
-                  </td>
-                  <td>
-                    <CurrencyInput value={row.honoraria} onValueChange={(val) => updateRow(index, 'honoraria', Number(val))} placeholder="0.00" />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={row.serviceRendered}
-                      onChange={(e) => updateRow(index, 'serviceRendered', e.target.value)}
-                      placeholder="Days/hours"
-                    />
-                  </td>
-                  <td>
-                    <CurrencyInput value={row.cbcLbf} onValueChange={(val) => updateRow(index, 'cbcLbf', Number(val))} placeholder="0.00" />
-                  </td>
-                  <td className="computed-cell">{currency.format(getNetAmount(row))}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="remove-row-btn"
-                      onClick={() => removeRow(index)}
-                      title="Remove row"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+              {rows.length ? (
+                <>
+                  {rows.map((row, index) => (
+                    <tr key={index}>
+                      <td style={{ textAlign: 'center', fontWeight: 600 }}>{index + 1}</td>
+                      <td>{row.name || '—'}</td>
+                      <td>{row.position || '—'}</td>
+                      <td>{currency.format(Number(row.honoraria) || 0)}</td>
+                      <td>{row.serviceRendered || '—'}</td>
+                      <td>{currency.format(Number(row.cbcLbf) || 0)}</td>
+                      <td className="computed-cell">{currency.format(getNetAmount(row))}</td>
+                    </tr>
+                  ))}
+                  <tr className="total-row">
+                    <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>
+                      TOTAL
+                    </td>
+                    <td className="computed-cell">{currency.format(totals.honoraria)}</td>
+                    <td></td>
+                    <td className="computed-cell">{currency.format(totals.cbcLbf)}</td>
+                    <td className="computed-cell">{currency.format(totals.netAmount)}</td>
+                  </tr>
+                </>
+              ) : (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', color: 'var(--ink-soft)' }}>
+                    Select an approved request above to load its payroll entries.
                   </td>
                 </tr>
-              ))}
-              <tr className="total-row">
-                <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>
-                  TOTAL
-                </td>
-                <td className="computed-cell">{currency.format(totals.honoraria)}</td>
-                <td></td>
-                <td className="computed-cell">{currency.format(totals.cbcLbf)}</td>
-                <td className="computed-cell">{currency.format(totals.netAmount)}</td>
-                <td></td>
-              </tr>
+              )}
             </tbody>
           </table>
-        </div>
-        <div className="add-row-actions">
-          <button type="button" className="add-row-btn" onClick={addRow}>
-            <PlusCircle size={16} /> Add Row
-          </button>
         </div>
       </div>
 

@@ -1017,6 +1017,258 @@
   transform: translateX(2px);
 }
 
+/* ---------- Collapsible Analytics Sections ----------
+   The overview used to stack every chart, the risk cards and the
+   recommendations down one page. Below the executive summary they are now one
+   accordion: each report is a row that opens on demand, and only one is open
+   at a time, so the page opens as a short table of contents rather than a
+   scroll. Each row carries the same surface, border, radius and shadow as the
+   cards around it, so the group reads as part of the module. */
+.an-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.an-acc-item {
+  background: var(--cuenta-card);
+  border: 1px solid var(--cuenta-border);
+  border-radius: var(--cuenta-card-radius);
+  box-shadow: var(--cuenta-shadow);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.an-acc-item:hover {
+  border-color: var(--cuenta-teal);
+}
+
+.an-acc-item.is-open {
+  border-color: var(--cuenta-teal);
+  box-shadow: var(--cuenta-shadow-hover);
+}
+
+/* The trigger is the section's heading as well as its control, so the h2
+   carries no styling of its own. */
+.an-acc-heading {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.an-acc-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  background: none;
+  border: none;
+  border-radius: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: background 0.18s ease;
+}
+
+.an-acc-trigger:hover {
+  background: var(--surface-2);
+}
+
+.an-acc-trigger:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.an-acc-item.is-open .an-acc-trigger {
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--cuenta-divider);
+}
+
+.an-acc-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-control);
+  display: grid;
+  place-items: center;
+  background: var(--cuenta-mint-soft);
+  color: var(--cuenta-teal);
+  flex-shrink: 0;
+}
+
+.an-acc-item.is-open .an-acc-icon {
+  background: var(--cuenta-card);
+}
+
+.an-acc-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.an-acc-title {
+  font-family: var(--font-display, inherit);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--cuenta-text-heading);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.an-acc-desc {
+  font-size: 0.86rem;
+  color: var(--cuenta-text-secondary);
+  line-height: 1.45;
+}
+
+/* Live figure for the report while it is still collapsed, so the closed list
+   still says something about the period. */
+.an-acc-meta {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--cuenta-text-secondary);
+  background: var(--surface-2);
+  border: 1px solid var(--cuenta-border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.an-acc-item.is-open .an-acc-meta {
+  background: var(--cuenta-card);
+}
+
+.an-acc-chevron {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--cuenta-muted);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease;
+}
+
+.an-acc-item.is-open .an-acc-chevron {
+  transform: rotate(180deg);
+  color: var(--cuenta-teal);
+}
+
+/* 0fr → 1fr animates to the body's natural height without measuring it in JS,
+   which matters here because the panels hold charts that size themselves. */
+.an-acc-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.an-acc-panel.is-expanded {
+  grid-template-rows: 1fr;
+}
+
+.an-acc-panel-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* A closed panel is clipped rather than emptied, so its buttons would still
+   be tab-reachable. `visibility: hidden` takes the body out of the tab order
+   and the a11y tree; the 0s-duration/0.32s-delay step holds it visible for
+   exactly as long as the row takes to close, so the content is still there to
+   watch shrink. Opening flips it back with no delay. */
+.an-acc-body {
+  padding: 22px 20px;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease,
+    visibility 0s linear 0.32s;
+}
+
+.an-acc-panel.is-expanded .an-acc-body {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.24s ease 0.06s,
+    transform 0.24s ease 0.06s,
+    visibility 0s linear;
+}
+
+/* A report inside a panel carries no card chrome of its own — the panel is
+   already the card, and nesting one inside the other reads as a box in a box.
+   It is deliberately not `.an-chart-card`: system-components.css paints that
+   class with a surface, a border and a shadow, and it loads last. */
+.an-acc-report {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* `.an-chart-body` is pinned to 250px with the overflow clipped, which suits
+   the two-up grid it was written for. A panel is full width and can give its
+   chart the room, so the height follows the chart instead of cropping it. */
+.an-acc-body .an-chart-body {
+  height: auto;
+  min-height: 280px;
+}
+
+/* A panel holds one report, so the two-column charts grid collapses to a
+   single full-width column inside it. */
+.an-acc-body .an-charts-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* ---------- Financial Summary Report (definition rows) ---------- */
+.an-summary-rows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 32px;
+  margin: 0;
+}
+
+.an-summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--cuenta-divider);
+}
+
+.an-summary-row dt {
+  font-size: 0.88rem;
+  color: var(--cuenta-text-secondary);
+}
+
+.an-summary-row dd {
+  margin: 0;
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: var(--cuenta-text-heading);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.an-summary-row dd.positive {
+  color: var(--cuenta-success);
+}
+
+.an-summary-row dd.warning {
+  color: var(--cuenta-warning);
+}
+
+.an-summary-row dd.danger {
+  color: var(--cuenta-danger);
+}
+
 /* ---------- Spending Highlights (4 Compact Cards) ---------- */
 .an-highlight-grid {
   display: grid;
@@ -1085,6 +1337,116 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* ---------- Combined AI Risk & Strategic Analysis panel ----------
+   Risk & Anomaly Analysis and Strategic Recommendations sit inside one
+   accordion row now instead of two, as one continuous report: a subsection
+   head, the at-a-glance strip, the severity-grouped anomaly cards, then a
+   second subsection head leading into the recommendation cards. */
+.an-acc-subsection + .an-acc-subsection {
+  padding-top: 22px;
+  margin-top: 4px;
+  border-top: 1px solid var(--cuenta-divider);
+}
+
+.an-acc-subhead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.an-acc-subhead-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-control);
+  display: grid;
+  place-items: center;
+  background: var(--cuenta-mint-soft);
+  color: var(--cuenta-teal);
+  flex-shrink: 0;
+}
+
+.an-acc-subhead-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--cuenta-text-heading);
+  letter-spacing: -0.01em;
+}
+
+.an-acc-subhead-desc {
+  margin: 3px 0 0;
+  font-size: 0.86rem;
+  color: var(--cuenta-text-secondary);
+  line-height: 1.5;
+}
+
+/* Risk Level / Budget Consumption Status — the two figures a reader wants
+   before scanning the individual alert cards below. */
+.an-risk-glance {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.an-risk-glance-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--radius-control);
+  background: var(--cuenta-card-muted);
+  border: 1px solid var(--cuenta-border);
+}
+
+.an-risk-glance-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--cuenta-text-secondary);
+}
+
+.an-risk-section-title {
+  margin: 0 0 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cuenta-muted);
+}
+
+.an-risk-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.an-risk-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.an-risk-group-count {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--cuenta-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.an-risk-group-empty {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: var(--radius-control);
+  background: var(--cuenta-card-muted);
+  border: 1px dashed var(--cuenta-border);
+  color: var(--cuenta-muted);
+  font-size: 0.86rem;
 }
 
 /* ---------- Risk Analysis (Individual Modular Cards) ---------- */
@@ -1471,6 +1833,23 @@
   color: var(--cuenta-text-secondary);
 }
 
+/* Anyone who has asked the OS to stop animation gets the same open/close
+   without the travel — the state change still has to be visible. */
+@media (prefers-reduced-motion: reduce) {
+
+  .an-acc-panel,
+  .an-acc-body,
+  .an-acc-chevron,
+  .an-acc-item,
+  .an-acc-trigger {
+    transition: none;
+  }
+
+  .an-acc-body {
+    transform: none;
+  }
+}
+
 /* ---------- Spinner Animation ---------- */
 .an-spin {
   animation: an-rotate 0.9s linear infinite;
@@ -1520,6 +1899,11 @@
 
   .an-pie-inner {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .an-summary-rows {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
   }
 }
 
@@ -1575,6 +1959,34 @@
 
   .an-page-title {
     font-size: 1.5rem;
+  }
+
+  /* Phones: the trigger wraps to two rows — icon, title and chevron on the
+     first, the live figure below it — so nothing gets squeezed to an
+     ellipsis. */
+  .an-acc-trigger {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px 12px;
+    padding: 16px;
+  }
+
+  .an-acc-title {
+    font-size: 1rem;
+  }
+
+  .an-acc-copy {
+    flex: 1 1 60%;
+  }
+
+  .an-acc-meta {
+    order: 1;
+    flex: 0 0 auto;
+    margin-left: 52px;
+  }
+
+  .an-acc-body {
+    padding: 18px 16px;
   }
 }
 
