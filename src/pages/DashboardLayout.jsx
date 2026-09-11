@@ -32,7 +32,7 @@ const navItems = [
     icon: LayoutDashboard
   },
   {
-    label: 'Budgets',
+    label: 'Budgets & Analysis',
     path: '/dashboard/budgets',
     roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
     icon: Wallet
@@ -62,7 +62,7 @@ const navItems = [
     icon: FileText
   },
   {
-    label: 'Documents',
+    label: 'Documents & Receipts',
     path: '/dashboard/documents',
     roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
     icon: Files

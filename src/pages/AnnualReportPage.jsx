@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react'
 import CurrencyInput from '../components/CurrencyInput';
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { FileText, Printer, ArrowLeft } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
@@ -20,13 +20,14 @@ function AnnualReportPage() {
   const { addDocument } = useDocuments()
   const { profileName, role, profileSurname } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const activeChairmanName = useActiveSkChairmanName()
 
   const [expectedResults, setExpectedResults] = useState('')
   const [performanceIndicators, setPerformanceIndicators] = useState('')
   const [projectOverrides, setProjectOverrides] = useState({})
-  
-  const [selectedYear, setSelectedYear] = useState(currentYear)
+
+  const [selectedYear, setSelectedYear] = useState(Number(location.state?.year) || currentYear)
   const [showPreview, setShowPreview] = useState(false)
   
   const fullName = profileName
@@ -234,7 +235,7 @@ function AnnualReportPage() {
       <header className="dashboard-header">
         <div className="header-left">
           <div>
-            <p className="eyebrow">Documents</p>
+            <p className="eyebrow">Documents &amp; Receipts</p>
             <h1>Annual Report</h1>
             <p>Generate the official Annual Statement of Receipts and Payments and Project Summary.</p>
           </div>

@@ -271,6 +271,61 @@ export async function deleteReceiptRecord(supabase, { id, path, originalPath }) 
   return { error: error || null }
 }
 
+const GENERATED_DOCUMENTS_BUCKET = 'generated-documents'
+
+/**
+ * Generates a storage path for a generated document PDF, scoped to the
+ * Project/Event/Payroll record it was generated from.
+ * Target format: {kind}s/{recordId}/{timestamp}-{filename}
+ * @param {'project'|'event'|'payroll'} kind
+ * @param {string|number} recordId
+ * @param {string} fileName
+ * @returns {string}
+ */
+export function generateDocumentPath(kind, recordId, fileName) {
+  const safeName = String(fileName || 'document.pdf').replace(/\s+/g, '-')
+  const folder = kind === 'event' ? 'events' : kind === 'payroll' ? 'payroll' : 'projects'
+  return `${folder}/${recordId}/${Date.now()}-${safeName}`
+}
+
+/**
+ * Uploads a generated document's PDF blob to the generated-documents bucket.
+ * Returns the storage path on success, or an error — never throws, so a
+ * failed upload can be treated as non-fatal by the caller (the document's
+ * metadata row still gets saved, just without a file attached).
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {{ kind: 'project'|'event'|'payroll', recordId: string|number, blob: Blob, fileName: string }} params
+ * @returns {Promise<{ path: string|null, error: Error|null }>}
+ */
+export async function uploadGeneratedDocumentPdf(supabase, { kind, recordId, blob, fileName }) {
+  if (!blob) return { path: null, error: null }
+
+  const path = generateDocumentPath(kind, recordId, fileName)
+  const { error } = await supabase.storage
+    .from(GENERATED_DOCUMENTS_BUCKET)
+    .upload(path, blob, { upsert: false, contentType: 'application/pdf' })
+
+  if (error) return { path: null, error }
+  return { path, error: null }
+}
+
+/**
+ * Removes a generated document's PDF from storage. Used after editing an
+ * already-generated document in place — the new PDF is uploaded (its own
+ * fresh path) and the row updated first, then the superseded file is cleaned
+ * up. Best-effort: a failure here is non-fatal, since the row is the source
+ * of truth for what currently exists (an orphaned old file is recoverable;
+ * losing the new one is not).
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {string} path
+ * @returns {Promise<{ error: Error|null }>}
+ */
+export async function removeGeneratedDocumentPdf(supabase, path) {
+  if (!path) return { error: null }
+  const { error } = await supabase.storage.from(GENERATED_DOCUMENTS_BUCKET).remove([path])
+  return { error: error || null }
+}
+
 /**
  * Inserts a receipt record into the database, providing robust linking and metadata.
  * Requires the file path and user session data.

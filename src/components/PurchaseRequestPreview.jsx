@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import '../components/PrintPreview.css'
 import barangaySeal from '../assets/brgy-logo-2.png'
+import { capturePrintPagesToPdfBlob } from '../utils/documentPdfCapture'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -10,9 +11,15 @@ const currency = new Intl.NumberFormat('en-PH', {
 
 const MIN_ROWS = 10
 
-function PurchaseRequestPreview({ data, onClose, onSave }) {
+// `autoSave`: skip waiting for a second manual click on "Print / Save as
+// PDF" — used when this preview was reached by editing an already-generated
+// document, where the form's own button already reads "Save". Clicking it
+// should actually save, not just land on another screen that still needs a
+// click of its own.
+function PurchaseRequestPreview({ data, onClose, onSave, autoSave = false }) {
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const containerRef = useRef(null)
   const {
     barangay,
     municipality,
@@ -32,19 +39,32 @@ function PurchaseRequestPreview({ data, onClose, onSave }) {
     paddedItems.push({ itemName: '', quantity: '', unitOfIssue: '', unitCost: '', total: '' })
   }
 
-  async function handlePrint(e) {
+  async function performSave() {
+    if (!onSave) return
+    setIsSaving(true)
+    setSaveError('')
+    try {
+      const pdfBlob = await capturePrintPagesToPdfBlob(containerRef.current)
+      await onSave(pdfBlob)
+      setTimeout(() => window.print(), 500)
+    } catch (err) {
+      setSaveError('Failed to save document record: ' + err.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    if (autoSave) performSave()
+    // Only ever once, right after this preview mounts — not on every
+    // re-render, and not again if `data`/`onSave` identity happens to change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function handlePrint(e) {
     e.preventDefault()
     if (onSave) {
-      setIsSaving(true)
-      setSaveError('')
-      try {
-        await onSave()
-        setTimeout(() => window.print(), 500)
-      } catch (err) {
-        setSaveError('Failed to save document record: ' + err.message)
-      } finally {
-        setIsSaving(false)
-      }
+      performSave()
     } else {
       window.print()
     }
@@ -52,7 +72,7 @@ function PurchaseRequestPreview({ data, onClose, onSave }) {
 
   return (
     <div className="print-preview-overlay">
-      <div className="print-preview-container">
+      <div className="print-preview-container" ref={containerRef}>
         <div className="print-preview-toolbar">
           {saveError && <span style={{ color: '#ef4444', marginRight: '16px', fontSize: '0.9rem' }}>{saveError}</span>}
           <button type="button" className="close-btn" onClick={onClose} disabled={isSaving}>

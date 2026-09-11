@@ -62,23 +62,25 @@ async function getNextItineraryNumber() {
   }
 }
 
-function ItineraryOfTravelForm({ profileName, role, onPreview }) {
-  const [itineraryNumber, setItineraryNumber] = useState('')
-  const [travelerName, setTravelerName] = useState('')
-  const [position, setPosition] = useState('')
-  const [officialStation, setOfficialStation] = useState('Midsayap, Cotabato')
+function ItineraryOfTravelForm({ profileName, role, onPreview, initialData = null }) {
+  const [itineraryNumber, setItineraryNumber] = useState(() => initialData?.itineraryNumber ?? '')
+  const [travelerName, setTravelerName] = useState(() => initialData?.travelerName ?? '')
+  const [position, setPosition] = useState(() => initialData?.position ?? '')
+  const [officialStation, setOfficialStation] = useState(() => initialData?.officialStation ?? 'Midsayap, Cotabato')
   const [travelStart, setTravelStart] = useState(todayISO())
   const [travelEnd, setTravelEnd] = useState(todayISO())
-  const [purpose, setPurpose] = useState('')
-  const [rows, setRows] = useState(() => Array.from({ length: 5 }, createEmptyTravelRow))
-  const [approvedBy, setApprovedBy] = useState('')
-  const [immediateSupervisor, setImmediateSupervisor] = useState('')
+  const [purpose, setPurpose] = useState(() => initialData?.purpose ?? '')
+  const [rows, setRows] = useState(() => initialData?.rows ?? Array.from({ length: 5 }, createEmptyTravelRow))
+  const [approvedBy, setApprovedBy] = useState(() => initialData?.approvedBy ?? '')
+  const [immediateSupervisor, setImmediateSupervisor] = useState(() => initialData?.immediateSupervisor ?? '')
   const [generatingNumber, setGeneratingNumber] = useState(false)
 
   useEffect(() => {
-    setTravelerName(profileName || '')
-    setPosition(role || '')
-  }, [profileName, role])
+    if (!initialData) {
+      setTravelerName(profileName || '')
+      setPosition(role || '')
+    }
+  }, [profileName, role, initialData])
 
   function updateRow(index, field, value) {
     setRows((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)))
@@ -321,7 +323,7 @@ function ItineraryOfTravelForm({ profileName, role, onPreview }) {
           onClick={handlePreview}
           disabled={generatingNumber}
         >
-          {generatingNumber ? 'Generating...' : 'Preview Document'}
+          {generatingNumber ? 'Generating...' : (initialData ? 'Save' : 'Preview Document')}
         </button>
       </div>
     </div>

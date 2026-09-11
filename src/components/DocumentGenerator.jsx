@@ -1,10 +1,11 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBudget } from '../context/BudgetContext'
 import { useAuth } from '../context/AuthContext'
 import { useDocuments } from '../context/DocumentContext'
 import { useActiveSkChairmanName } from '../hooks/useActiveSkChairmanName'
 import { supabase } from '../supabase/supabaseClient'
+import { uploadGeneratedDocumentPdf, removeGeneratedDocumentPdf } from '../utils/uploadUtils'
 import PurchaseRequestPreview from './PurchaseRequestPreview'
 import DisbursementVoucherForm from './documents/DisbursementVoucherForm'
 import DisbursementVoucherPreview from './documents/DisbursementVoucherPreview'
@@ -112,12 +113,26 @@ function DocumentGenerator({
   recordKind = null,
   allowedDocTypes = null,
   onSaved,
+  // Fires once the preview overlay is dismissed after a save — not at save
+  // time itself, since the overlay's own "Print / Save as PDF" step still
+  // needs the DOM to stay mounted for window.print() a moment later.
+  // GenerateDocumentsModal uses this to switch back to the Generated
+  // Documents tab only once printing is actually done.
+  onPreviewClosed,
+  // Set when opened via the "Edit" action on an already-generated document —
+  // { id, filePath, data: { type, data } }, the row being edited. Its saved
+  // form data prefills the matching form; saving updates this same row in
+  // place (new content, new date, new PDF replacing the old one) instead of
+  // inserting a new one. Date fields are intentionally left at their normal
+  // defaults rather than reparsed from the saved display-formatted strings.
+  editingDocument = null,
 }) {
   const { requests } = useBudget()
   const { profileName, role } = useAuth()
-  const { addDocument } = useDocuments()
+  const { addDocument, updateDocument } = useDocuments()
   const activeChairmanName = useActiveSkChairmanName()
   const navigate = useNavigate()
+  const initialData = editingDocument?.data?.data || null
 
   const visibleDocTypes = useMemo(
     () => (allowedDocTypes ? DOC_TYPES.filter((dt) => allowedDocTypes.includes(dt.id)) : DOC_TYPES),
@@ -131,14 +146,15 @@ function DocumentGenerator({
   const [preview, setPreview] = useState(null)
   const [generatingNumber, setGeneratingNumber] = useState(false)
 
-  // PR fields
-  const [barangay, setBarangay] = useState(DEFAULTS.barangay)
-  const [municipality, setMunicipality] = useState(DEFAULTS.municipality)
-  const [province, setProvince] = useState(DEFAULTS.province)
-  const [prNumber, setPrNumber] = useState('')
+  // PR fields — seeded from initialData when opened via "Edit" on an
+  // already-generated Purchase Request (see the initialData prop doc above).
+  const [barangay, setBarangay] = useState(() => initialData?.barangay ?? DEFAULTS.barangay)
+  const [municipality, setMunicipality] = useState(() => initialData?.municipality ?? DEFAULTS.municipality)
+  const [province, setProvince] = useState(() => initialData?.province ?? DEFAULTS.province)
+  const [prNumber, setPrNumber] = useState(() => initialData?.prNumber ?? '')
   const [docDate, setDocDate] = useState(todayISO())
-  const [requestedByName, setRequestedByName] = useState('')
-  const [approvedByName, setApprovedByName] = useState('')
+  const [requestedByName, setRequestedByName] = useState(() => initialData?.requestedByName ?? '')
+  const [approvedByName, setApprovedByName] = useState(() => initialData?.approvedByName ?? '')
   const [items, setItems] = useState([])
   // Which preset record's fields the PR item-breakdown state currently
   // reflects — lets the derivation below run exactly once per record,
@@ -305,7 +321,7 @@ function DocumentGenerator({
     setPreview(previewData)
   }
 
-  async function handleSaveDocument(previewData) {
+  async function handleSaveDocument(previewData, pdfBlob) {
     if (!previewData) return
 
     let name = 'Document'
@@ -318,18 +334,54 @@ function DocumentGenerator({
 
     // A document generated from a specific Project/Event/Payroll links to
     // that record's own id and kind, not to the underlying budget request —
-    // that is what lets the Documents page (and, eventually, that record's
-    // own history) look the reference up directly instead of by title text.
-    const saved = await addDocument({
+    // that is what lets the Documents page, and that record's own Generated
+    // Documents history, look the reference up directly instead of by title
+    // text.
+    let filePath = null
+    let fileName = null
+    if (presetRecord && pdfBlob) {
+      fileName = `${name}.pdf`
+      const { path, error } = await uploadGeneratedDocumentPdf(supabase, {
+        kind: recordKind,
+        recordId: presetRecord.id,
+        blob: pdfBlob,
+        fileName,
+      })
+      if (error) console.warn('Could not upload generated document PDF:', error)
+      filePath = path
+    }
+
+    const payload = {
       name,
-      project: selectedRequest ? selectedRequest.event : '',
+      project: presetRecord ? (presetRecord.event || presetRecord.project || '') : (selectedRequest ? selectedRequest.event : ''),
       generatedBy: profileName || role,
       type: typeLabel,
       data: previewData,
       relatedEntityType: presetRecord ? recordKind : (selectedRequest ? (docType === 'payroll' ? 'payroll' : 'request') : null),
       relatedEntityId: presetRecord ? presetRecord.id : (selectedRequest?.id || null),
-    })
+      fileName: filePath ? fileName : null,
+      filePath,
+    }
 
+    let saved
+    if (editingDocument) {
+      // Editing an already-generated document updates that same row rather
+      // than inserting a new one.
+      saved = await updateDocument(editingDocument.id, payload)
+
+      // The new PDF is already uploaded and the row already points at it —
+      // only now is it safe to remove the superseded file. Skipped when the
+      // capture/upload failed this time (filePath null) so a real PDF is
+      // never deleted in favor of nothing.
+      if (filePath && editingDocument.filePath && editingDocument.filePath !== filePath) {
+        const { error } = await removeGeneratedDocumentPdf(supabase, editingDocument.filePath)
+        if (error) console.warn('Could not remove the previous document PDF:', error)
+      }
+    } else {
+      saved = await addDocument(payload)
+    }
+
+    didSaveRef.current = true
     if (onSaved) onSaved(saved)
   }
 
@@ -339,7 +391,18 @@ function DocumentGenerator({
   // and pre-fill the same record instead of asking the user to pick again.
   function handleOpenNarrativeReport() {
     const requestId = presetRecord ? (presetRecord.requestId || presetRecord.id) : selectedRequest?.id
-    navigate(`/dashboard/narrative-report${requestId ? `?requestId=${encodeURIComponent(requestId)}` : ''}`)
+    const params = new URLSearchParams()
+    if (requestId) params.set('requestId', requestId)
+    // Carry the originating Project/Event through so the narrative report,
+    // once saved, links back to that record the same way every other
+    // document type does (relatedEntityType/relatedEntityId), instead of
+    // only ever linking to the underlying budget request.
+    if (presetRecord && recordKind) {
+      params.set('recordKind', recordKind)
+      params.set('recordId', presetRecord.id)
+    }
+    const query = params.toString()
+    navigate(`/dashboard/narrative-report${query ? `?${query}` : ''}`)
   }
 
   // Render the form for the current doc type
@@ -352,6 +415,7 @@ function DocumentGenerator({
             role={role}
             selectedRequest={selectedRequest}
             onPreview={handleNewDocPreview}
+            initialData={initialData}
           />
         )
       case 'payroll':
@@ -364,6 +428,7 @@ function DocumentGenerator({
             role={role}
             selectedRequest={selectedRequest}
             onPreview={handleNewDocPreview}
+            initialData={initialData}
           />
         )
       case 'project':
@@ -373,6 +438,7 @@ function DocumentGenerator({
             role={role}
             selectedRequest={selectedRequest}
             onPreview={handleNewDocPreview}
+            initialData={initialData}
           />
         )
       case 'itinerary':
@@ -381,6 +447,7 @@ function DocumentGenerator({
             profileName={profileName}
             role={role}
             onPreview={handleNewDocPreview}
+            initialData={initialData}
           />
         )
       case 'transmittal':
@@ -389,6 +456,7 @@ function DocumentGenerator({
             profileName={profileName}
             role={role}
             onPreview={handleNewDocPreview}
+            initialData={initialData}
           />
         )
       case 'narrative':
@@ -401,23 +469,45 @@ function DocumentGenerator({
     }
   }
 
+  // Closing the preview after an actual save is what should send
+  // GenerateDocumentsModal back to the Generated Documents tab — closing
+  // without ever saving (the user just backs out) must not, so this is
+  // tracked separately from `preview` itself. A ref, not state: it doesn't
+  // need to trigger a render, just to be read at close time.
+  const didSaveRef = useRef(false)
+
+  function handlePreviewClose() {
+    setPreview(null)
+    if (didSaveRef.current) {
+      didSaveRef.current = false
+      if (onPreviewClosed) onPreviewClosed()
+    }
+  }
+
   // Render the preview overlay for the current preview type
   function renderPreview() {
     if (!preview) return null
 
+    // Editing an already-generated document: the form's own button already
+    // reads "Save" (see the initialData-driven label in each Form
+    // component), so this preview should act on that promise immediately
+    // instead of waiting for a second manual click on its own
+    // "Print / Save as PDF" button.
+    const autoSave = Boolean(editingDocument)
+
     switch (preview.type) {
       case 'pr':
-        return <PurchaseRequestPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
+        return <PurchaseRequestPreview data={preview.data} onClose={handlePreviewClose} onSave={(pdfBlob) => handleSaveDocument(preview, pdfBlob)} autoSave={autoSave} />
       case 'dv':
-        return <DisbursementVoucherPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
+        return <DisbursementVoucherPreview data={preview.data} onClose={handlePreviewClose} onSave={(pdfBlob) => handleSaveDocument(preview, pdfBlob)} autoSave={autoSave} />
       case 'payroll':
-        return <PayrollPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
+        return <PayrollPreview data={preview.data} onClose={handlePreviewClose} onSave={(pdfBlob) => handleSaveDocument(preview, pdfBlob)} autoSave={autoSave} />
       case 'project':
-        return <ProjectDesignPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
+        return <ProjectDesignPreview data={preview.data} onClose={handlePreviewClose} onSave={(pdfBlob) => handleSaveDocument(preview, pdfBlob)} autoSave={autoSave} />
       case 'itinerary':
-        return <ItineraryOfTravelPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
+        return <ItineraryOfTravelPreview data={preview.data} onClose={handlePreviewClose} onSave={(pdfBlob) => handleSaveDocument(preview, pdfBlob)} autoSave={autoSave} />
       case 'transmittal':
-        return <TransmittalLetterPreview data={preview.data} onClose={() => setPreview(null)} onSave={() => handleSaveDocument(preview)} />
+        return <TransmittalLetterPreview data={preview.data} onClose={handlePreviewClose} onSave={(pdfBlob) => handleSaveDocument(preview, pdfBlob)} autoSave={autoSave} />
       default:
         return null
     }
@@ -631,7 +721,7 @@ function DocumentGenerator({
               onClick={handlePreview}
               disabled={generatingNumber || !items.length}
             >
-              {generatingNumber ? 'Generating...' : 'Preview Document'}
+              {generatingNumber ? 'Generating...' : (initialData ? 'Save' : 'Preview Document')}
             </button>
           </div>
         </div>

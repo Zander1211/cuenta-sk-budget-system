@@ -9,11 +9,11 @@ import { materializeActualExpenseRows, summarizeApprovedBudgetFinancials } from 
 
 const PAGE_NAMES = {
   '/dashboard': 'Main Dashboard',
-  '/dashboard/budgets': 'Budgets',
+  '/dashboard/budgets': 'Budgets & Analysis',
   '/dashboard/projects': 'Projects and Events',
   '/dashboard/expenses': 'Expenses',
   '/dashboard/request': 'Submit Budget Request',
-  '/dashboard/documents': 'Documents',
+  '/dashboard/documents': 'Documents & Receipts',
   '/dashboard/approvals': 'Approvals',
   '/dashboard/archive': 'Archive',
   '/dashboard/ai-analysis': 'Financial Analysis',
@@ -66,7 +66,7 @@ function getChips({ role, budgetUtilization, remaining, pendingApprovals, missin
   if (pendingApprovals > 0 && role === 'SK Chairman') chips.push(`Summarize the pending approval requests`)
   if (missingReceipts > 0) chips.push(`Which expenses are missing receipts?`)
   if (currentPage === 'Submit Budget Request') chips.push(`How do I fill out a Purchase Request?`)
-  if (currentPage === 'Documents') chips.push(`What documents do I need for a disbursement?`)
+  if (currentPage === 'Documents & Receipts') chips.push(`What documents do I need for a disbursement?`)
 
   const fallback = [
     `How is our budget doing this month?`,

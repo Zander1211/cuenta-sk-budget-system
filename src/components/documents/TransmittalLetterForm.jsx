@@ -43,25 +43,27 @@ function createEmptyOtherRow() {
   return { date: '', typeOfReport: '' }
 }
 
-function TransmittalLetterForm({ profileName, role, onPreview }) {
+function TransmittalLetterForm({ profileName, role, onPreview, initialData = null }) {
   const activeChairmanName = useActiveSkChairmanName()
   const [docDate, setDocDate] = useState(todayISO())
-  const [coaTeamNumber, setCoaTeamNumber] = useState('')
-  const [month, setMonth] = useState(getCurrentMonth())
-  const [accountNo, setAccountNo] = useState('1002-1118-84')
-  const [dvRows, setDvRows] = useState(() => Array.from({ length: 3 }, createEmptyDvRow))
-  const [rcdRows, setRcdRows] = useState(() => Array.from({ length: 2 }, createEmptyRcdRow))
-  const [otherRows, setOtherRows] = useState(() => Array.from({ length: 2 }, createEmptyOtherRow))
-  const [bodyText, setBodyText] = useState('')
-  const [skTreasurer, setSkTreasurer] = useState('')
-  const [skChairperson, setSkChairperson] = useState('')
+  const [coaTeamNumber, setCoaTeamNumber] = useState(() => initialData?.coaTeamNumber ?? '')
+  const [month, setMonth] = useState(() => initialData?.month ?? getCurrentMonth())
+  const [accountNo, setAccountNo] = useState(() => initialData?.accountNo ?? '1002-1118-84')
+  const [dvRows, setDvRows] = useState(() => initialData?.dvRows ?? Array.from({ length: 3 }, createEmptyDvRow))
+  const [rcdRows, setRcdRows] = useState(() => initialData?.rcdRows ?? Array.from({ length: 2 }, createEmptyRcdRow))
+  const [otherRows, setOtherRows] = useState(() => initialData?.otherRows ?? Array.from({ length: 2 }, createEmptyOtherRow))
+  const [bodyText, setBodyText] = useState(() => initialData?.bodyText ?? '')
+  const [skTreasurer, setSkTreasurer] = useState(() => initialData?.skTreasurer ?? '')
+  const [skChairperson, setSkChairperson] = useState(() => initialData?.skChairperson ?? '')
 
   useEffect(() => {
     if (activeChairmanName) setSkChairperson((prev) => prev || activeChairmanName)
   }, [activeChairmanName])
 
-  // Default body text
+  // Default body text — skipped when editing an already-generated document,
+  // whose bodyText is already seeded above from what was saved.
   useState(() => {
+    if (initialData?.bodyText) return
     setBodyText(
       `We submit the original copies of the disbursement vouchers issued for the month of ${getCurrentMonth()}, duly acknowledged by the payees together with the supporting documents, and copies of the corresponding checks and Sangguniang Kabataan Certification (SKC).`
     )
@@ -325,7 +327,7 @@ function TransmittalLetterForm({ profileName, role, onPreview }) {
 
       <div className="doc-gen-actions">
         <button type="button" className="primary-button" onClick={handlePreview}>
-          Preview Document
+          {initialData ? 'Save' : 'Preview Document'}
         </button>
       </div>
     </div>

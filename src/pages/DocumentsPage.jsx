@@ -7,7 +7,7 @@ const TABS = [
   {
     key: 'documents',
     label: 'Documents',
-    description: 'Generate, view, manage, and print official COA-mandated forms.',
+    description: 'Create, view, edit, print, and export the SK Annual Report.',
   },
   {
     key: 'receipts',

@@ -5,9 +5,12 @@ import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import { useAuth } from '../context/AuthContext'
 import { useDocuments } from '../context/DocumentContext'
+import { useNotifications } from '../context/NotificationContext'
 import NarrativeReportPreview from '../components/documents/NarrativeReportPreview'
 import { savePhoto, getPhotosByProject, deletePhoto } from '../utils/photoDB'
 import { useActiveSkChairmanName } from '../hooks/useActiveSkChairmanName'
+import { supabase } from '../supabase/supabaseClient'
+import { uploadGeneratedDocumentPdf } from '../utils/uploadUtils'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -28,6 +31,7 @@ function NarrativeReportPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { requests, expenses } = useBudget()
   const { addDocument } = useDocuments()
+  const { addNotification } = useNotifications()
   const { profileName, role } = useAuth()
   const activeChairmanName = useActiveSkChairmanName()
 
@@ -182,15 +186,34 @@ function NarrativeReportPage() {
   // same request so the user isn't asked to pick it again. If the id doesn't
   // match anything (e.g. the underlying request row was later removed), this
   // silently no-ops and the dropdown below is still there as a fallback.
+  // The originating Project/Event, when this page was opened from that
+  // record's own Documents button (see DocumentGenerator's
+  // handleOpenNarrativeReport) — used below to link the saved document back
+  // to the record itself instead of only to the underlying budget request,
+  // so it shows up in that record's own Generated Documents history, and to
+  // send "Back"/"Cancel" to that same record's Documents modal instead of
+  // the unrelated global Documents page.
+  const [presetRecordRef, setPresetRecordRef] = useState(null)
+  const backDestination = presetRecordRef
+    ? `/dashboard/projects-events?openDocs=${encodeURIComponent(presetRecordRef.id)}`
+    : '/dashboard/documents'
+
   useEffect(() => {
     const presetId = searchParams.get('requestId')
     if (!presetId || selectedRequestId || !requests.length) return
     if (!requests.some((r) => r.id === presetId)) return
 
     selectRequestById(presetId)
+
+    const recordKind = searchParams.get('recordKind')
+    const recordId = searchParams.get('recordId')
+    if (recordKind && recordId) setPresetRecordRef({ kind: recordKind, id: recordId })
+
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev)
       next.delete('requestId')
+      next.delete('recordKind')
+      next.delete('recordId')
       return next
     }, { replace: true })
     // selectRequestById reads from `requests`/component state directly and is
@@ -347,7 +370,7 @@ function NarrativeReportPage() {
     })
   }
 
-  async function handleSaveDocument(previewData) {
+  async function handleSaveDocument(previewData, pdfBlob) {
     if (!previewData) return
     const documentType = previewData.printMode === 'photos'
       ? 'Photo Documentation'
@@ -355,15 +378,46 @@ function NarrativeReportPage() {
         ? 'Narrative Report & Photo Documentation'
         : 'Narrative Report'
 
+    const name = `${documentType} - ${projectTitle || 'Untitled'}`
+
+    let filePath = null
+    let fileName = null
+    if (presetRecordRef && pdfBlob) {
+      fileName = `${name}.pdf`
+      const { path, error } = await uploadGeneratedDocumentPdf(supabase, {
+        kind: presetRecordRef.kind,
+        recordId: presetRecordRef.id,
+        blob: pdfBlob,
+        fileName,
+      })
+      if (error) console.warn('Could not upload generated document PDF:', error)
+      filePath = path
+    }
+
     await addDocument({
-      name: `${documentType} - ${projectTitle || 'Untitled'}`,
+      name,
       project: projectTitle || '',
       generatedBy: profileName || role,
       type: documentType,
       data: { type: 'narrative', data: previewData },
-      relatedEntityType: selectedRequest ? 'request' : null,
-      relatedEntityId: selectedRequest?.id || null,
+      relatedEntityType: presetRecordRef ? presetRecordRef.kind : (selectedRequest ? 'request' : null),
+      relatedEntityId: presetRecordRef ? presetRecordRef.id : (selectedRequest?.id || null),
+      fileName: filePath ? fileName : null,
+      filePath,
     })
+
+    addNotification({
+      type: 'system',
+      title: 'Document Generated',
+      message: `${documentType} for "${projectTitle || 'Untitled'}" was successfully generated.`,
+    })
+
+    // The preview's own handlePrint calls window.print() ~500ms after this
+    // resolves — wait for the print dialog to actually close (printed or
+    // cancelled, either way) before leaving the page, then return to
+    // wherever "Back"/"Cancel" would: that record's own Documents modal
+    // history tab, or the global Documents page for the standalone flow.
+    window.addEventListener('afterprint', () => navigate(backDestination), { once: true })
   }
 
   return (
@@ -371,7 +425,7 @@ function NarrativeReportPage() {
       <header className="dashboard-header">
         <div className="header-left">
           <div>
-            <p className="eyebrow">Documents</p>
+            <p className="eyebrow">Documents &amp; Receipts</p>
             <h1>Narrative Report &amp; Photo Documentation</h1>
             <p>Generate a professional narrative report and photo documentation for a project or event.</p>
           </div>
@@ -380,10 +434,10 @@ function NarrativeReportPage() {
           <button
             type="button"
             className="secondary-button"
-            onClick={() => navigate('/dashboard/documents')}
+            onClick={() => navigate(backDestination)}
           >
             <ArrowLeft size={16} />
-            Back to Documents
+            {presetRecordRef ? 'Back' : 'Back to Documents'}
           </button>
         </div>
       </header>
@@ -842,7 +896,7 @@ function NarrativeReportPage() {
           <button
             type="button"
             className="secondary-button"
-            onClick={() => navigate('/dashboard/documents')}
+            onClick={() => navigate(backDestination)}
           >
             Cancel
           </button>
@@ -853,7 +907,7 @@ function NarrativeReportPage() {
         <NarrativeReportPreview 
           data={preview} 
           onClose={() => setPreview(null)} 
-          onSave={(data) => handleSaveDocument(data)} 
+          onSave={(data, pdfBlob) => handleSaveDocument(data, pdfBlob)}
         />
       ) : null}
     </RoleGate>

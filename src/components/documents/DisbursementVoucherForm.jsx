@@ -49,36 +49,41 @@ async function getNextDvNumber() {
   }
 }
 
-function DisbursementVoucherForm({ profileName, role, selectedRequest, onPreview }) {
+function DisbursementVoucherForm({ profileName, role, selectedRequest, onPreview, initialData = null }) {
   const activeChairmanName = useActiveSkChairmanName()
-  const [dvNumber, setDvNumber] = useState('')
+  const [dvNumber, setDvNumber] = useState(() => initialData?.dvNumber ?? '')
   const [docDate, setDocDate] = useState(todayISO())
-  const [fund, setFund] = useState('10% SK')
-  const [payeeName, setPayeeName] = useState('')
-  const [payeeAddress, setPayeeAddress] = useState('')
-  const [particulars, setParticulars] = useState('')
-  const [amount, setAmount] = useState('')
-  const [skKagawad, setSkKagawad] = useState('')
-  const [skTreasurer, setSkTreasurer] = useState('')
-  const [skChairman, setSkChairman] = useState('')
+  const [fund, setFund] = useState(() => initialData?.fund ?? '10% SK')
+  const [payeeName, setPayeeName] = useState(() => initialData?.payeeName ?? '')
+  const [payeeAddress, setPayeeAddress] = useState(() => initialData?.payeeAddress ?? '')
+  const [particulars, setParticulars] = useState(() => initialData?.particulars ?? '')
+  const [amount, setAmount] = useState(() => (initialData?.amount != null ? String(initialData.amount) : ''))
+  const [skKagawad, setSkKagawad] = useState(() => initialData?.skKagawad ?? '')
+  const [skTreasurer, setSkTreasurer] = useState(() => initialData?.skTreasurer ?? '')
+  const [skChairman, setSkChairman] = useState(() => initialData?.skChairman ?? '')
   useEffect(() => {
     if (activeChairmanName) setSkChairman((prev) => prev || activeChairmanName)
   }, [activeChairmanName])
   const [certDateA, setCertDateA] = useState(todayISO())
   const [certDateB, setCertDateB] = useState(todayISO())
   const [certDateC, setCertDateC] = useState(todayISO())
-  const [bankName, setBankName] = useState('LBP Midsayap')
+  const [bankName, setBankName] = useState(() => initialData?.bankName ?? 'LBP Midsayap')
   const [generatingNumber, setGeneratingNumber] = useState(false)
 
   useEffect(() => {
-    if (selectedRequest) {
+    // Skip the auto-fill-from-record derivation when editing an
+    // already-generated document — its fields are already seeded from what
+    // was actually saved, and selectedRequest (the linked Project/Event) is
+    // already set on mount here, which would otherwise immediately overwrite
+    // them with the record's current live values.
+    if (selectedRequest && !initialData) {
       setPayeeName(selectedRequest.event || '')
       setParticulars(
         `To payment of ${selectedRequest.event || ''} in the amount of ${currency.format(selectedRequest.amount || 0)}`
       )
       setAmount(String(selectedRequest.amount || ''))
     }
-  }, [selectedRequest])
+  }, [selectedRequest, initialData])
 
   useEffect(() => {
     if (role === 'SK Kagawad') {
@@ -237,7 +242,7 @@ function DisbursementVoucherForm({ profileName, role, selectedRequest, onPreview
           onClick={handlePreview}
           disabled={generatingNumber}
         >
-          {generatingNumber ? 'Generating...' : 'Preview Document'}
+          {generatingNumber ? 'Generating...' : (initialData ? 'Save' : 'Preview Document')}
         </button>
       </div>
     </div>

@@ -817,53 +817,85 @@ function UserManagementPage() {
                 {filteredAccounts.length === 0 ? (
                   <p className="empty-state">No disabled accounts.</p>
                 ) : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                  // `data-table` gives the plain hover/base rules, `user-table`
+                  // layers on the same polished header (gradient + sheen,
+                  // uppercase label type) Activity Logs' table already uses —
+                  // one shared look instead of a bespoke one just for this page.
+                  <table className="data-table user-table" style={{ marginTop: 0 }}>
                     <thead>
-                      <tr style={{ borderBottom: '2px solid var(--border-color)' }}>
-                        {['User', 'Email', 'Role', 'Date Disabled', 'Status', 'Actions'].map((h) => (
-                          <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-secondary)', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                      <tr>
+                        {['User', 'Role', 'Actions'].map((h) => (
+                          <th
+                            key={h}
+                            style={{
+                              whiteSpace: 'nowrap',
+                              // Actions stays put as the row scrolls horizontally —
+                              // otherwise "Enable Account" is only reachable by
+                              // scrolling all the way right past User/Email/Role.
+                              ...(h === 'Actions'
+                                ? { position: 'sticky', right: 0, background: 'var(--grad-header)', boxShadow: 'var(--sheen), -6px 0 8px -6px rgba(0,0,0,0.12)' }
+                                : {}),
+                            }}
+                          >
                             {h}
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredAccounts.map((user, idx) => (
-                        <tr
-                          key={user.id}
-                          style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)', transition: 'background 0.15s' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.03)' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)' }}
-                        >
-                          {/* User */}
-                          <td style={{ padding: '14px', whiteSpace: 'nowrap' }}>
+                      {filteredAccounts.map((user) => (
+                        <tr key={user.id}>
+                          {/* User — name and email grouped as one identity
+                              column instead of a separate Email column, so
+                              Role/Date/Status/Actions aren't squeezed out of
+                              view in the narrower half of this two-column
+                              page. */}
+                          <td style={{ whiteSpace: 'nowrap' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'rgba(239,68,68,0.15)', color: '#b91c1c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 'bold', flexShrink: 0 }}>
+                              <div style={{ width: '34px', height: '34px', borderRadius: '50%', backgroundColor: 'rgba(239,68,68,0.15)', color: '#b91c1c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: '700', flexShrink: 0 }}>
                                 {user.full_name?.charAt(0)?.toUpperCase() || '?'}
                               </div>
-                              <span style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{user.full_name}</span>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: '600', color: 'var(--ink)' }}>{user.full_name}</div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--ink-3)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {user.email}
+                                </div>
+                              </div>
                             </div>
                           </td>
-                          {/* Email */}
-                          <td style={{ padding: '14px', color: 'var(--text-secondary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {user.email}
+                          {/* Role, Status, and Date Disabled grouped into one
+                              "Role" cell instead of three separate columns —
+                              Status is "Disabled" for every row on this tab
+                              anyway (redundant as its own column), and
+                              stacking the date underneath as a caption keeps
+                              this whole cell only as wide as the role pill
+                              itself. This is what actually fits User, this,
+                              and Actions on screen together without any of
+                              them getting squeezed out of view. */}
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              <span className="role-pill">{user.role}</span>
+                              <StatusBadge isActive={false} />
+                            </div>
+                            {user.disabled_at ? (
+                              // No "Disabled" prefix here — that's already
+                              // the badge right above it; just when.
+                              <div style={{ fontSize: '0.78rem', color: 'var(--ink-3)', marginTop: '4px' }}>
+                                {new Date(user.disabled_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                              </div>
+                            ) : null}
                           </td>
-                          {/* Role */}
-                          <td style={{ padding: '14px', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
-                            {user.role}
-                          </td>
-                          {/* Date Disabled */}
-                          <td style={{ padding: '14px', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
-                            {user.disabled_at
-                              ? new Date(user.disabled_at).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
-                              : '—'}
-                          </td>
-                          {/* Status */}
-                          <td style={{ padding: '14px', whiteSpace: 'nowrap' }}>
-                            <StatusBadge isActive={false} />
-                          </td>
-                          {/* Actions */}
-                          <td style={{ padding: '14px', whiteSpace: 'nowrap' }}>
+                          {/* Actions — sticky so "Enable Account" is always in view,
+                              matching the sticky Actions header above. */}
+                          <td
+                            style={{
+                              whiteSpace: 'nowrap',
+                              position: 'sticky',
+                              right: 0,
+                              backgroundColor: 'var(--surface)',
+                              boxShadow: '-6px 0 8px -6px rgba(0,0,0,0.12)',
+                            }}
+                          >
                             <button
                               type="button"
                               style={{

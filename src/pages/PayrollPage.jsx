@@ -590,6 +590,7 @@ function PayrollPage({ embedded = false }) {
         <GenerateDocumentsModal
           record={docGenTarget}
           kind="payroll"
+          canGenerateDocs={canGenerateDocs}
           onClose={() => setDocGenTarget(null)}
         />
       )}

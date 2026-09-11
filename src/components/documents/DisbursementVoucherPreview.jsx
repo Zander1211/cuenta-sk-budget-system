@@ -1,6 +1,7 @@
 import '../PrintPreview.css'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './AdditionalDocuments.css'
+import { capturePrintPagesToPdfBlob } from '../../utils/documentPdfCapture'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -15,9 +16,10 @@ function formatDateLocal(dateStr) {
   return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
 }
 
-function DisbursementVoucherPreview({ data, onClose, onSave }) {
+function DisbursementVoucherPreview({ data, onClose, onSave, autoSave = false }) {
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const containerRef = useRef(null)
   const {
     dvNumber,
     date,
@@ -35,19 +37,30 @@ function DisbursementVoucherPreview({ data, onClose, onSave }) {
     bankName,
   } = data
 
-  async function handlePrint(e) {
+  async function performSave() {
+    if (!onSave) return
+    setIsSaving(true)
+    setSaveError('')
+    try {
+      const pdfBlob = await capturePrintPagesToPdfBlob(containerRef.current)
+      await onSave(pdfBlob)
+      setTimeout(() => window.print(), 500)
+    } catch (err) {
+      setSaveError('Failed to save document record: ' + err.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    if (autoSave) performSave()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function handlePrint(e) {
     e.preventDefault()
     if (onSave) {
-      setIsSaving(true)
-      setSaveError('')
-      try {
-        await onSave()
-        setTimeout(() => window.print(), 500)
-      } catch (err) {
-        setSaveError('Failed to save document record: ' + err.message)
-      } finally {
-        setIsSaving(false)
-      }
+      performSave()
     } else {
       window.print()
     }
@@ -62,7 +75,7 @@ function DisbursementVoucherPreview({ data, onClose, onSave }) {
 
   return (
     <div className="print-preview-overlay">
-      <div className="print-preview-container">
+      <div className="print-preview-container" ref={containerRef}>
         <div className="print-preview-toolbar">
           {saveError && <span style={{ color: '#ef4444', marginRight: '16px', fontSize: '0.9rem' }}>{saveError}</span>}
           <button type="button" className="close-btn" onClick={onClose} disabled={isSaving}>

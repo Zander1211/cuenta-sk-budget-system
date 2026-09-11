@@ -9,31 +9,34 @@ const currency = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 2,
 })
 
-function ProjectDesignForm({ profileName, role, selectedRequest, onPreview }) {
+function ProjectDesignForm({ profileName, role, selectedRequest, onPreview, initialData = null }) {
   const activeChairmanName = useActiveSkChairmanName()
-  const [title, setTitle] = useState('')
-  const [cost, setCost] = useState('')
-  const [location, setLocation] = useState('')
-  const [projectLeader, setProjectLeader] = useState('')
-  const [rationale, setRationale] = useState('')
-  const [objectives, setObjectives] = useState(['', '', ''])
-  const [beneficiaries, setBeneficiaries] = useState(['', ''])
-  const [estimatedParticipants, setEstimatedParticipants] = useState('')
-  const [budgetItems, setBudgetItems] = useState([])
-  const [sourceOfFund, setSourceOfFund] = useState('Sangguniang Kabataan Fund')
-  const [preparedBy, setPreparedBy] = useState('')
-  const [notedBy, setNotedBy] = useState('')
+  const [title, setTitle] = useState(() => initialData?.title ?? '')
+  const [cost, setCost] = useState(() => (initialData?.cost != null ? String(initialData.cost) : ''))
+  const [location, setLocation] = useState(() => initialData?.location ?? '')
+  const [projectLeader, setProjectLeader] = useState(() => initialData?.projectLeader ?? '')
+  const [rationale, setRationale] = useState(() => initialData?.rationale ?? '')
+  const [objectives, setObjectives] = useState(() => initialData?.objectives ?? ['', '', ''])
+  const [beneficiaries, setBeneficiaries] = useState(() => initialData?.beneficiaries ?? ['', ''])
+  const [estimatedParticipants, setEstimatedParticipants] = useState(() => initialData?.estimatedParticipants ?? '')
+  const [budgetItems, setBudgetItems] = useState(() => initialData?.budgetItems ?? [])
+  const [sourceOfFund, setSourceOfFund] = useState(() => initialData?.sourceOfFund ?? 'Sangguniang Kabataan Fund')
+  const [preparedBy, setPreparedBy] = useState(() => initialData?.preparedBy ?? '')
+  const [notedBy, setNotedBy] = useState(() => initialData?.notedBy ?? '')
 
   useEffect(() => {
-    setProjectLeader(profileName || '')
-  }, [profileName])
+    if (!initialData) setProjectLeader(profileName || '')
+  }, [profileName, initialData])
 
   useEffect(() => {
     if (activeChairmanName) setNotedBy((prev) => prev || activeChairmanName)
   }, [activeChairmanName])
 
   useEffect(() => {
-    if (selectedRequest) {
+    // Editing an already-generated document: title/cost/location/budgetItems
+    // are already seeded from what was saved — don't overwrite them with the
+    // record's current live values.
+    if (selectedRequest && !initialData) {
       setTitle(selectedRequest.event || '')
       setCost(String(selectedRequest.amount || ''))
       setLocation(selectedRequest.venue || '')
@@ -60,7 +63,7 @@ function ProjectDesignForm({ profileName, role, selectedRequest, onPreview }) {
       }
       setBudgetItems(mapped)
     }
-  }, [selectedRequest])
+  }, [selectedRequest, initialData])
 
   function updateObjective(index, value) {
     setObjectives((prev) => prev.map((obj, i) => (i === index ? value : obj)))
@@ -319,7 +322,7 @@ function ProjectDesignForm({ profileName, role, selectedRequest, onPreview }) {
 
       <div className="doc-gen-actions">
         <button type="button" className="primary-button" onClick={handlePreview}>
-          Preview Document
+          {initialData ? 'Save' : 'Preview Document'}
         </button>
       </div>
     </div>

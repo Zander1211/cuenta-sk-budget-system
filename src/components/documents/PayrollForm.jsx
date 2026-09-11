@@ -60,14 +60,14 @@ async function getNextPayrollNumber() {
   }
 }
 
-function PayrollForm({ profileName, role, selectedRequest, onPreview }) {
+function PayrollForm({ profileName, role, selectedRequest, onPreview, initialData = null }) {
   const activeChairmanName = useActiveSkChairmanName()
-  const [payrollNumber, setPayrollNumber] = useState('')
-  const [periodCovered, setPeriodCovered] = useState(getCurrentMonthRange())
+  const [payrollNumber, setPayrollNumber] = useState(() => initialData?.payrollNumber ?? '')
+  const [periodCovered, setPeriodCovered] = useState(() => initialData?.periodCovered ?? getCurrentMonthRange())
   const [rows, setRows] = useState([])
-  const [skKagawad, setSkKagawad] = useState('')
-  const [skTreasurer, setSkTreasurer] = useState('')
-  const [skChairman, setSkChairman] = useState('')
+  const [skKagawad, setSkKagawad] = useState(() => initialData?.skKagawad ?? '')
+  const [skTreasurer, setSkTreasurer] = useState(() => initialData?.skTreasurer ?? '')
+  const [skChairman, setSkChairman] = useState(() => initialData?.skChairman ?? '')
   const [certDateA, setCertDateA] = useState(todayISO())
   const [certDateB, setCertDateB] = useState(todayISO())
   const [certDateC, setCertDateC] = useState(todayISO())
@@ -84,10 +84,13 @@ function PayrollForm({ profileName, role, selectedRequest, onPreview }) {
 
   useEffect(() => {
     if (selectedRequest) {
-      if (selectedRequest.event) {
+      // Editing an already-generated document: periodCovered is already
+      // seeded from what was saved — don't overwrite it with the record's
+      // current live value.
+      if (selectedRequest.event && !initialData) {
         setPeriodCovered(selectedRequest.event)
       }
-      
+
       const breakdown = Array.isArray(selectedRequest.breakdown) ? selectedRequest.breakdown : []
       if (breakdown.length > 0) {
         const mapped = breakdown.map(item => ({
@@ -104,7 +107,7 @@ function PayrollForm({ profileName, role, selectedRequest, onPreview }) {
         setRows([])
       }
     }
-  }, [selectedRequest])
+  }, [selectedRequest, initialData])
 
   function getNetAmount(row) {
     const hon = Number(row.honoraria) || 0
@@ -289,7 +292,7 @@ function PayrollForm({ profileName, role, selectedRequest, onPreview }) {
           onClick={handlePreview}
           disabled={generatingNumber}
         >
-          {generatingNumber ? 'Generating...' : 'Preview Document'}
+          {generatingNumber ? 'Generating...' : (initialData ? 'Save' : 'Preview Document')}
         </button>
       </div>
     </div>

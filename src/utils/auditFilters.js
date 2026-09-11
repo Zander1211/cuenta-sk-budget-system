@@ -61,13 +61,14 @@ export const ACTION_TYPE_GROUPS = [
     group: 'Expenses & Receipts',
     options: [
       { label: 'Expense Added', values: ['Expense Added'] },
-      { label: 'Expense Updated', values: ['Expense Updated'] },
-      { label: 'Expense Deleted', values: ['Expense Deleted'] },
       { label: 'Expense Archived', values: ['Expense Archived'] },
       { label: 'Expense Restored', values: ['Expense Restored'] },
       { label: 'Requisition Added', values: ['Requisition Added', 'Record Updated'] },
       { label: 'Receipt Uploaded', values: ['Receipt Uploaded', 'Upload'] },
       { label: 'Receipt Verified', values: ['Receipt Verified', 'Update'] },
+      // Written by RecordReceiptsModal's delete flow — was missing here
+      // entirely, so a deleted-receipt entry could never be filtered to.
+      { label: 'Receipt Deleted', values: ['Receipt Deleted'] },
     ],
   },
   {
@@ -76,7 +77,6 @@ export const ACTION_TYPE_GROUPS = [
       { label: 'Backup Generated', values: ['Backup Generated'] },
       { label: 'Backup Deleted', values: ['Backup Deleted'] },
       { label: 'Restore Completed', values: ['Restore Completed'] },
-      { label: 'Restore Rolled Back', values: ['Restore Rolled Back'] },
       { label: 'Restore Deleted', values: ['Restore Deleted'] },
     ],
   },
@@ -84,7 +84,6 @@ export const ACTION_TYPE_GROUPS = [
     group: 'User Management',
     options: [
       { label: 'User Created', values: ['User Created'] },
-      { label: 'User Updated', values: ['User Updated'] },
       { label: 'User Account Enabled', values: ['User Account Enabled'] },
       { label: 'User Account Disabled', values: ['User Account Disabled'] },
     ],

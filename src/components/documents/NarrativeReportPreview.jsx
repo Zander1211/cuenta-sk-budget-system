@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import '../PrintPreview.css'
 import './AdditionalDocuments.css'
 import { Printer, X } from 'lucide-react'
 import logo from '../../assets/logo.png'
+import { capturePrintPagesToPdfBlob } from '../../utils/documentPdfCapture'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -34,6 +35,7 @@ const tocSections = [
 function NarrativeReportPreview({ data, onClose, onSave }) {
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const containerRef = useRef(null)
 
   async function handlePrint(e) {
     e.preventDefault()
@@ -41,7 +43,8 @@ function NarrativeReportPreview({ data, onClose, onSave }) {
       setIsSaving(true)
       setSaveError('')
       try {
-        await onSave(data)
+        const pdfBlob = await capturePrintPagesToPdfBlob(containerRef.current)
+        await onSave(data, pdfBlob)
         setTimeout(() => window.print(), 500)
       } catch (err) {
         setSaveError('Failed to save document record: ' + err.message)
@@ -67,7 +70,7 @@ function NarrativeReportPreview({ data, onClose, onSave }) {
 
   return (
     <div className="print-preview-overlay">
-      <div className="print-preview-container" style={{ maxWidth: '900px' }}>
+      <div className="print-preview-container" style={{ maxWidth: '900px' }} ref={containerRef}>
         <div className="print-preview-toolbar">
           {saveError && <span style={{ color: '#ef4444', marginRight: '16px', fontSize: '0.9rem' }}>{saveError}</span>}
           <button type="button" className="close-btn" onClick={onClose} disabled={isSaving}>

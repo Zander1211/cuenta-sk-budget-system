@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Search,
   Shield, Clock, Users, Activity,
@@ -172,17 +172,37 @@ function AuditTrailPage() {
     return Array.from(names).sort((a, b) => a.localeCompare(b))
   }, [actorOptions, logs])
 
+  // Filters apply live — no "Apply" click needed. Dropdowns and dates are
+  // discrete choices, so they fetch immediately; free-text search is
+  // debounced so it doesn't fire a server request per keystroke.
+  const searchDebounceRef = useRef(null)
+
+  useEffect(() => () => clearTimeout(searchDebounceRef.current), [])
+
   function handleFilterChange(key, value) {
-    setLocalFilters(prev => ({ ...prev, [key]: value }))
+    const next = { ...localFilters, [key]: value }
+    setLocalFilters(next)
+    setExpandedRows({})
+
+    clearTimeout(searchDebounceRef.current)
+    if (key === 'search') {
+      searchDebounceRef.current = setTimeout(() => setActiveFilters(next), 400)
+    } else {
+      setActiveFilters(next)
+    }
   }
 
+  // Pressing Enter in the search field flushes immediately instead of
+  // waiting out the debounce.
   function handleApplyFilters(e) {
     e?.preventDefault()
+    clearTimeout(searchDebounceRef.current)
     setActiveFilters(localFilters)
     setExpandedRows({})
   }
 
   function handleClearFilters() {
+    clearTimeout(searchDebounceRef.current)
     setLocalFilters(DEFAULT_FILTERS)
     setActiveFilters(DEFAULT_FILTERS)
     setExpandedRows({})
@@ -368,11 +388,10 @@ function AuditTrailPage() {
               </select>
             </div>
 
-            {/* Row 3: Actions */}
+            {/* Row 3: Actions — filters apply live as you change them (see
+                handleFilterChange), so there is no "Apply" button anymore;
+                only Clear is left, for a one-click reset. */}
             <div className="audit-filter-actions">
-              <button type="submit" className="primary-button" id="audit-apply-filters">
-                Apply Filters
-              </button>
               {hasActiveFilters && (
                 <button
                   type="button"

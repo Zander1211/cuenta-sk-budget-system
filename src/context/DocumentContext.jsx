@@ -8,6 +8,7 @@ const DEFAULT_DOCUMENT_QUERY = {
   pageSize: 10,
   search: '',
   type: 'All',
+  year: 'All',
   archived: false,
 }
 
@@ -56,7 +57,7 @@ export function DocumentProvider({ children }) {
     active: 0,
     archived: 0,
   })
-  const [documentTypes, setDocumentTypes] = useState([])
+  const [documentYears, setDocumentYears] = useState([])
   const currentQueryRef = useRef(DEFAULT_DOCUMENT_QUERY)
   const latestDocumentsRequestRef = useRef(0)
 
@@ -69,8 +70,9 @@ export function DocumentProvider({ children }) {
     const pageSize = Math.max(1, Number(queryOptions.pageSize) || 10)
     const search = normalizeDocumentSearch(queryOptions.search)
     const type = queryOptions.type || 'All'
+    const year = queryOptions.year || 'All'
     const archived = Boolean(queryOptions.archived)
-    currentQueryRef.current = { page, pageSize, search, type, archived }
+    currentQueryRef.current = { page, pageSize, search, type, year, archived }
     const requestId = ++latestDocumentsRequestRef.current
 
     if (isAuthLoading) return []
@@ -100,6 +102,7 @@ export function DocumentProvider({ children }) {
       : query.is('archived_at', null)
 
     if (type !== 'All') query = query.eq('type', type)
+    if (year !== 'All') query = query.eq('related_entity_id', String(year))
     if (search) {
       query = query.or(`name.ilike.%${search}%,project.ilike.%${search}%`)
     }
@@ -125,15 +128,15 @@ export function DocumentProvider({ children }) {
   const loadDocumentStats = useCallback(async () => {
     if (isAuthLoading || !userId) {
       setDocumentStats({ total: 0, active: 0, archived: 0 })
-      setDocumentTypes([])
+      setDocumentYears([])
       return
     }
 
-    const [totalResult, activeResult, archivedResult, typesResult] = await Promise.all([
-      supabase.from('documents').select('id', { count: 'exact', head: true }),
-      supabase.from('documents').select('id', { count: 'exact', head: true }).is('archived_at', null),
-      supabase.from('documents').select('id', { count: 'exact', head: true }).not('archived_at', 'is', null),
-      supabase.from('documents').select('type'),
+    const [totalResult, activeResult, archivedResult, yearsResult] = await Promise.all([
+      supabase.from('documents').select('id', { count: 'exact', head: true }).eq('type', 'Annual Report'),
+      supabase.from('documents').select('id', { count: 'exact', head: true }).eq('type', 'Annual Report').is('archived_at', null),
+      supabase.from('documents').select('id', { count: 'exact', head: true }).eq('type', 'Annual Report').not('archived_at', 'is', null),
+      supabase.from('documents').select('related_entity_id').eq('type', 'Annual Report'),
     ])
 
     const countError = totalResult.error || activeResult.error || archivedResult.error
@@ -148,9 +151,10 @@ export function DocumentProvider({ children }) {
       archived: archivedResult.count ?? 0,
     })
 
-    if (!typesResult.error) {
-      setDocumentTypes(
-        Array.from(new Set((typesResult.data || []).map((row) => row.type).filter(Boolean))).sort(),
+    if (!yearsResult.error) {
+      setDocumentYears(
+        Array.from(new Set((yearsResult.data || []).map((row) => row.related_entity_id).filter(Boolean)))
+          .sort((a, b) => Number(b) - Number(a)),
       )
     }
   }, [isAuthLoading, userId])
@@ -163,7 +167,7 @@ export function DocumentProvider({ children }) {
         setDocuments([])
         setTotalCount(0)
         setDocumentStats({ total: 0, active: 0, archived: 0 })
-        setDocumentTypes([])
+        setDocumentYears([])
       })
     }
 
@@ -238,6 +242,55 @@ export function DocumentProvider({ children }) {
     return savedDocument
   }
 
+  // Overwrites an already-generated document in place — used by the "Edit"
+  // action on a Project/Event's Generated Documents list, where revising and
+  // saving should update that same entry rather than adding another row.
+  // Same shape as addDocument, minus created_by/archived_at/status (owner
+  // and archive state of an existing row don't change on an edit).
+  async function updateDocument(docId, doc) {
+    if (!doc?.name || !doc?.type || !doc?.generatedBy) {
+      throw new Error('Document title, type, and generated-by information are required.')
+    }
+
+    const updatePayload = {
+      date_generated: new Date().toISOString(),
+      name: doc.name,
+      project: doc.project || null,
+      generated_by: doc.generatedBy,
+      type: doc.type,
+      data: doc.data || null,
+      related_entity_type: doc.relatedEntityType || null,
+      related_entity_id: doc.relatedEntityId ? String(doc.relatedEntityId) : null,
+      file_name: doc.fileName || createFileName(doc.name),
+      file_path: doc.filePath || null,
+      storage_url: doc.storageUrl || null,
+    }
+
+    setDocumentsError('')
+
+    const { data: updatedData, error } = await supabase
+      .from('documents')
+      .update(updatePayload)
+      .eq('id', docId)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error updating document:', error)
+      const message = `Unable to update document: ${error.message}`
+      setDocumentsError(message)
+      throw new Error(message, { cause: error })
+    }
+
+    const savedDocument = mapDocument({ id: docId, ...updatePayload, ...updatedData })
+    await Promise.all([
+      loadDocuments({ ...currentQueryRef.current, page: 1 }),
+      loadDocumentStats(),
+    ])
+    window.dispatchEvent(new CustomEvent('cuenta:document-created', { detail: savedDocument }))
+    return savedDocument
+  }
+
   async function deleteDocument(docId) {
     const backup = [...documents]
     setDocuments((prev) => prev.filter((d) => d.id !== docId))
@@ -300,10 +353,11 @@ export function DocumentProvider({ children }) {
         documentsError,
         totalCount,
         documentStats,
-        documentTypes,
+        documentYears,
         refreshDocuments: loadDocuments,
         refreshDocumentStats: loadDocumentStats,
         addDocument,
+        updateDocument,
         deleteDocument,
         archiveDocument,
         restoreDocument

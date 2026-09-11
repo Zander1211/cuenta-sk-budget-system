@@ -73,6 +73,7 @@ function ProjectsEventsPage() {
 
   const [searchParams, setSearchParams] = useSearchParams()
   const highlightId = searchParams.get('highlight')
+  const openDocsId = searchParams.get('openDocs')
 
   const [activeTab, setActiveTab] = useState(() => {
     const tab = searchParams.get('tab')
@@ -128,6 +129,29 @@ function ProjectsEventsPage() {
       return next
     }, { replace: true })
   }, [highlightId, expenses, setSearchParams])
+
+  // Arrived here via "Back"/"Cancel" from the Narrative & Photo
+  // Documentation builder (a separate page — see DocumentGenerator's
+  // handleOpenNarrativeReport) — reopen that same record's Documents modal
+  // instead of leaving the user stranded on the plain Projects & Events
+  // list, same idea as the `highlight` deep link above.
+  useEffect(() => {
+    if (!openDocsId) return
+    const target = expenses.find((item) => String(item.id) === String(openDocsId))
+    if (!target) return
+
+    setActiveTab(target.type === 'Event' ? 'events' : 'projects')
+    // Land on the Generated Documents tab, not the generator — coming back
+    // from the narrative builder, seeing the new entry land in the list is
+    // the useful confirmation, not an empty "generate new" form.
+    setDocGenTarget({ record: target, kind: target.type === 'Event' ? 'event' : 'project', initialTab: 'history' })
+
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('openDocs')
+      return next
+    }, { replace: true })
+  }, [openDocsId, expenses, setSearchParams])
 
   // Scroll the highlighted row into view once it's rendered.
   useEffect(() => {
@@ -811,15 +835,19 @@ function ProjectsEventsPage() {
                                 those stay one click away; the rest no longer force
                                 the row into a horizontal scroll to get to them. */}
                             <RowActionsMenu label={`More actions for ${item.project || item.event || 'this record'}`}>
-                              {canGenerateDocs && (
-                                <button
-                                  type="button"
-                                  className="row-menu-item"
-                                  onClick={() => setDocGenTarget({ record: item, kind: item.type === 'Event' ? 'event' : 'project' })}
-                                >
-                                  <FileText size={14} aria-hidden="true" /> Documents
-                                </button>
-                              )}
+                              {/* Visible to every role — SK Kagawad and
+                                  Barangay Treasurer can View/Download from the
+                                  Generated Documents list even though only SK
+                                  Chairman/Treasurer can generate new ones
+                                  (canGenerateDocs gates that section inside
+                                  the modal itself). */}
+                              <button
+                                type="button"
+                                className="row-menu-item"
+                                onClick={() => setDocGenTarget({ record: item, kind: item.type === 'Event' ? 'event' : 'project' })}
+                              >
+                                <FileText size={14} aria-hidden="true" /> Documents
+                              </button>
                               <button
                                 type="button"
                                 className="row-menu-item"
@@ -889,6 +917,8 @@ function ProjectsEventsPage() {
         <GenerateDocumentsModal
           record={docGenTarget.record}
           kind={docGenTarget.kind}
+          canGenerateDocs={canGenerateDocs}
+          initialTab={docGenTarget.initialTab}
           onClose={() => setDocGenTarget(null)}
         />
       )}

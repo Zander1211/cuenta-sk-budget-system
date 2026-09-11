@@ -45,7 +45,7 @@ function BudgetsPage() {
       <header className="dashboard-header">
         <div className="header-left">
           <div>
-            <p className="eyebrow">Budgets</p>
+            <p className="eyebrow">Budgets &amp; Analysis</p>
             <h1>{current.title}</h1>
             <p>{current.description}</p>
           </div>
