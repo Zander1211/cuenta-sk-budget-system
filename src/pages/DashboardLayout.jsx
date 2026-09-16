@@ -38,7 +38,7 @@ const navItems = [
     icon: Wallet
   },
   {
-    label: 'Projects & Events',
+    label: 'Approved Records',
     path: '/dashboard/projects-events',
     roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
     icon: Briefcase

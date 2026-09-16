@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuditLog } from '../context/AuditLogContext'
 import RoleGate from '../components/RoleGate'
@@ -135,6 +135,30 @@ function UserManagementPage() {
   const [activeTab, setActiveTab] = useState('active')
   const [searchQuery, setSearchQuery] = useState('')
   const [filterRole, setFilterRole] = useState('all')
+
+  // Roles still open to a new account: a role with a limit (SK Treasurer,
+  // Barangay Treasurer) drops out of the "Create a user" picker once an
+  // active account already holds it, so the form can't be submitted for a
+  // seat that `checkRoleLimit` would reject anyway.
+  const availableRoles = useMemo(() => {
+    const activeCounts = accounts.reduce((counts, account) => {
+      if (account.is_active) counts[account.role] = (counts[account.role] || 0) + 1
+      return counts
+    }, {})
+    return roles.filter((role) => {
+      const limit = ROLE_LIMITS[role]
+      return !limit || (activeCounts[role] || 0) < limit
+    })
+  }, [accounts])
+
+  // Once accounts load, the default `role` (roles[0]) may already be filled —
+  // fall back to the first role that's still open so the select never shows
+  // a value it doesn't actually offer as an option.
+  useEffect(() => {
+    if (availableRoles.length && !availableRoles.includes(formState.role)) {
+      setFormState((prev) => ({ ...prev, role: availableRoles[0] }))
+    }
+  }, [availableRoles])
 
   // ── Load accounts ────────────────────────────────────────────────────────
 
@@ -563,21 +587,32 @@ function UserManagementPage() {
 
                 <label className="field">
                   <span>Role</span>
-                  <select name="role" value={formState.role} onChange={handleChange}>
-                    {roles.map((role) => (
+                  <select
+                    name="role"
+                    value={formState.role}
+                    onChange={handleChange}
+                    disabled={!availableRoles.length}
+                  >
+                    {availableRoles.map((role) => (
                       <option key={role} value={role}>{role}</option>
                     ))}
                   </select>
                 </label>
 
-                <p className="form-note">
-                  Accounts created here are assigned directly by the SK Chairman.
-                </p>
+                {availableRoles.length ? (
+                  <p className="form-note">
+                    Accounts created here are assigned directly by the SK Chairman.
+                  </p>
+                ) : (
+                  <p className="form-error">
+                    Every role already has its maximum number of active accounts. Disable an existing account to free up a role.
+                  </p>
+                )}
 
                 {formError ? <p className="form-error">{formError}</p> : null}
                 {formStatus ? <p className="form-status">{formStatus}</p> : null}
 
-                <button type="submit" className="primary-button" disabled={isSubmitting}>
+                <button type="submit" className="primary-button" disabled={isSubmitting || !availableRoles.length}>
                   Send Verification Code
                 </button>
               </form>

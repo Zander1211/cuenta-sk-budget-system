@@ -5,7 +5,7 @@ import BudgetBreakdownTable from '../components/BudgetBreakdownTable'
 import { useBudget } from '../context/BudgetContext'
 import { useNotifications } from '../context/NotificationContext'
 import YearSpinner from '../components/YearSpinner'
-import { Search, Filter, Eye, Check, X, Archive, RotateCcw } from 'lucide-react'
+import { Search, Filter, Eye, Check, X, RotateCcw } from 'lucide-react'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -25,7 +25,6 @@ function ApprovalsPage() {
     approveRequest,
     rejectRequest,
     cancelApproval,
-    archiveRequest,
     restoreRequest,
     undoRejectRequest,
   } = useBudget()
@@ -268,16 +267,7 @@ function ApprovalsPage() {
                             <button className="secondary-button" style={{ padding: '6px 12px' }} onClick={() => setViewDetailsReq(req)}>
                               <Eye size={14} /> View
                             </button>
-                            {!req.archivedAt ? (
-                              <button type="button" className="secondary-button" style={{ padding: '6px 12px' }} onClick={(e) => {
-                                e.stopPropagation();
-                                if (window.confirm("Are you sure you want to archive this request?")) {
-                                  archiveRequest(req.id);
-                                }
-                              }}>
-                                <Archive size={14} /> Archive
-                              </button>
-                            ) : (
+                            {req.archivedAt && (
                               <button type="button" className="secondary-button" style={{ padding: '6px 12px' }} onClick={(e) => {
                                 e.stopPropagation();
                                 restoreRequest(req.id);

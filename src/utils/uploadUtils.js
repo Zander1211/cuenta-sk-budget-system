@@ -187,6 +187,43 @@ export async function insertScannedReceiptRecord(supabase, {
 }
 
 /**
+ * Overwrites an existing receipt row with a freshly scanned/uploaded file and
+ * its metadata, in place of inserting a new row. Used to correct a receipt
+ * that was scanned or uploaded by mistake, without losing the row's id (and
+ * therefore its place in whatever list it's shown in) or its ownership
+ * (`record_id`/`requisition_id`, `uploaded_by_*` stay as originally recorded
+ * — only what the correction actually changed is touched).
+ */
+export async function replaceScannedReceiptRecord(supabase, {
+  id,
+  scanFile,
+  scanPath,
+  originalPath,
+  ocrMetadata,
+  scanSettings,
+  user,
+}) {
+  const { data, error } = await supabase
+    .from('receipt_records')
+    .update({
+      file_path: scanPath,
+      original_path: originalPath || null,
+      file_name: scanFile.name,
+      file_type: scanFile.type,
+      is_scanned: true,
+      ocr_metadata: ocrMetadata || null,
+      scan_settings: scanSettings || null,
+      ocr_verified_at: new Date().toISOString(),
+      ocr_verified_by: user?.user_metadata?.full_name || user?.email || 'Unknown',
+      uploaded_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+
+  return { data, error }
+}
+
+/**
  * Renders verified OCR metadata as readable lines for the expense remarks.
  *
  * Only fields the reviewer actually confirmed appear. A null stays out of the

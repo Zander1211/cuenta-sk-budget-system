@@ -297,46 +297,55 @@
   cursor: not-allowed;
 }
 
-.an-btn-primary {
+/* Compound with `.an-btn` (not just the modifier class alone): system-
+   components.css defines its own single-class `.an-btn` base — the shared
+   portal button look — and loads after this file, so a same-specificity
+   modifier here would lose the cascade tie to it (that's what was hollowing
+   out the ghost/icon refresh button: the portal base's opaque surface,
+   border and 0 22px padding were winning over `.an-btn-ghost`/`.an-btn-icon`
+   and squeezing the icon out of a now-too-narrow box). `.an-btn.an-btn-*` is
+   two classes, so it always wins regardless of file order. */
+.an-btn.an-btn-primary {
   background: var(--cuenta-gradient-primary);
   color: #ffffff;
   border: 1px solid rgba(14, 107, 77, 0.3);
   box-shadow: 0 4px 12px rgba(14, 107, 77, 0.18);
 }
 
-.an-btn-primary:hover:not(:disabled) {
+.an-btn.an-btn-primary:hover:not(:disabled) {
   filter: brightness(1.05);
   box-shadow: 0 6px 16px rgba(14, 107, 77, 0.24);
   transform: translateY(-1px);
 }
 
-.an-btn-outline {
+.an-btn.an-btn-outline {
   background: #ffffff;
   color: var(--cuenta-teal);
   border-color: var(--line-strong);
 }
 
-.an-btn-outline:hover:not(:disabled) {
+.an-btn.an-btn-outline:hover:not(:disabled) {
   background: var(--cuenta-mint-soft);
   border-color: var(--cuenta-teal);
   color: var(--cuenta-teal-dark);
 }
 
-.an-btn-ghost {
+.an-btn.an-btn-ghost {
   background: transparent;
   color: var(--cuenta-text-secondary);
   border-color: transparent;
 }
 
-.an-btn-ghost:hover:not(:disabled) {
+.an-btn.an-btn-ghost:hover:not(:disabled) {
   background: var(--cuenta-mint-soft);
   color: var(--cuenta-teal);
 }
 
-.an-btn-icon {
+.an-btn.an-btn-icon {
   padding: 8px;
   width: 42px;
   height: 42px;
+  min-height: 0;
   justify-content: center;
 }
 
@@ -1030,12 +1039,15 @@
   gap: 14px;
 }
 
+/* No `overflow: hidden` here — it would break the sticky heading below by
+   making this box the scrollport it sticks against instead of the viewport.
+   Corner-rounding is handled locally on the two children that need it
+   instead (see `.an-acc-trigger` and `.an-acc-panel-inner`). */
 .an-acc-item {
   background: var(--cuenta-card);
   border: 1px solid var(--cuenta-border);
   border-radius: var(--cuenta-card-radius);
   box-shadow: var(--cuenta-shadow);
-  overflow: hidden;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -1049,11 +1061,33 @@
 }
 
 /* The trigger is the section's heading as well as its control, so the h2
-   carries no styling of its own. */
+   carries no styling of its own — apart from being the sticky element while
+   the section is open (see `.an-acc-item.is-open .an-acc-heading`). */
 .an-acc-heading {
   margin: 0;
   font-size: inherit;
   font-weight: inherit;
+}
+
+/* Sticky while its panel is open: a long report scrolls underneath the
+   header instead of carrying it off-screen, so collapsing the section never
+   costs a scroll back up.
+   It has to be the h2, not the button inside it: a sticky box can only be
+   offset within its containing block, and the h2 shrink-wraps the button, so
+   a sticky button would have exactly zero room to travel. The h2's
+   containing block is `.an-acc-item` — header plus expanded panel — which
+   gives it the whole open section to slide through, and releases it
+   naturally once the section scrolls past.
+   `.an-acc-item` must not carry `overflow: hidden` for the same reason: any
+   overflow but visible makes that box the sticky scrollport instead of the
+   viewport.
+   Scoped to `.is-open` only — closed rows are one header tall with nothing
+   to scroll under them, so leaving them static keeps every collapsed row in
+   the list from sticking and unsticking as the page scrolls past. */
+.an-acc-item.is-open .an-acc-heading {
+  position: sticky;
+  top: var(--shell-pad, 16px);
+  z-index: 5;
 }
 
 .an-acc-trigger {
@@ -1064,7 +1098,7 @@
   padding: 18px 20px;
   background: none;
   border: none;
-  border-radius: inherit;
+  border-radius: var(--cuenta-card-radius) var(--cuenta-card-radius) 0 0;
   text-align: left;
   cursor: pointer;
   font: inherit;
@@ -1081,9 +1115,12 @@
   outline-offset: -3px;
 }
 
+/* Opaque, not translucent: while the heading is stuck, the report scrolls
+   directly beneath this button. */
 .an-acc-item.is-open .an-acc-trigger {
   background: var(--accent-soft);
   border-bottom: 1px solid var(--cuenta-divider);
+  box-shadow: var(--cuenta-shadow-sm);
 }
 
 .an-acc-icon {
@@ -1174,6 +1211,7 @@
 .an-acc-panel-inner {
   overflow: hidden;
   min-height: 0;
+  border-radius: 0 0 var(--cuenta-card-radius) var(--cuenta-card-radius);
 }
 
 /* A closed panel is clipped rather than emptied, so its buttons would still

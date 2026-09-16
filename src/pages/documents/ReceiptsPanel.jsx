@@ -10,6 +10,7 @@ import {
   generateReceiptScanPaths,
   logUploadDebugInfo,
   insertScannedReceiptRecord,
+  replaceScannedReceiptRecord,
   formatOcrMetadataNote,
 } from '../../utils/uploadUtils'
 import ReceiptOCRDetailsModal from '../../components/receipts/ReceiptOCRDetailsModal'
@@ -42,6 +43,7 @@ function ReceiptsPanel() {
   const [feedback, setFeedback] = useState(null)
   const [receiptLinks, setReceiptLinks] = useState({})
   const [scanModalOpen, setScanModalOpen] = useState(false)
+  const [replacingReceipt, setReplacingReceipt] = useState(null)
   const [activeExpense, setActiveExpense] = useState(null)
   const [viewerExpense, setViewerExpense] = useState(null)
   const [ocrViewer, setOcrViewer] = useState(null)
@@ -341,6 +343,52 @@ function ReceiptsPanel() {
     })
   }
 
+  async function saveReceiptDetails(expense, receipt, metadata) {
+    if (String(receipt.id).startsWith('legacy-')) {
+      throw new Error('This receipt predates receipt tracking and cannot be edited here. Re-upload it via Scan & Upload instead.')
+    }
+
+    const verifiedAt = new Date().toISOString()
+    const verifiedBy = user?.user_metadata?.full_name || user?.email || 'Unknown'
+
+    const { error } = await supabase
+      .from('receipt_records')
+      .update({ ocr_metadata: metadata, ocr_verified_at: verifiedAt, ocr_verified_by: verifiedBy })
+      .eq('id', receipt.id)
+    if (error) throw new Error(error.message || 'Could not save these changes.')
+
+    setReceiptLinks((prev) => ({
+      ...prev,
+      [expense.id]: (prev[expense.id] || []).map((entry) =>
+        entry.id === receipt.id
+          ? { ...entry, ocrMetadata: metadata, ocrVerifiedAt: verifiedAt, ocrVerifiedBy: verifiedBy }
+          : entry
+      ),
+    }))
+
+    setOcrViewer((prev) => (
+      prev && prev.receipt.id === receipt.id
+        ? { ...prev, receipt: { ...prev.receipt, ocrMetadata: metadata, ocrVerifiedAt: verifiedAt, ocrVerifiedBy: verifiedBy } }
+        : prev
+    ))
+
+    await refreshExpensesFromSupabase()
+
+    const recordName = expense.event || expense.project || 'the selected record'
+    const message = `Receipt details updated for ${recordName}.`
+    setFeedback({ type: 'success', message })
+    addNotification({ type: 'system', title: 'Receipt Updated', message })
+    addLog({
+      action: 'Receipt Details Edited',
+      actionType: 'Receipt Updated',
+      module: 'Receipts',
+      recordType: expense.type || 'Expense',
+      recordId: String(expense.id),
+      description: `Edited receipt details for ${recordName}`,
+      status: 'Success',
+    })
+  }
+
   function triggerCamera(expense) {
     if (expense?.archivedAt) {
       addNotification({
@@ -351,6 +399,26 @@ function ReceiptsPanel() {
       return
     }
     setActiveExpense(expense)
+    setReplacingReceipt(null)
+    setFeedback(null)
+    setErrorsById((prev) => ({ ...prev, [expense.id]: '' }))
+    setScanModalOpen(true)
+  }
+
+  // Lets a receipt that was scanned or uploaded by mistake be corrected in
+  // place — same capture/review flow as a new scan, but the save step below
+  // overwrites the existing row instead of adding a new one.
+  function triggerReplace(expense, receipt) {
+    if (expense?.archivedAt) {
+      addNotification({
+        type: 'error',
+        title: 'Record Archived',
+        message: `"${expense.event || expense.project || 'This record'}" has been archived and can no longer accept new receipts.`,
+      })
+      return
+    }
+    setActiveExpense(expense)
+    setReplacingReceipt(receipt)
     setFeedback(null)
     setErrorsById((prev) => ({ ...prev, [expense.id]: '' }))
     setScanModalOpen(true)
@@ -503,6 +571,154 @@ function ReceiptsPanel() {
     } finally {
       setUploadingId(null)
     }
+  }
+
+  async function saveReplacementScan({ scanFile, originalFile, metadata, scanSettings }) {
+    const expense = activeExpense
+    const oldReceipt = replacingReceipt
+    if (!expense) throw new Error('No record is selected for this scan.')
+    if (!oldReceipt) throw new Error('No receipt is selected to replace.')
+
+    const validationError = validateReceiptFile(scanFile, role)
+    if (validationError) throw new Error(validationError)
+
+    const { scanPath, originalPath } = generateReceiptScanPaths(expense, scanFile, originalFile)
+    setUploadingId(expense.id)
+
+    let scanUploaded = false
+    let originalUploaded = false
+    // A receipt uploaded before receipt_records existed has no row to update
+    // — it's reconstructed from the expense's own receipt_url column — so
+    // replacing it inserts a fresh row the same way a brand-new scan would.
+    const isLegacy = String(oldReceipt.id).startsWith('legacy-')
+
+    try {
+      const { error: scanError } = await supabase.storage
+        .from(RECEIPTS_BUCKET)
+        .upload(scanPath, scanFile, { upsert: false })
+      if (scanError) throw Object.assign(scanError, { uploadStep: 'storage' })
+      scanUploaded = true
+
+      let storedOriginalPath = originalPath
+      const { error: originalError } = await supabase.storage
+        .from(RECEIPTS_BUCKET)
+        .upload(originalPath, originalFile, { upsert: false })
+      if (originalError) {
+        console.warn('The original photograph could not be stored.', originalError)
+        storedOriginalPath = null
+      } else {
+        originalUploaded = true
+      }
+
+      let receiptId = oldReceipt.id
+      if (isLegacy) {
+        const { data: receiptData, error: dbError } = await insertScannedReceiptRecord(supabase, {
+          record: expense, scanFile, scanPath, originalPath: storedOriginalPath, ocrMetadata: metadata, scanSettings, user, userRole: role,
+        })
+        if (dbError) throw Object.assign(dbError, { uploadStep: 'receipt_record' })
+        receiptId = receiptData?.[0]?.id || scanPath
+      } else {
+        const { error: dbError } = await replaceScannedReceiptRecord(supabase, {
+          id: oldReceipt.id, scanFile, scanPath, originalPath: storedOriginalPath, ocrMetadata: metadata, scanSettings, user,
+        })
+        if (dbError) throw Object.assign(dbError, { uploadStep: 'receipt_record' })
+      }
+
+      const wasPrimary = (expense.receiptUrl || expense.receipt_url) === oldReceipt.path
+      if (wasPrimary) {
+        const appendedNotes = formatOcrMetadataNote(metadata)
+        const updatePayload = { receipt_url: scanPath, receipt_name: scanFile.name }
+        if (appendedNotes) {
+          updatePayload.remarks = expense.remarks ? `${expense.remarks}\n\n${appendedNotes}` : appendedNotes
+        }
+        const { error: linkError } = await supabase.from('expenses').update(updatePayload).eq('id', expense.id)
+        if (linkError) console.warn('Could not relink the replacement scan to the expense record:', linkError)
+        updateExpenseReceipt(expense.id, scanPath, scanFile.name)
+      }
+
+      // The row (or expense link) now points at the new files, so the
+      // superseded ones can be cleaned up. Best-effort: a stray old file is
+      // recoverable, but the correction itself must not be lost over it.
+      const oldPaths = [oldReceipt.path, oldReceipt.originalPath].filter(Boolean)
+      if (oldPaths.length) {
+        const { error: cleanupError } = await supabase.storage.from(RECEIPTS_BUCKET).remove(oldPaths)
+        if (cleanupError) console.warn('Could not remove the replaced receipt file(s):', cleanupError)
+      }
+
+      const { data: signedData } = await supabase.storage
+        .from(RECEIPTS_BUCKET)
+        .createSignedUrl(scanPath, 60 * 60)
+
+      let originalUrl = null
+      if (storedOriginalPath) {
+        const { data: originalSigned } = await supabase.storage
+          .from(RECEIPTS_BUCKET)
+          .createSignedUrl(storedOriginalPath, 60 * 60)
+        originalUrl = originalSigned?.signedUrl || null
+      }
+
+      const updatedEntry = {
+        id: receiptId,
+        url: signedData?.signedUrl || '',
+        path: scanPath,
+        originalPath: storedOriginalPath,
+        name: scanFile.name,
+        type: scanFile.type,
+        isScanned: true,
+        originalUrl,
+        ocrMetadata: metadata,
+        scanSettings,
+        ocrVerifiedAt: new Date().toISOString(),
+        ocrVerifiedBy: user?.user_metadata?.full_name || user?.email || 'Unknown',
+        requisitionId: oldReceipt.requisitionId || null,
+      }
+      setReceiptLinks((prev) => ({
+        ...prev,
+        [expense.id]: (prev[expense.id] || []).map((entry) => (entry.id === oldReceipt.id ? updatedEntry : entry)),
+      }))
+
+      await refreshExpensesFromSupabase()
+
+      const recordName = expense.event || expense.project || 'the selected record'
+      const message = `Receipt replaced for ${recordName}.`
+      setFeedback({ type: 'success', message })
+      addNotification({ type: 'system', title: 'Receipt Replaced', message })
+      addLog({
+        action: 'Receipt Replaced',
+        actionType: 'Receipt Uploaded',
+        module: 'Receipts',
+        recordType: expense.type || 'Expense',
+        recordId: String(expense.id),
+        description: `Replaced receipt "${oldReceipt.name || 'Receipt'}" for ${recordName}`,
+        status: 'Success',
+        remarks: metadata?.receiptNumber ? `Receipt no: ${metadata.receiptNumber}` : '',
+      })
+
+      setScanModalOpen(false)
+      setActiveExpense(null)
+      setReplacingReceipt(null)
+    } catch (error) {
+      if (scanUploaded) await supabase.storage.from(RECEIPTS_BUCKET).remove([scanPath])
+      if (originalUploaded) await supabase.storage.from(RECEIPTS_BUCKET).remove([originalPath])
+
+      logUploadDebugInfo(error, {
+        expenseId: expense.id,
+        filePath: scanPath,
+        step: error.uploadStep || 'unknown',
+      })
+
+      const message = error.uploadStep === 'receipt_record'
+        ? `The replacement uploaded, but its receipt record could not be saved: ${error.message}`
+        : getUploadErrorMessage(error)
+      setFeedback({ type: 'error', message })
+      throw new Error(message, { cause: error })
+    } finally {
+      setUploadingId(null)
+    }
+  }
+
+  function handleScanSave(payload) {
+    return replacingReceipt ? saveReplacementScan(payload) : saveScannedReceipt(payload)
   }
 
   return (
@@ -925,6 +1141,22 @@ function ReceiptsPanel() {
                             🖼️ View Original
                           </a>
                         ) : null}
+                        {['SK Chairman', 'SK Treasurer'].includes(role) ? (
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            style={{ padding: '6px 12px', fontSize: '0.82rem' }}
+                            disabled={uploadingId !== null || Boolean(viewerExpense?.archivedAt)}
+                            onClick={() => {
+                              const target = viewerExpense
+                              setViewerExpense(null)
+                              triggerReplace(target, rcpt)
+                            }}
+                            title={viewerExpense?.archivedAt ? 'This record has been archived and can no longer accept new receipts' : "Wrong file or scan? Replace it without losing this receipt's place in the list"}
+                          >
+                            🔄 Replace
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -976,6 +1208,7 @@ function ReceiptsPanel() {
           verifiedReceiptTotals={receiptFinancialTotals}
           canVerify={['SK Chairman', 'SK Treasurer'].includes(role)}
           onVerify={(amount) => verifyReceipt(ocrViewer.expense, ocrViewer.receipt, amount)}
+          onSaveDetails={(metadata) => saveReceiptDetails(ocrViewer.expense, ocrViewer.receipt, metadata)}
           onClose={() => setOcrViewer(null)}
         />
       ) : null}
@@ -984,10 +1217,11 @@ function ReceiptsPanel() {
         <Suspense fallback={null}>
           <ReceiptScanModal
             expense={activeExpense}
-            onSave={saveScannedReceipt}
+            onSave={handleScanSave}
             onClose={() => {
               setScanModalOpen(false)
               setActiveExpense(null)
+              setReplacingReceipt(null)
             }}
           />
         </Suspense>

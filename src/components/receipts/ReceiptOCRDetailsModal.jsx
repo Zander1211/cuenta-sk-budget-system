@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ExternalLink,
   FileQuestion,
+  Pencil,
   ShieldCheck,
   X,
 } from 'lucide-react'
@@ -11,6 +12,7 @@ import {
   calculateProjectEventFinancials,
   formatUtilization,
 } from '../../utils/projectEventFinancials'
+import CurrencyInput from '../CurrencyInput'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -50,6 +52,31 @@ function DetailField({ label, value, missing = false }) {
       <dt>{label}</dt>
       <dd>{value}</dd>
     </div>
+  )
+}
+
+const editInputStyle = {
+  width: '100%',
+  padding: '6px 8px',
+  borderRadius: 'var(--radius-control, 6px)',
+  border: '1px solid var(--line)',
+  fontSize: '0.85rem',
+  background: 'var(--surface)',
+  color: 'var(--ink)',
+}
+
+function EditField({ label, value, onChange, type = 'text', money = false, wide = false, multiline = false }) {
+  return (
+    <label className={`receipt-ocr-field${wide ? ' receipt-ocr-field--wide' : ''}`}>
+      <span style={{ display: 'block', margin: '0 0 5px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--ink-2)' }}>{label}</span>
+      {money ? (
+        <CurrencyInput value={value ?? ''} onValueChange={(v) => onChange(v === '' ? '' : Number(v))} style={editInputStyle} />
+      ) : multiline ? (
+        <textarea rows={3} value={value ?? ''} onChange={(event) => onChange(event.target.value)} style={editInputStyle} />
+      ) : (
+        <input type={type} value={value ?? ''} onChange={(event) => onChange(event.target.value)} style={editInputStyle} />
+      )}
+    </label>
   )
 }
 
@@ -99,6 +126,72 @@ function getExtractionStatus(metadata, confidence) {
   }
 }
 
+function editValuesFromMetadata(metadata) {
+  const particulars = Array.isArray(metadata?.particulars)
+    ? metadata.particulars.map((item) => item?.description || String(item)).filter(Boolean).join(', ')
+    : (metadata?.particulars ?? '')
+
+  return {
+    receiptNumber: metadata?.receiptNumber ?? '',
+    date: metadata?.date ?? '',
+    time: metadata?.time ?? '',
+    organization: metadata?.organization ?? '',
+    address: metadata?.address ?? '',
+    tin: metadata?.tin ?? '',
+    telephone: metadata?.telephone ?? '',
+    receivedFrom: metadata?.receivedFrom ?? '',
+    receiver: metadata?.receiver ?? '',
+    bank: metadata?.bank ?? '',
+    chequeNumber: metadata?.chequeNumber ?? '',
+    subtotal: metadata?.subtotal ?? '',
+    vatAmount: metadata?.vatAmount ?? '',
+    discount: metadata?.discount ?? '',
+    totalAmount: metadata?.totalAmount ?? '',
+    cashAmount: metadata?.cashAmount ?? '',
+    chequeAmount: metadata?.chequeAmount ?? '',
+    totalCashAndCheque: metadata?.totalCashAndCheque ?? '',
+    particulars,
+  }
+}
+
+// Mirrors ReceiptScanModal's normaliseMetadata: a field left blank is recorded
+// as unknown (null), never as an empty string or a zero that later reads as a
+// real value.
+function metadataFromEditValues(editValues, previousMetadata) {
+  const text = (value) => {
+    const trimmed = (value ?? '').toString().trim()
+    return trimmed.length ? trimmed : null
+  }
+  const amount = (value) => {
+    if (value === '' || value === null || value === undefined) return null
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  return {
+    ...(previousMetadata || {}),
+    receiptNumber: text(editValues.receiptNumber),
+    date: text(editValues.date),
+    time: text(editValues.time),
+    organization: text(editValues.organization),
+    address: text(editValues.address),
+    tin: text(editValues.tin),
+    telephone: text(editValues.telephone),
+    receivedFrom: text(editValues.receivedFrom),
+    receiver: text(editValues.receiver),
+    bank: text(editValues.bank),
+    chequeNumber: text(editValues.chequeNumber),
+    subtotal: amount(editValues.subtotal),
+    vatAmount: amount(editValues.vatAmount),
+    discount: amount(editValues.discount),
+    totalAmount: amount(editValues.totalAmount),
+    cashAmount: amount(editValues.cashAmount),
+    chequeAmount: amount(editValues.chequeAmount),
+    totalCashAndCheque: amount(editValues.totalCashAndCheque),
+    particulars: text(editValues.particulars),
+  }
+}
+
 export default function ReceiptOCRDetailsModal({
   expense,
   receipt,
@@ -106,6 +199,7 @@ export default function ReceiptOCRDetailsModal({
   verifiedReceiptTotals,
   canVerify = false,
   onVerify,
+  onSaveDetails,
   onClose,
 }) {
   useEffect(() => {
@@ -122,6 +216,11 @@ export default function ReceiptOCRDetailsModal({
   const [verifying, setVerifying] = useState(false)
   const [verifyError, setVerifyError] = useState('')
 
+  const [isEditing, setIsEditing] = useState(false)
+  const [editValues, setEditValues] = useState(null)
+  const [savingDetails, setSavingDetails] = useState(false)
+  const [editError, setEditError] = useState('')
+
   async function handleVerify() {
     const amount = Number(verifyAmount)
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -136,6 +235,37 @@ export default function ReceiptOCRDetailsModal({
       setVerifyError(error?.message || 'Could not verify this receipt.')
     } finally {
       setVerifying(false)
+    }
+  }
+
+  function startEditing() {
+    setEditValues(editValuesFromMetadata(receipt?.ocrMetadata))
+    setEditError('')
+    setIsEditing(true)
+  }
+
+  function cancelEditing() {
+    setIsEditing(false)
+    setEditValues(null)
+    setEditError('')
+  }
+
+  function setEditField(key, value) {
+    setEditValues((prev) => ({ ...prev, [key]: value }))
+  }
+
+  async function handleSaveDetails() {
+    setEditError('')
+    setSavingDetails(true)
+    try {
+      const nextMetadata = metadataFromEditValues(editValues, receipt?.ocrMetadata)
+      await onSaveDetails(nextMetadata)
+      setIsEditing(false)
+      setEditValues(null)
+    } catch (error) {
+      setEditError(error?.message || 'Could not save these changes.')
+    } finally {
+      setSavingDetails(false)
     }
   }
 
@@ -196,9 +326,16 @@ export default function ReceiptOCRDetailsModal({
             <h2 id="receipt-ocr-title">Extracted Receipt Information</h2>
             <p>{receipt?.name || 'Uploaded receipt'}</p>
           </div>
-          <button type="button" className="receipt-ocr-close" onClick={onClose} aria-label="Close OCR details">
-            <X size={20} aria-hidden="true" />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {canVerify && onSaveDetails && !isLegacyReceipt && !isEditing ? (
+              <button type="button" className="secondary-button" onClick={startEditing} style={{ padding: '6px 12px', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <Pencil size={14} aria-hidden="true" /> Edit Details
+              </button>
+            ) : null}
+            <button type="button" className="receipt-ocr-close" onClick={onClose} aria-label="Close OCR details">
+              <X size={20} aria-hidden="true" />
+            </button>
+          </div>
         </header>
 
         <div className="receipt-ocr-status-row">
@@ -241,47 +378,106 @@ export default function ReceiptOCRDetailsModal({
           </section>
 
           <div className="receipt-ocr-details">
-            <section className="receipt-ocr-section" aria-labelledby="receipt-info-heading">
-              <h3 id="receipt-info-heading">Receipt Information</h3>
-              <dl className="receipt-ocr-field-grid">
-                <DetailField label="Receipt number" value={displayText(metadata?.receiptNumber)} missing={!hasValue(metadata?.receiptNumber)} />
-                <DetailField label="Receipt date" value={displayDate(metadata?.date)} missing={!hasValue(metadata?.date)} />
-                <DetailField label="Receipt time" value={displayText(metadata?.time)} missing={!hasValue(metadata?.time)} />
-                <DetailField label="Store or merchant" value={displayText(merchant)} missing={!hasValue(merchant)} />
-                <DetailField label="Store address" value={displayText(metadata?.address)} missing={!hasValue(metadata?.address)} />
-                <DetailField label="TIN" value={displayText(metadata?.tin)} missing={!hasValue(metadata?.tin)} />
-                <DetailField label="Telephone" value={displayText(metadata?.telephone)} missing={!hasValue(metadata?.telephone)} />
-              </dl>
-            </section>
-
-            <section className="receipt-ocr-section" aria-labelledby="financial-info-heading">
-              <h3 id="financial-info-heading">Financial Information</h3>
-              <dl className="receipt-ocr-field-grid">
-                <DetailField label="Subtotal" value={displayMoney(metadata?.subtotal)} missing={!hasValue(metadata?.subtotal)} />
-                <DetailField label="VAT amount" value={displayMoney(metadata?.vatAmount)} missing={!hasValue(metadata?.vatAmount)} />
-                <DetailField label="Discount" value={displayMoney(metadata?.discount)} missing={!hasValue(metadata?.discount)} />
-                <DetailField label="Total amount" value={displayMoney(metadata?.totalAmount)} missing={!hasValue(metadata?.totalAmount)} />
-                <DetailField label="Cash amount" value={displayMoney(metadata?.cashAmount)} missing={!hasValue(metadata?.cashAmount)} />
-                <DetailField label="Cheque amount" value={displayMoney(metadata?.chequeAmount)} missing={!hasValue(metadata?.chequeAmount)} />
-                <DetailField label="Cash and cheque total" value={displayMoney(metadata?.totalCashAndCheque)} missing={!hasValue(metadata?.totalCashAndCheque)} />
-              </dl>
-            </section>
-
-            {(hasValue(metadata?.receivedFrom) || hasValue(metadata?.receiver) || hasValue(metadata?.bank) || hasValue(metadata?.chequeNumber) || hasValue(particulars)) ? (
-              <section className="receipt-ocr-section" aria-labelledby="additional-info-heading">
-                <h3 id="additional-info-heading">Additional Extracted Information</h3>
-                <dl className="receipt-ocr-field-grid">
-                  <DetailField label="Received from" value={displayText(metadata?.receivedFrom)} />
-                  <DetailField label="Receiver" value={displayText(metadata?.receiver)} />
-                  <DetailField label="Bank" value={displayText(metadata?.bank)} />
-                  <DetailField label="Cheque number" value={displayText(metadata?.chequeNumber)} />
-                  <div className="receipt-ocr-field receipt-ocr-field--wide">
-                    <dt>Particulars</dt>
-                    <dd className="receipt-ocr-multiline">{displayText(particulars)}</dd>
+            {isEditing ? (
+              <>
+                <section className="receipt-ocr-section" aria-labelledby="edit-receipt-info-heading">
+                  <h3 id="edit-receipt-info-heading">Edit Receipt Information</h3>
+                  <div className="receipt-ocr-field-grid">
+                    <EditField label="Receipt number" value={editValues.receiptNumber} onChange={(v) => setEditField('receiptNumber', v)} />
+                    <EditField label="Receipt date" type="date" value={editValues.date} onChange={(v) => setEditField('date', v)} />
+                    <EditField label="Receipt time" value={editValues.time} onChange={(v) => setEditField('time', v)} />
+                    <EditField label="Store or merchant" value={editValues.organization} onChange={(v) => setEditField('organization', v)} />
+                    <EditField label="Store address" value={editValues.address} onChange={(v) => setEditField('address', v)} />
+                    <EditField label="TIN" value={editValues.tin} onChange={(v) => setEditField('tin', v)} />
+                    <EditField label="Telephone" value={editValues.telephone} onChange={(v) => setEditField('telephone', v)} />
                   </div>
-                </dl>
-              </section>
-            ) : null}
+                </section>
+
+                <section className="receipt-ocr-section" aria-labelledby="edit-financial-info-heading">
+                  <h3 id="edit-financial-info-heading">Edit Financial Information</h3>
+                  <div className="receipt-ocr-field-grid">
+                    <EditField label="Subtotal" money value={editValues.subtotal} onChange={(v) => setEditField('subtotal', v)} />
+                    <EditField label="VAT amount" money value={editValues.vatAmount} onChange={(v) => setEditField('vatAmount', v)} />
+                    <EditField label="Discount" money value={editValues.discount} onChange={(v) => setEditField('discount', v)} />
+                    <EditField label="Total amount" money value={editValues.totalAmount} onChange={(v) => setEditField('totalAmount', v)} />
+                    <EditField label="Cash amount" money value={editValues.cashAmount} onChange={(v) => setEditField('cashAmount', v)} />
+                    <EditField label="Cheque amount" money value={editValues.chequeAmount} onChange={(v) => setEditField('chequeAmount', v)} />
+                    <EditField label="Cash and cheque total" money value={editValues.totalCashAndCheque} onChange={(v) => setEditField('totalCashAndCheque', v)} />
+                  </div>
+                </section>
+
+                <section className="receipt-ocr-section" aria-labelledby="edit-additional-info-heading">
+                  <h3 id="edit-additional-info-heading">Edit Additional Information</h3>
+                  <div className="receipt-ocr-field-grid">
+                    <EditField label="Received from" value={editValues.receivedFrom} onChange={(v) => setEditField('receivedFrom', v)} />
+                    <EditField label="Receiver" value={editValues.receiver} onChange={(v) => setEditField('receiver', v)} />
+                    <EditField label="Bank" value={editValues.bank} onChange={(v) => setEditField('bank', v)} />
+                    <EditField label="Cheque number" value={editValues.chequeNumber} onChange={(v) => setEditField('chequeNumber', v)} />
+                    <EditField label="Particulars" wide multiline value={editValues.particulars} onChange={(v) => setEditField('particulars', v)} />
+                  </div>
+                </section>
+
+                {editError ? (
+                  <p className="receipt-ocr-warning" role="alert">
+                    <AlertTriangle size={16} aria-hidden="true" />
+                    {editError}
+                  </p>
+                ) : null}
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                  <button type="button" className="secondary-button" onClick={cancelEditing} disabled={savingDetails}>
+                    Cancel
+                  </button>
+                  <button type="button" className="primary-button" onClick={handleSaveDetails} disabled={savingDetails}>
+                    {savingDetails ? 'Saving…' : 'Save Changes'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <section className="receipt-ocr-section" aria-labelledby="receipt-info-heading">
+                  <h3 id="receipt-info-heading">Receipt Information</h3>
+                  <dl className="receipt-ocr-field-grid">
+                    <DetailField label="Receipt number" value={displayText(metadata?.receiptNumber)} missing={!hasValue(metadata?.receiptNumber)} />
+                    <DetailField label="Receipt date" value={displayDate(metadata?.date)} missing={!hasValue(metadata?.date)} />
+                    <DetailField label="Receipt time" value={displayText(metadata?.time)} missing={!hasValue(metadata?.time)} />
+                    <DetailField label="Store or merchant" value={displayText(merchant)} missing={!hasValue(merchant)} />
+                    <DetailField label="Store address" value={displayText(metadata?.address)} missing={!hasValue(metadata?.address)} />
+                    <DetailField label="TIN" value={displayText(metadata?.tin)} missing={!hasValue(metadata?.tin)} />
+                    <DetailField label="Telephone" value={displayText(metadata?.telephone)} missing={!hasValue(metadata?.telephone)} />
+                  </dl>
+                </section>
+
+                <section className="receipt-ocr-section" aria-labelledby="financial-info-heading">
+                  <h3 id="financial-info-heading">Financial Information</h3>
+                  <dl className="receipt-ocr-field-grid">
+                    <DetailField label="Subtotal" value={displayMoney(metadata?.subtotal)} missing={!hasValue(metadata?.subtotal)} />
+                    <DetailField label="VAT amount" value={displayMoney(metadata?.vatAmount)} missing={!hasValue(metadata?.vatAmount)} />
+                    <DetailField label="Discount" value={displayMoney(metadata?.discount)} missing={!hasValue(metadata?.discount)} />
+                    <DetailField label="Total amount" value={displayMoney(metadata?.totalAmount)} missing={!hasValue(metadata?.totalAmount)} />
+                    <DetailField label="Cash amount" value={displayMoney(metadata?.cashAmount)} missing={!hasValue(metadata?.cashAmount)} />
+                    <DetailField label="Cheque amount" value={displayMoney(metadata?.chequeAmount)} missing={!hasValue(metadata?.chequeAmount)} />
+                    <DetailField label="Cash and cheque total" value={displayMoney(metadata?.totalCashAndCheque)} missing={!hasValue(metadata?.totalCashAndCheque)} />
+                  </dl>
+                </section>
+
+                {(hasValue(metadata?.receivedFrom) || hasValue(metadata?.receiver) || hasValue(metadata?.bank) || hasValue(metadata?.chequeNumber) || hasValue(particulars)) ? (
+                  <section className="receipt-ocr-section" aria-labelledby="additional-info-heading">
+                    <h3 id="additional-info-heading">Additional Extracted Information</h3>
+                    <dl className="receipt-ocr-field-grid">
+                      <DetailField label="Received from" value={displayText(metadata?.receivedFrom)} />
+                      <DetailField label="Receiver" value={displayText(metadata?.receiver)} />
+                      <DetailField label="Bank" value={displayText(metadata?.bank)} />
+                      <DetailField label="Cheque number" value={displayText(metadata?.chequeNumber)} />
+                      <div className="receipt-ocr-field receipt-ocr-field--wide">
+                        <dt>Particulars</dt>
+                        <dd className="receipt-ocr-multiline">{displayText(particulars)}</dd>
+                      </div>
+                    </dl>
+                  </section>
+                ) : null}
+              </>
+            )}
 
             <section className="receipt-ocr-section receipt-ocr-linked" aria-labelledby="linked-info-heading">
               <div className="receipt-ocr-section-heading">
@@ -306,14 +502,14 @@ export default function ReceiptOCRDetailsModal({
               ) : null}
             </section>
 
-            {status.missingFields.length > 0 ? (
+            {!isEditing && status.missingFields.length > 0 ? (
               <section className="receipt-ocr-review-note" aria-labelledby="manual-review-heading">
                 <h3 id="manual-review-heading">Manual verification needed</h3>
                 <p>The following key fields were not confidently available: {status.missingFields.join(', ')}.</p>
               </section>
             ) : null}
 
-            {!isCountedTowardSpending && canVerify ? (
+            {!isEditing && !isCountedTowardSpending && canVerify ? (
               <section className="receipt-ocr-review-note" aria-labelledby="manual-verify-heading">
                 <h3 id="manual-verify-heading">This receipt isn't counted toward spending yet</h3>
                 {isLegacyReceipt ? (

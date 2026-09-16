@@ -30,13 +30,13 @@ const currency = new Intl.NumberFormat('en-PH', {
 // had back when it was its own page.
 const TAB_HEADINGS = {
   projects: {
-    eyebrow: 'Projects & Events Dashboard',
-    title: 'Projects & Events',
+    eyebrow: 'Approved Records Dashboard',
+    title: 'Approved Records',
     description: 'Monitor budgets, expenses, and completion status of all approved projects and events.',
   },
   events: {
-    eyebrow: 'Projects & Events Dashboard',
-    title: 'Projects & Events',
+    eyebrow: 'Approved Records Dashboard',
+    title: 'Approved Records',
     description: 'Monitor budgets, expenses, and completion status of all approved projects and events.',
   },
   payroll: {
@@ -45,7 +45,7 @@ const TAB_HEADINGS = {
     description: 'Monitor budgets, expenses, and status of all approved payroll requests.',
   },
   archived: {
-    eyebrow: 'Projects & Events Dashboard',
+    eyebrow: 'Approved Records Dashboard',
     title: 'Archived Projects & Events',
     description: 'Completed projects and events that were archived. Restore one to move it back to the active lists.',
   },

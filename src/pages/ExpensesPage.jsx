@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, lazy, Suspense, useCallback } from 'react'
-import { AlertCircle, FileText, CheckCircle, ChevronDown, Plus, PlusCircle, Trash2, CreditCard, ChevronRight, Calculator, Archive, ArchiveRestore } from 'lucide-react'
+import { AlertCircle, FileText, CheckCircle, ChevronDown, Plus, PlusCircle, Trash2, CreditCard, ChevronRight, Calculator, Archive, ArchiveRestore, X } from 'lucide-react'
 import { useBudget } from '../context/BudgetContext'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
@@ -10,7 +10,7 @@ import ReceiptPrintPreview from '../components/ReceiptPrintPreview'
 import CurrencyInput from '../components/CurrencyInput'
 import YearSpinner from '../components/YearSpinner'
 import { getRecordPeriod } from '../utils/budgetUtils'
-import { summarizeApprovedBudgetFinancials } from '../utils/projectEventFinancials'
+import { summarizeApprovedBudgetFinancials, materializeActualExpenseRows } from '../utils/projectEventFinancials'
 import '../components/documents/AdditionalDocuments.css'
 
 const EMPTY_REQUISITION_ROW = { itemName: '', quantity: 1, unitCost: 0 }
@@ -28,6 +28,171 @@ const monthLabels = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
+const REPORT_TYPE_OPTIONS = [
+  { value: 'monthly', label: 'Monthly Report' },
+  { value: 'quarterly', label: 'Quarterly Report' },
+  { value: 'yearly', label: 'Yearly Report' },
+]
+
+const EXPORT_QUARTER_OPTIONS = [
+  { value: 1, label: '1st Quarter (January–March)', range: 'January–March', ordinal: '1st' },
+  { value: 2, label: '2nd Quarter (April–June)', range: 'April–June', ordinal: '2nd' },
+  { value: 3, label: '3rd Quarter (July–September)', range: 'July–September', ordinal: '3rd' },
+  { value: 4, label: '4th Quarter (October–December)', range: 'October–December', ordinal: '4th' },
+]
+
+// The Export PDF year dropdown always starts at this floor and always
+// reaches at least 10 years past whatever "today" is — so the list keeps
+// extending into the future on its own as years pass, with no fixed end
+// year to come back and bump later.
+const EXPORT_YEAR_FLOOR = 2025
+const EXPORT_YEAR_LOOKAHEAD = 10
+
+function buildExportYearOptions(currentYear) {
+  const startYear = Math.min(EXPORT_YEAR_FLOOR, currentYear)
+  const endYear = currentYear + EXPORT_YEAR_LOOKAHEAD
+  return Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i)
+}
+
+function formatReportDate(value) {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+// Every record in this system belongs to the same single office — there is
+// no per-record "office" field to read, so the report states the one that
+// actually owns it, matching the letterhead.
+const RESPONSIBLE_OFFICE = 'Office of the Sangguniang Kabataan'
+
+// A materialized "actual expense" row (see materializeActualExpenseRows) is
+// either the record's own direct verified receipts ('parent-receipts') or an
+// itemized additional requisition linked to it — each needs a different
+// description, since only the requisition kind carries its own item name.
+function buildTransactionDescription(row, record) {
+  if (row.actualExpenseKind === 'parent-receipts') {
+    const description = (record.description || '').replace(/\s+/g, ' ').trim()
+    return description || 'Recorded expense (verified receipt)'
+  }
+  const raw = row.itemName || row.description || row.remarks || ''
+  return raw.replace(/\s+/g, ' ').trim() || 'Additional requisition'
+}
+
+// Every actual-expense row materialized for the whole system, narrowed down
+// to the ones that belong to this one approved record — its direct verified
+// receipts plus any additional requisitions linked to it.
+function getRecordTransactions(record, allActualRows) {
+  const recordId = String(record.id)
+  const requestId = record.requestId ? String(record.requestId) : null
+
+  return allActualRows
+    .filter((row) => {
+      if (Number(row.amount) <= 0) return false
+      if (row.actualExpenseKind === 'parent-receipts') return String(row.id) === recordId
+      const parentId = String(row.parentProjectId ?? '')
+      return parentId === recordId || (requestId && parentId === requestId)
+    })
+    .map((row) => {
+      const rawDate = row.date || row.eventDate || row.scheduledDate || record.eventDate || record.date || record.approvedAt
+      return {
+        rawDate,
+        dateLabel: formatReportDate(rawDate),
+        description: buildTransactionDescription(row, record),
+        amount: Number(row.amount) || 0,
+      }
+    })
+    .sort((a, b) => new Date(a.rawDate || 0) - new Date(b.rawDate || 0))
+    .map(({ dateLabel, description, amount }) => ({ dateLabel, description, amount }))
+}
+
+// One full financial "card" per approved record: general info, the
+// Approved/Actual/Remaining/Utilization/Returned figures, a plain-language
+// utilization status, and its own expense transactions — everything the
+// exported PDF needs to render that record's section, already computed so
+// exportPdf.js stays presentational.
+function buildRecordCard(record, allActualRows) {
+  const period = getRecordPeriod(record)
+  const approvedBudget = Number(record.approvedBudget) || 0
+  const totalExpenses = Number(record.totalExpenses) || 0
+  const remainingBudget = Number.isFinite(record.remainingBudget)
+    ? record.remainingBudget
+    : approvedBudget - totalExpenses
+  const utilization = approvedBudget > 0 ? (totalExpenses / approvedBudget) * 100 : 0
+  const utilizationStatus = totalExpenses <= 0
+    ? 'No Expenses Recorded'
+    : utilization >= 99.5
+      ? 'Fully Utilized'
+      : 'Partially Utilized'
+
+  return {
+    id: record.id,
+    name: record.event || record.project || 'Untitled',
+    type: record.type || 'Project',
+    category: record.category || 'Uncategorized',
+    month: period?.month || null,
+    year: period?.year || null,
+    status: record.projectStatus || 'Ongoing',
+    responsibleOffice: RESPONSIBLE_OFFICE,
+    approvedBudget,
+    totalExpenses,
+    remainingBudget,
+    utilization,
+    utilizationStatus,
+    returnedBudget: Number(record.returnedBudget) || 0,
+    returnedAt: record.returnedAt || null,
+    transactions: getRecordTransactions(record, allActualRows),
+  }
+}
+
+// Builds the data behind an Export PDF request: every approved Project,
+// Event, and Payroll record in the selected period — grouped by month, each
+// with its own full financial card — plus the totals for the report-wide
+// Overall Summary. Quarterly and Yearly always enumerate every month in
+// range (even ones with no records) so the report's structure matches what
+// was asked for the period, not just whichever months happened to have data.
+function buildExpenseReportData({ expenses, verifiedReceiptTotals, reportType, year, month, quarter }) {
+  const monthsInScope = reportType === 'monthly'
+    ? [Number(month)]
+    : reportType === 'quarterly'
+      ? [1, 2, 3].map((offset) => (Number(quarter) - 1) * 3 + offset)
+      : Array.from({ length: 12 }, (_, i) => i + 1)
+
+  const yearly = summarizeApprovedBudgetFinancials(expenses, verifiedReceiptTotals, { view: 'yearly', year })
+  const allActualRows = materializeActualExpenseRows(expenses, verifiedReceiptTotals)
+
+  const months = monthsInScope.map((m) => {
+    const monthRecords = yearly.records
+      .filter((record) => getRecordPeriod(record)?.month === m)
+      .sort((a, b) => String(a.event || a.project || '').localeCompare(String(b.event || b.project || '')))
+      .map((record) => buildRecordCard(record, allActualRows))
+
+    return {
+      month: m,
+      label: `${monthLabels[m - 1]} ${year}`,
+      records: monthRecords,
+    }
+  })
+
+  const allRecords = months.flatMap((m) => m.records)
+  const totalBudget = allRecords.reduce((sum, r) => sum + r.approvedBudget, 0)
+  const totalExpenses = allRecords.reduce((sum, r) => sum + r.totalExpenses, 0)
+  const totalReturnedBudget = allRecords.reduce((sum, r) => sum + r.returnedBudget, 0)
+
+  return {
+    months,
+    overall: {
+      totalBudget,
+      approvedAllocations: allRecords.length,
+      totalExpenses,
+      remainingBudget: totalBudget - totalExpenses,
+      totalReturnedBudget,
+      projectCount: allRecords.filter((r) => r.type === 'Project').length,
+      eventCount: allRecords.filter((r) => r.type === 'Event').length,
+      payrollCount: allRecords.filter((r) => r.type === 'Payroll').length,
+    },
+  }
+}
 
 
 function ExpensesPage() {
@@ -111,65 +276,99 @@ function ExpensesPage() {
   const canExportBreakdown = role === 'SK Chairman'
   const [breakdownExportState, setBreakdownExportState] = useState({ busy: false, error: '' })
 
-  async function handleExportMonthlyBreakdown() {
-    setBreakdownExportState({ busy: true, error: '' })
-    try {
-      const months = Object.entries(breakdownData.byMonth).map(([mStr, mData]) => {
-        const m = Number(mStr)
-        const additionalAmount = mData.items
-          .filter((e) => e.isAdditional)
-          .reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
-        const receipts = mData.items.reduce((count, e) => count + (receiptLinks[e.id] || 0), 0)
+  // Export Options dialog — lets the user pick a Monthly, Quarterly, or
+  // Yearly period before a PDF is generated, instead of always exporting
+  // whatever quarter the on-page breakdown happens to be showing.
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [exportReportType, setExportReportType] = useState('')
+  const [exportYear, setExportYear] = useState(now.getFullYear())
+  const [exportMonth, setExportMonth] = useState(now.getMonth() + 1)
+  const [exportQuarter, setExportQuarter] = useState(Math.floor(now.getMonth() / 3) + 1)
+  const [exportValidationError, setExportValidationError] = useState('')
 
-        return {
-          label: `${monthLabels[m]} ${breakdownYear}`,
-          baseAmount: mData.total - additionalAmount,
-          additionalAmount,
-          total: mData.total,
-          budget: mData.budget,
-          utilization: mData.budget > 0 ? (mData.total / mData.budget) * 100 : 0,
-          transactions: mData.items.length,
-          receipts,
-          categories: Object.entries(mData.categories)
-            .sort(([, a], [, b]) => b - a)
-            .map(([name, amount]) => ({
-              name,
-              amount,
-              count: mData.items.filter((e) => (e.category || 'Uncategorized') === name).length,
-              share: mData.total > 0 ? (amount / mData.total) * 100 : 0,
-            })),
-          items: [...mData.items]
-            .sort((a, b) => new Date(b.approvedAt || b.date || 0) - new Date(a.approvedAt || a.date || 0))
-            .map((e) => ({
-              title: e.event || e.project || 'Untitled',
-              date: e.isAdditional
-                ? 'Requisition'
-                : (e.date || e.approvedAt ? new Date(e.date || e.approvedAt).toLocaleDateString() : '—'),
-              budget: Number(e.approvedBudget) || 0,
-              expenses: Number(e.totalExpenses) || 0,
-              remaining: Number(e.remainingBudget) || 0,
-            })),
-        }
+  // Cheap enough to rebuild on every render — no need to memoize a
+  // dozen-element array, and doing so would only pin it to a stale `now`.
+  const exportYearOptions = buildExportYearOptions(now.getFullYear())
+
+  function openExportDialog() {
+    setExportReportType('')
+    setExportValidationError('')
+    setBreakdownExportState({ busy: false, error: '' })
+    setExportDialogOpen(true)
+  }
+
+  function closeExportDialog() {
+    setExportDialogOpen(false)
+    setExportValidationError('')
+  }
+
+  async function handleGenerateExportPdf() {
+    if (!exportReportType) {
+      setExportValidationError('Select a report type — Monthly, Quarterly, or Yearly — to continue.')
+      return
+    }
+    if (!exportYear) {
+      setExportValidationError('Select the year for this report.')
+      return
+    }
+    if (exportReportType === 'monthly' && !exportMonth) {
+      setExportValidationError('Select the month for this Monthly report.')
+      return
+    }
+    if (exportReportType === 'quarterly' && !exportQuarter) {
+      setExportValidationError('Select the quarter for this Quarterly report.')
+      return
+    }
+
+    setExportValidationError('')
+    setBreakdownExportState({ busy: true, error: '' })
+
+    try {
+      const { months, overall } = buildExpenseReportData({
+        expenses,
+        verifiedReceiptTotals,
+        reportType: exportReportType,
+        year: exportYear,
+        month: exportMonth,
+        quarter: exportQuarter,
       })
 
-      const { exportMonthlyBreakdownPdf } = await import('../utils/exportPdf')
-      exportMonthlyBreakdownPdf({
+      const periodLabel = exportReportType === 'monthly'
+        ? `${monthLabels[exportMonth - 1]} ${exportYear}`
+        : exportReportType === 'quarterly'
+          ? `Quarter ${exportQuarter} ${exportYear} (${EXPORT_QUARTER_OPTIONS.find((q) => q.value === exportQuarter)?.range})`
+          : String(exportYear)
+
+      const periodSlug = exportReportType === 'monthly'
+        ? `${exportYear}-${String(exportMonth).padStart(2, '0')}`
+        : exportReportType === 'quarterly'
+          ? `${exportYear}-Q${exportQuarter}`
+          : String(exportYear)
+
+      // Quarterly names the exact quarter selected ("2nd Quarter Expense
+      // Report") rather than a generic "Quarterly Expense Report" — the
+      // title should always say which one this is.
+      const reportTitle = exportReportType === 'monthly'
+        ? 'Monthly Expense Report'
+        : exportReportType === 'quarterly'
+          ? `${EXPORT_QUARTER_OPTIONS.find((q) => q.value === exportQuarter)?.ordinal || `${exportQuarter}th`} Quarter Expense Report`
+          : 'Yearly Expense Report'
+
+      const { exportExpensesReportPdf } = await import('../utils/exportPdf')
+      await exportExpensesReportPdf({
+        reportType: exportReportType,
+        reportTitle,
+        periodLabel,
+        periodSlug,
         months,
-        quarter: breakdownQuarter,
-        year: breakdownYear,
-        totals: {
-          budget: breakdownData.totalBudget,
-          spending: breakdownData.totalSpent,
-          remaining: breakdownData.remaining,
-          utilization: breakdownData.utilization,
-          transactions: months.reduce((sum, month) => sum + month.transactions, 0),
-          receipts: months.reduce((sum, month) => sum + month.receipts, 0),
-        },
+        overall,
         preparedBy: [profileName, role].filter(Boolean).join(' — '),
       })
+
       setBreakdownExportState({ busy: false, error: '' })
+      closeExportDialog()
     } catch (err) {
-      console.error('Monthly breakdown PDF export failed:', err)
+      console.error('Expense report PDF export failed:', err)
       setBreakdownExportState({ busy: false, error: 'Could not generate the PDF. Please try again.' })
     }
   }
@@ -807,11 +1006,9 @@ function ExpensesPage() {
                 <button
                   type="button"
                   className="secondary-button"
-                  onClick={handleExportMonthlyBreakdown}
-                  disabled={breakdownExportState.busy || !breakdownData.expenses.length}
-                  title={breakdownData.expenses.length
-                    ? `Export the Quarter ${breakdownQuarter} ${breakdownYear} breakdown as PDF`
-                    : 'No expenses to export for this quarter'}
+                  onClick={openExportDialog}
+                  disabled={breakdownExportState.busy}
+                  title="Choose a Monthly, Quarterly, or Yearly period to export as PDF"
                 >
                   <FileText size={16} aria-hidden="true" />
                   {breakdownExportState.busy ? 'Preparing PDF…' : 'Export PDF'}
@@ -1079,6 +1276,123 @@ function ExpensesPage() {
           />
         )}
       </Suspense>
+
+      {exportDialogOpen ? (
+        <div className="modal-overlay" onClick={() => (breakdownExportState.busy ? null : closeExportDialog())}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px', width: '95%' }}>
+            <div className="modal-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+              <div>
+                <p className="eyebrow" style={{ margin: '0 0 4px' }}>Export PDF</p>
+                <h2 style={{ margin: 0 }}>Export Options</h2>
+              </div>
+              <button type="button" className="icon-button" onClick={closeExportDialog} aria-label="Close" disabled={breakdownExportState.busy}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <p style={{ margin: '0 0 16px', color: 'var(--ink-soft)', fontSize: '0.9rem' }}>
+                Choose the reporting period for the expense records to include in the PDF.
+              </p>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--ink-2)', marginBottom: '8px' }}>
+                  Report Type
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  {REPORT_TYPE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={exportReportType === option.value ? 'primary-button' : 'secondary-button'}
+                      onClick={() => setExportReportType(option.value)}
+                      style={{ padding: '10px 8px', fontSize: '0.85rem' }}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {exportReportType ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1 1 140px' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--ink-2)' }}>Select Year</span>
+                    <select
+                      className="receipts-select"
+                      value={exportYear}
+                      onChange={(e) => setExportYear(Number(e.target.value))}
+                    >
+                      {exportYearOptions.map((yr) => (
+                        <option key={yr} value={yr}>{yr}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {exportReportType === 'monthly' && (
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1 1 160px' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--ink-2)' }}>Select Month</span>
+                      <select
+                        className="receipts-select"
+                        value={exportMonth}
+                        onChange={(e) => setExportMonth(Number(e.target.value))}
+                      >
+                        {monthLabels.map((label, i) => (
+                          <option key={label} value={i + 1}>{label}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+
+                  {exportReportType === 'quarterly' && (
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1 1 220px' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--ink-2)' }}>Select Quarter</span>
+                      <select
+                        className="receipts-select"
+                        value={exportQuarter}
+                        onChange={(e) => setExportQuarter(Number(e.target.value))}
+                      >
+                        {EXPORT_QUARTER_OPTIONS.map((q) => (
+                          <option key={q.value} value={q.value}>{q.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
+              ) : null}
+
+              {exportReportType ? (
+                <div style={{ marginTop: '16px', padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 'var(--radius-control)', border: '1px solid var(--line)' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                    Selected period
+                  </span>
+                  <p style={{ margin: '4px 0 0', fontWeight: 600, color: 'var(--ink)' }}>
+                    {exportReportType === 'monthly' && `${monthLabels[exportMonth - 1]} ${exportYear}`}
+                    {exportReportType === 'quarterly' && `Quarter ${exportQuarter} ${exportYear} (${EXPORT_QUARTER_OPTIONS.find((q) => q.value === exportQuarter)?.range})`}
+                    {exportReportType === 'yearly' && `${exportYear}`}
+                  </p>
+                </div>
+              ) : null}
+
+              {(exportValidationError || breakdownExportState.error) ? (
+                <div className="form-error" role="alert" style={{ marginTop: '16px' }}>
+                  {exportValidationError || breakdownExportState.error}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button type="button" className="secondary-button" onClick={closeExportDialog} disabled={breakdownExportState.busy}>
+                Cancel
+              </button>
+              <button type="button" className="primary-button" onClick={handleGenerateExportPdf} disabled={breakdownExportState.busy}>
+                <FileText size={16} aria-hidden="true" />
+                {breakdownExportState.busy ? 'Generating…' : 'Generate PDF'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   )
 }
