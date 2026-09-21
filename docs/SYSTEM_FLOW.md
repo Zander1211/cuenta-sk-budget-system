@@ -268,7 +268,7 @@ flowchart LR
     ACTION["Any significant action\n(login · submit · approve · reject\nreceipt upload · document generate\nbackup · restore · rollback)"]
     --> AUDIT["INSERT into audit_trail\n(user_id, user_name, user_role,\naction, action_type, module,\nrecord_id, description, status)"]
 
-    AUDIT --> VIEW["AuditTrailPage\n(Chairman only)"]
+    AUDIT --> VIEW["AuditTrailPage\n(all roles, view-only)"]
 
     RLS["Row Level Security (RLS)\non every table"] --> ROLE_CHECK{"Role check via\nauth.jwt() → app_metadata.role"}
     ROLE_CHECK --> ALLOW["Allow read / write"]

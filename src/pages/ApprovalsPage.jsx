@@ -25,7 +25,6 @@ function ApprovalsPage() {
     approveRequest,
     rejectRequest,
     cancelApproval,
-    restoreRequest,
     undoRejectRequest,
   } = useBudget()
 
@@ -67,8 +66,7 @@ function ApprovalsPage() {
         (statusFilter === 'Pending' && (!req.status || req.status === 'Pending') && !req.archivedAt) ||
         (statusFilter === 'Approved' && req.status === 'Approved' && !req.archivedAt) ||
         (statusFilter === 'Rejected' && req.status === 'Rejected' && !req.archivedAt) ||
-        (statusFilter === 'Cancelled' && req.status === 'Cancelled' && !req.archivedAt) ||
-        (statusFilter === 'Archived' && req.archivedAt)
+        (statusFilter === 'Cancelled' && req.status === 'Cancelled' && !req.archivedAt)
       
       // Date
       const reqDate = new Date(req.eventDate || req.submittedAt || Date.now())
@@ -82,7 +80,7 @@ function ApprovalsPage() {
   }, [requests, searchTerm, typeFilter, statusFilter, monthFilter, yearFilter])
 
   const requestTypes = ['All', 'Project', 'Event', 'Payroll']
-  const statusOptions = ['All', 'Pending', 'Approved', 'Rejected', 'Cancelled', 'Archived']
+  const statusOptions = ['All', 'Pending', 'Approved', 'Rejected', 'Cancelled']
 
   // Keep modal data fresh
   const activeViewDetailsReq = viewDetailsReq ? requests.find(r => String(r.id) === String(viewDetailsReq.id)) || viewDetailsReq : null
@@ -267,14 +265,6 @@ function ApprovalsPage() {
                             <button className="secondary-button" style={{ padding: '6px 12px' }} onClick={() => setViewDetailsReq(req)}>
                               <Eye size={14} /> View
                             </button>
-                            {req.archivedAt && (
-                              <button type="button" className="secondary-button" style={{ padding: '6px 12px' }} onClick={(e) => {
-                                e.stopPropagation();
-                                restoreRequest(req.id);
-                              }}>
-                                <RotateCcw size={14} /> Restore
-                              </button>
-                            )}
                           </div>
                         </td>
                       </tr>

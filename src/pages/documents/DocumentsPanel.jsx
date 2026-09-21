@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, X, Eye, Download, Archive, RotateCcw, Search, Calendar, Pencil } from 'lucide-react'
+import { Plus, X, Eye, Download, Archive, RotateCcw, Search, Calendar } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useDocuments } from '../../context/DocumentContext'
 import AnnualReportPreview from '../../components/documents/AnnualReportPreview'
@@ -71,11 +71,6 @@ function DocumentsPanel() {
     navigate('/dashboard/annual-report')
   }
 
-  function handleEditAnnualReport(doc) {
-    const year = doc.relatedEntityId || new Date(doc.dateGenerated).getFullYear()
-    navigate('/dashboard/annual-report', { state: { year: Number(year) } })
-  }
-
   function renderViewingDoc() {
     if (!viewingDoc) return null
     const storedData = viewingDoc.data || {}
@@ -94,7 +89,7 @@ function DocumentsPanel() {
           <div>
             <h2 style={{ margin: '0 0 4px', fontSize: '1.4rem', color: 'var(--text-primary)' }}>Annual Report</h2>
             <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-              Create, view, edit, print, and export your SK Annual Report.
+              Generate, view, print, and export your SK Annual Report. A generated report is final and cannot be edited &mdash; to change it, generate a new version.
             </p>
           </div>
           {canCreate && (
@@ -245,11 +240,6 @@ function DocumentsPanel() {
                           <button className="secondary-button" style={{ padding: '6px 12px' }} onClick={() => setViewDetailsDoc(doc)}>
                             <Eye size={14} /> View
                           </button>
-                          {canCreate && !doc.archivedAt && (
-                            <button className="secondary-button" style={{ padding: '6px 12px' }} onClick={() => handleEditAnnualReport(doc)}>
-                              <Pencil size={14} /> Edit
-                            </button>
-                          )}
                           <button className="secondary-button" style={{ padding: '6px 12px' }} onClick={() => {
                             setViewingDoc(doc)
                             setTimeout(() => window.print(), 500)

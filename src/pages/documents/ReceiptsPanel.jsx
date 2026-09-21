@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useBudget } from '../../context/BudgetContext'
 import { supabase } from '../../supabase/supabaseClient'
 import { useAuth } from '../../context/AuthContext'
-import { useAuditLog } from '../../context/AuditLogContext'
 import { useNotifications } from '../../context/NotificationContext'
 import {
   validateReceiptFile,
@@ -30,7 +29,6 @@ const currency = new Intl.NumberFormat('en-PH', {
 function ReceiptsPanel() {
   const { user, role } = useAuth()
   const { addNotification } = useNotifications()
-  const { addLog } = useAuditLog()
   const {
     expenses,
     verifiedReceiptTotals,
@@ -331,16 +329,6 @@ function ReceiptsPanel() {
     const message = `Receipt verified for ${recordName} at ${currency.format(amount)}.`
     setFeedback({ type: 'success', message })
     addNotification({ type: 'system', title: 'Receipt Verified', message })
-    addLog({
-      action: 'Receipt Verified',
-      actionType: 'Receipt Verified',
-      module: 'Receipts',
-      recordType: expense.type || 'Expense',
-      recordId: String(expense.id),
-      description: `Manually verified receipt for ${recordName}`,
-      status: 'Success',
-      remarks: `Verified amount: ${currency.format(amount)}`,
-    })
   }
 
   async function saveReceiptDetails(expense, receipt, metadata) {
@@ -378,15 +366,6 @@ function ReceiptsPanel() {
     const message = `Receipt details updated for ${recordName}.`
     setFeedback({ type: 'success', message })
     addNotification({ type: 'system', title: 'Receipt Updated', message })
-    addLog({
-      action: 'Receipt Details Edited',
-      actionType: 'Receipt Updated',
-      module: 'Receipts',
-      recordType: expense.type || 'Expense',
-      recordId: String(expense.id),
-      description: `Edited receipt details for ${recordName}`,
-      status: 'Success',
-    })
   }
 
   function triggerCamera(expense) {
@@ -538,16 +517,6 @@ function ReceiptsPanel() {
       const message = `Scanned receipt saved and attached to ${recordName}.`
       setFeedback({ type: 'success', message })
       addNotification({ type: 'system', title: 'Receipt Scanned', message })
-      addLog({
-        action: 'Receipt Scanned',
-        actionType: 'Receipt Uploaded',
-        module: 'Receipts',
-        recordType: expense.type || 'Expense',
-        recordId: String(expense.id),
-        description: `Scanned receipt attached to ${recordName}`,
-        status: 'Success',
-        remarks: metadata?.receiptNumber ? `Receipt no: ${metadata.receiptNumber}` : '',
-      })
 
       setScanModalOpen(false)
       setActiveExpense(null)
@@ -683,16 +652,6 @@ function ReceiptsPanel() {
       const message = `Receipt replaced for ${recordName}.`
       setFeedback({ type: 'success', message })
       addNotification({ type: 'system', title: 'Receipt Replaced', message })
-      addLog({
-        action: 'Receipt Replaced',
-        actionType: 'Receipt Uploaded',
-        module: 'Receipts',
-        recordType: expense.type || 'Expense',
-        recordId: String(expense.id),
-        description: `Replaced receipt "${oldReceipt.name || 'Receipt'}" for ${recordName}`,
-        status: 'Success',
-        remarks: metadata?.receiptNumber ? `Receipt no: ${metadata.receiptNumber}` : '',
-      })
 
       setScanModalOpen(false)
       setActiveExpense(null)

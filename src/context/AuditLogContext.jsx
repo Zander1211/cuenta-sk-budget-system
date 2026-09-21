@@ -25,15 +25,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from './AuthContext'
 import { supabase } from '../supabase/supabaseClient'
-import { resolveActionTypeValues, resolveModuleValues, resolveRecordTypeValues } from '../utils/auditFilters'
+import {
+  parseSearchDate,
+  resolveActionTypeValues,
+  resolveModuleValues,
+  resolveMonthYearWindow,
+  resolveRecordTypeValues,
+} from '../utils/auditFilters'
 import { logAuditEvent } from '../utils/auditLogger'
 import { getDeviceInfo } from '../utils/deviceInfo'
 
 const AuditLogContext = createContext(null)
 
 const PAGE_SIZE = 15
-// Names are deduplicated client-side; the trail has no distinct-value endpoint.
-const ACTOR_SCAN_LIMIT = 5000
 
 const DEFAULT_FILTERS = {
   search:     '',
@@ -43,6 +47,8 @@ const DEFAULT_FILTERS = {
   module:     'All',
   recordType: 'All',
   status:     'All',
+  year:       'All',
+  month:      'All',
   dateFrom:   '',
   dateTo:     '',
 }
@@ -53,8 +59,9 @@ function AuditLogProvider({ children }) {
   const [totalCount, setTotalCount]   = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
   const [activeFilters, setActiveFiltersState] = useState(DEFAULT_FILTERS)
-  // Every name that appears anywhere in the trail, not just on the page that
-  // happens to be loaded — the user filter is built from this.
+  // Full names of the accounts that are active right now — the user filter is
+  // built from this, so it is the account directory, not the trail: a disabled
+  // account's name stays in its old log rows but is no longer selectable.
   const [actorOptions, setActorOptions] = useState([])
 
   const { user, profileName, role, isAuthenticated } = useAuth()
@@ -78,15 +85,23 @@ function AuditLogProvider({ children }) {
       // ── Full-text search ─────────────────────────────
       if (filters.search) {
         const s = filters.search
-        query = query.or(
-          [
-            `action.ilike.%${s}%`,
-            `user_name.ilike.%${s}%`,
-            `description.ilike.%${s}%`,
-            `record_id.ilike.%${s}%`,
-            `action_type.ilike.%${s}%`,
-          ].join(',')
-        )
+        const clauses = [
+          `action.ilike.%${s}%`,
+          `user_name.ilike.%${s}%`,
+          `description.ilike.%${s}%`,
+          `record_id.ilike.%${s}%`,
+          `action_type.ilike.%${s}%`,
+          `module.ilike.%${s}%`,
+        ]
+        // Text that reads as a date ("Sept. 21, 2026") also matches that
+        // day's entries — created_at is a timestamp, so it can't be ilike'd.
+        const searchedDate = parseSearchDate(s)
+        if (searchedDate) {
+          clauses.push(
+            `and(created_at.gte.${searchedDate.start.toISOString()},created_at.lt.${searchedDate.end.toISOString()})`
+          )
+        }
+        query = query.or(clauses.join(','))
       }
 
       // ── Dropdown filters ──────────────────────────────
@@ -121,6 +136,14 @@ function AuditLogProvider({ children }) {
         query = query.eq('status', filters.status)
       }
 
+      // ── Year / Month ─────────────────────────────────
+      const monthYearWindow = resolveMonthYearWindow(filters)
+      if (monthYearWindow) {
+        query = query
+          .gte('created_at', monthYearWindow.start.toISOString())
+          .lt('created_at', monthYearWindow.end.toISOString())
+      }
+
       // ── Date range ────────────────────────────────────
       if (filters.dateFrom) {
         const fromDate = new Date(filters.dateFrom)
@@ -150,20 +173,21 @@ function AuditLogProvider({ children }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Distinct actors for the user filter ──────────────────────
+  // ── Active accounts for the user filter ──────────────────────
+  // A null is_active counts as active, matching how User Management reads it.
+  // A failed fetch keeps the list already showing rather than emptying it.
   const fetchActorOptions = useCallback(async () => {
     try {
       const { data, error } = await supabase
-        .from('audit_trail')
-        .select('user_name')
-        .not('user_name', 'is', null)
-        .order('user_name', { ascending: true })
-        .limit(ACTOR_SCAN_LIMIT)
+        .from('created_accounts')
+        .select('full_name')
+        .or('is_active.eq.true,is_active.is.null')
 
       if (error) throw error
-      setActorOptions([...new Set(data.map((row) => row.user_name).filter(Boolean))])
+      const names = (data || []).map((row) => row.full_name?.trim()).filter(Boolean)
+      setActorOptions([...new Set(names)].sort((a, b) => a.localeCompare(b)))
     } catch (err) {
-      console.warn('[AuditLogContext] Actor list fetch error:', err)
+      console.warn('[AuditLogContext] Active account list fetch error:', err)
     }
   }, [])
 
@@ -195,6 +219,33 @@ function AuditLogProvider({ children }) {
       window.removeEventListener('cuenta:rollback-complete', handleRollback)
     }
   }, [isAuthenticated, fetchLogs, fetchActorOptions])
+
+  // Disabling, re-enabling, creating or renaming an account changes who the
+  // user filter should offer, so refetch on any change to the directory — no
+  // manual refresh needed. Refetching again on tab focus covers a missed
+  // realtime event (dropped socket, table not in the realtime publication).
+  useEffect(() => {
+    if (!isAuthenticated) return undefined
+
+    const channel = supabase
+      .channel('audit-active-accounts')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'created_accounts' },
+        () => fetchActorOptions()
+      )
+      .subscribe()
+
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') fetchActorOptions()
+    }
+    document.addEventListener('visibilitychange', handleVisible)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisible)
+      supabase.removeChannel(channel)
+    }
+  }, [isAuthenticated, fetchActorOptions])
 
   // ── Add a log entry ──────────────────────────────────────────
   /**
@@ -301,10 +352,11 @@ function AuditLogProvider({ children }) {
       activeFilters,
       setActiveFilters,
       actorOptions,
+      fetchActorOptions,
       PAGE_SIZE,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [logs, fetchLogs, isLoadingLogs, totalCount, totalPages, currentPage, goToPage, activeFilters, setActiveFilters, actorOptions]
+    [logs, fetchLogs, isLoadingLogs, totalCount, totalPages, currentPage, goToPage, activeFilters, setActiveFilters, actorOptions, fetchActorOptions]
   )
 
   return (

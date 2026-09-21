@@ -7,7 +7,7 @@ import {
 import RoleGate from '../components/RoleGate'
 import PaginationControls from '../components/PaginationControls'
 import { useAuditLog } from '../context/AuditLogContext'
-import { ACTION_TYPE_GROUPS, MODULE_OPTIONS, RECORD_TYPE_OPTIONS, ROLE_OPTIONS } from '../utils/auditFilters'
+import { ACTION_TYPE_GROUPS, MODULE_OPTIONS, MONTH_NAMES, RECORD_TYPE_OPTIONS, ROLE_OPTIONS } from '../utils/auditFilters'
 
 // ── Constants ────────────────────────────────────────────────────
 
@@ -24,11 +24,13 @@ function getActionBadge(actionType, action) {
   if (text.includes('archived'))      return { label: 'Archived', tone: 'neutral'  }
   if (text.includes('created') || text.includes('submitted') || text.includes('added'))
     return { label: 'Created', tone: 'pending' }
-  if (text.includes('updated') || text.includes('changed') || text.includes('uploaded'))
+  if (text.includes('verified'))      return { label: 'Verified', tone: 'approved' }
+  if (text.includes('updated') || text.includes('changed') || text.includes('uploaded') || text.includes('replaced'))
     return { label: 'Updated', tone: 'pending' }
   if (text.includes('deleted'))       return { label: 'Deleted',  tone: 'rejected' }
   if (text.includes('backup') || text.includes('restore'))
     return { label: 'Backup',  tone: 'neutral' }
+  if (text.includes('generated'))     return { label: 'Generated', tone: 'pending' }
   if (text.includes('password'))      return { label: 'Auth',     tone: 'neutral'  }
   return { label: 'System', tone: 'neutral' }
 }
@@ -129,14 +131,21 @@ const DEFAULT_FILTERS = {
   actionType: 'All',
   module:     'All',
   recordType: 'All',
+  year:       'All',
+  month:      'All',
   dateFrom:   '',
   dateTo:     '',
 }
+
+// The current year and the four before it — the trail cannot reach further
+// back than the system itself.
+const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - i))
 
 function AuditTrailPage() {
   const {
     logs,
     actorOptions,
+    fetchActorOptions,
     isLoadingLogs,
     totalCount,
     totalPages,
@@ -162,15 +171,10 @@ function AuditTrailPage() {
       })
     : '—'
 
-  // Every actor in the trail, not only the ones on the page currently loaded —
-  // otherwise the filter can only offer the users you can already see. Names
-  // from the loaded page are merged in so a just-written entry is selectable
-  // before the list is refetched.
-  const uniqueActors = useMemo(() => {
-    const names = new Set(actorOptions)
-    logs.forEach(l => { if (l.user_name) names.add(l.user_name) })
-    return Array.from(names).sort((a, b) => a.localeCompare(b))
-  }, [actorOptions, logs])
+  // Active accounts only, alphabetical — the context keeps this in sync with
+  // the account directory. Names on loaded log rows are deliberately NOT
+  // merged in: that would put a disabled account's name straight back.
+  const uniqueActors = actorOptions
 
   // Filters apply live — no "Apply" click needed. Dropdowns and dates are
   // discrete choices, so they fetch immediately; free-text search is
@@ -179,8 +183,30 @@ function AuditTrailPage() {
 
   useEffect(() => () => clearTimeout(searchDebounceRef.current), [])
 
+  // Pick up any account change made while this page was closed or hidden.
+  useEffect(() => { fetchActorOptions() }, [fetchActorOptions])
+
+  // If the account being filtered on is disabled while selected, it drops out
+  // of the list — go back to All Users rather than keep filtering by a name
+  // the dropdown no longer shows.
+  const selectedUser = localFilters.userName
+  useEffect(() => {
+    if (selectedUser !== 'All' && actorOptions.length && !actorOptions.includes(selectedUser)) {
+      handleFilterChange('userName', 'All')
+    }
+    // handleFilterChange closes over the current filters; the trigger is the
+    // selection or the list changing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedUser, actorOptions])
+
   function handleFilterChange(key, value) {
     const next = { ...localFilters, [key]: value }
+    // A month only means something within a year: picking one with no year
+    // chosen selects the current year, and clearing the year clears the month.
+    if (key === 'month' && value !== 'All' && next.year === 'All') {
+      next.year = String(new Date().getFullYear())
+    }
+    if (key === 'year' && value === 'All') next.month = 'All'
     setLocalFilters(next)
     setExpandedRows({})
 
@@ -223,14 +249,14 @@ function AuditTrailPage() {
   const hasActiveFilters = Object.values(localFilters).some((value) => value && value !== 'All')
 
   return (
-    <RoleGate allow={['SK Chairman']}>
+    <RoleGate allow={['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']}>
       {/* ── Header ──────────────────────────────────────────── */}
       <header className="dashboard-header">
         <div className="header-left">
           <div>
             <p className="eyebrow">Activity Logs</p>
             <h1>Tamper-Evident Activity Log</h1>
-            <p>Complete chronological record of all system actions. Append-only — records cannot be modified or deleted.</p>
+            <p>Complete chronological record of all system actions, including those of the SK Chairman and SK Treasurer. View-only for every role — records cannot be modified or deleted.</p>
           </div>
         </div>
         <div className="header-actions">
@@ -293,7 +319,7 @@ function AuditTrailPage() {
                 <input
                   type="search"
                   id="audit-search"
-                  placeholder="Search by user, description, action, or record ID…"
+                  placeholder="Search by user, activity, module, date (e.g. Sept. 21, 2026), or record ID…"
                   value={localFilters.search}
                   onChange={e => handleFilterChange('search', e.target.value)}
                   aria-label="Search audit logs"
@@ -323,6 +349,32 @@ function AuditTrailPage() {
 
             {/* Row 2: Dropdowns */}
             <div className="audit-filter-row audit-filter-row--dropdowns">
+              <select
+                className="panel-select"
+                id="audit-year-filter"
+                value={localFilters.year}
+                onChange={e => handleFilterChange('year', e.target.value)}
+                aria-label="Filter by year"
+              >
+                <option value="All">All Years</option>
+                {YEAR_OPTIONS.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+
+              <select
+                className="panel-select"
+                id="audit-month-filter"
+                value={localFilters.month}
+                onChange={e => handleFilterChange('month', e.target.value)}
+                aria-label="Filter by month"
+              >
+                <option value="All">All Months</option>
+                {MONTH_NAMES.map((name, i) => (
+                  <option key={name} value={String(i + 1)}>{name}</option>
+                ))}
+              </select>
+
               <select
                 className="panel-select"
                 id="audit-user-filter"

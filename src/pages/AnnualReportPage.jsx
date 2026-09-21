@@ -219,8 +219,20 @@ function AnnualReportPage() {
 
   async function handleSaveDocument(previewData) {
     if (!previewData) return
+
+    // A generated Annual Report is never rewritten. Generating one for a year
+    // that already has a report (archived ones included) files it as the next
+    // version instead, so the earlier report stays exactly as it was issued.
+    let version = 1
+    const { count } = await supabase
+      .from('documents')
+      .select('id', { count: 'exact', head: true })
+      .eq('type', 'Annual Report')
+      .eq('related_entity_id', String(selectedYear))
+    if (count) version = count + 1
+
     await addDocument({
-      name: `Annual Report ${selectedYear}`,
+      name: version > 1 ? `Annual Report ${selectedYear} (Version ${version})` : `Annual Report ${selectedYear}`,
       project: '',
       generatedBy: profileName || role,
       type: 'Annual Report',

@@ -76,7 +76,7 @@ const navItems = [
   {
     label: 'Activity Logs',
     path: '/dashboard/audit-trail',
-    roles: ['SK Chairman'],
+    roles: ['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer'],
     icon: FileText
   },
   {

@@ -895,8 +895,8 @@ function BudgetProvider({ children }) {
     )
 
     addLog({
-      action: `Request Restored to Pending — ${request.event}`,
-      actionType: 'Request Updated',
+      action: `Rejection Undone — ${request.event}`,
+      actionType: 'Rejection Undone',
       module: 'Budget Requests',
       recordType: 'Budget Request',
       recordId: requestId,
@@ -1034,121 +1034,6 @@ function BudgetProvider({ children }) {
     if (type === 'Event') return 'Events'
     if (type === 'Payroll') return 'Payroll'
     return 'Budget Requests'
-  }
-
-  async function archiveRequest(requestId, archivedBy) {
-    const request = requests.find((item) => String(item.id) === String(requestId))
-    if (!request || request.archivedAt) {
-      return { error: null }
-    }
-
-    const now = new Date().toISOString()
-    const actorName = archivedBy || profileName || user?.user_metadata?.full_name || 'System'
-
-    const { error } = await supabase
-      .from('budget_requests')
-      .update({ archived_at: now, archived_by: actorName, updated_at: now })
-      .eq('id', requestId)
-
-    if (error) {
-      console.error('Failed to archive request in Supabase:', error)
-      return { error }
-    }
-
-    if (request.status === 'Approved') {
-      const { error: expErr } = await supabase
-        .from('expenses')
-        .update({ archived_at: now })
-        .eq('request_id', requestId)
-      if (expErr) console.warn('Failed to archive linked expense in Supabase:', expErr)
-    }
-
-    setRequests((prev) =>
-      prev.map((item) =>
-        String(item.id) === String(requestId)
-          ? { ...item, archivedAt: now, archivedBy: actorName }
-          : item
-      )
-    )
-
-    if (request.status === 'Approved') {
-      setExpenses((prev) =>
-        prev.map((expense) =>
-          String(expense.requestId) === String(requestId)
-            ? { ...expense, archivedAt: now, archivedBy: actorName }
-            : expense
-        )
-      )
-    }
-
-    addLog({
-      action: `Request Archived — ${request.event}`,
-      actionType: 'Request Archived',
-      module: requestModule(request.type),
-      recordType: 'Budget Request',
-      recordId: requestId,
-      description: `Archived budget request for ${request.event}`,
-      previousValue: { archivedAt: null },
-      newValue: { archivedAt: now },
-    })
-
-    return { error: null }
-  }
-
-  async function restoreRequest(requestId) {
-    const request = requests.find((item) => String(item.id) === String(requestId))
-    if (!request || !request.archivedAt) {
-      return { error: null }
-    }
-
-    const { error } = await supabase
-      .from('budget_requests')
-      .update({ archived_at: null, archived_by: null, updated_at: new Date().toISOString() })
-      .eq('id', requestId)
-
-    if (error) {
-      console.error('Failed to restore request in Supabase:', error)
-      return { error }
-    }
-
-    if (request.status === 'Approved') {
-      const { error: expErr } = await supabase
-        .from('expenses')
-        .update({ archived_at: null })
-        .eq('request_id', requestId)
-      if (expErr) console.warn('Failed to restore linked expense in Supabase:', expErr)
-    }
-
-    setRequests((prev) =>
-      prev.map((item) =>
-        String(item.id) === String(requestId)
-          ? { ...item, archivedAt: null, archivedBy: null }
-          : item
-      )
-    )
-
-    if (request.status === 'Approved') {
-      setExpenses((prev) =>
-        prev.map((expense) =>
-          String(expense.requestId) === String(requestId)
-            ? { ...expense, archivedAt: null, archivedBy: null }
-            : expense
-        )
-      )
-    }
-
-    addLog({
-      action: `Request Restored — ${request.event}`,
-      actionType: 'Request Restored',
-      module: requestModule(request.type),
-      recordType: 'Budget Request',
-      recordId: requestId,
-      description: `Restored archived budget request for ${request.event}`,
-      previousValue: { archivedAt: request.archivedAt },
-      newValue: { archivedAt: null },
-    })
-
-    return { error: null }
   }
 
   async function addRequest({
@@ -1328,16 +1213,6 @@ function BudgetProvider({ children }) {
       return { error }
     }
 
-    addLog({
-      action: `Budget Request Resubmitted — ${request.event}`,
-      actionType: 'Request Submitted',
-      module: 'Budget Requests',
-      recordType: 'Budget Request',
-      recordId: requestId,
-      description: `The SK Treasurer has updated and resubmitted the budget request for "${request.event}" worth ₱${Number(amount || 0).toLocaleString()}.`,
-      newValue: { event: request.event, amount: Number(amount || 0), status: 'Pending' },
-    })
-
     const rolesToNotify = ['SK Chairman', 'SK Kagawad', 'Barangay Treasurer']
     try {
       const notificationsToInsert = rolesToNotify.map((r) => ({
@@ -1385,15 +1260,34 @@ function BudgetProvider({ children }) {
       })
     )
 
+    // What the Treasurer actually edited — a "Request Updated" entry that does
+    // not say what was updated is the confusion this type keeps causing.
+    const itemsOf = (list) => JSON.stringify(
+      (Array.isArray(list) ? list : []).map((entry) => [
+        String(entry.itemName ?? '').trim(),
+        Number(entry.quantity) || 0,
+        Number(entry.unitCost) || 0,
+      ])
+    )
+    const changes = []
+    if (Number(request.amount) !== amount) changes.push('Budget amount updated')
+    if (updatedData.event !== undefined && updatedData.event !== request.event) changes.push('Title edited')
+    if (updatedData.category !== undefined && updatedData.category !== request.category) changes.push('Category edited')
+    if (updatedData.eventDate !== undefined && (updatedData.eventDate || null) !== (request.eventDate || null)) changes.push('Date edited')
+    if (updatedData.venue !== undefined && updatedData.venue !== request.venue) changes.push('Venue edited')
+    if (updatedData.description !== undefined && updatedData.description !== request.description) changes.push('Purpose edited')
+    if (itemsOf(breakdown) !== itemsOf(request.breakdown)) changes.push('Requisition breakdown modified')
+    const requestTitle = updatedData.event || request.event
+
     addLog({
-      action: `Request Resubmitted — ${updatedData.event || request.event}`,
+      action: `Request Updated — ${requestTitle}`,
       actionType: 'Request Updated',
       module: 'Budget Requests',
       recordType: 'Budget Request',
       recordId: requestId,
-      description: `Resubmitted budget request for ${updatedData.event || request.event}`,
+      description: `The SK Treasurer edited the budget request for "${requestTitle}" and resubmitted it for approval.${changes.length ? ` ${changes.join('. ')}.` : ''}`,
       previousValue: { status: 'Rejected', amount: request.amount },
-      newValue: { status: 'Pending', amount: amount, event: updatedData.event || request.event },
+      newValue: { status: 'Pending', amount, event: requestTitle },
     })
     
     addNotification({
@@ -1902,8 +1796,6 @@ function BudgetProvider({ children }) {
       rejectRequest,
       undoRejectRequest,
       cancelApproval,
-      archiveRequest,
-      restoreRequest,
       addExpense,
       addAdditionalRequisition,
       archiveExpense,

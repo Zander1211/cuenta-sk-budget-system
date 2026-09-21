@@ -74,6 +74,24 @@ function RecordReceiptsModal({ record, onClose }) {
   const recordName = record.event || record.project || 'this record'
   const recordTypeLabel = record.type || 'Project'
 
+  // Every receipt action taken from Approved Records is written to the Activity
+  // Logs under the same module, with the Project/Event/Payroll it belongs to in
+  // the title, description and stored values — the reader should never have to
+  // open the receipt to learn which record it was for.
+  function logReceiptActivity(actionType, description, { remarks = '', newValue = null } = {}) {
+    addLog({
+      action: `${actionType} \u2014 ${recordName}`,
+      actionType,
+      module: 'Approved Records',
+      recordType: recordTypeLabel,
+      recordId: String(record.id),
+      description,
+      newValue: { [recordTypeLabel.toLowerCase()]: recordName, ...newValue },
+      status: 'Success',
+      remarks,
+    })
+  }
+
   // A receipt can be filed under the record's own id, the original request id
   // (receipts uploaded before the request finished approving), or one of its
   // linked additional requisitions — the same ownership resolution the main
@@ -350,16 +368,11 @@ function RecordReceiptsModal({ record, onClose }) {
       const message = `Scanned receipt saved and attached to ${recordName}.`
       setFeedback({ type: 'success', message })
       addNotification({ type: 'system', title: 'Receipt Scanned', message })
-      addLog({
-        action: 'Receipt Scanned',
-        actionType: 'Receipt Uploaded',
-        module: 'Receipts',
-        recordType: recordTypeLabel,
-        recordId: String(record.id),
-        description: `Scanned receipt attached to ${recordName}`,
-        status: 'Success',
-        remarks: metadata?.receiptNumber ? `Receipt no: ${metadata.receiptNumber}` : '',
-      })
+      logReceiptActivity(
+        'Receipt Uploaded',
+        `Uploaded a receipt for ${recordTypeLabel} "${recordName}"`,
+        { remarks: metadata?.receiptNumber ? `Receipt no: ${metadata.receiptNumber}` : '' },
+      )
 
       setScanModalOpen(false)
       setPage(1)
@@ -486,16 +499,11 @@ function RecordReceiptsModal({ record, onClose }) {
       const message = `Receipt replaced for ${recordName}.`
       setFeedback({ type: 'success', message })
       addNotification({ type: 'system', title: 'Receipt Replaced', message })
-      addLog({
-        action: 'Receipt Replaced',
-        actionType: 'Receipt Uploaded',
-        module: 'Receipts',
-        recordType: recordTypeLabel,
-        recordId: String(record.id),
-        description: `Replaced receipt "${oldReceipt.name || 'Receipt'}" for ${recordName}`,
-        status: 'Success',
-        remarks: metadata?.receiptNumber ? `Receipt no: ${metadata.receiptNumber}` : '',
-      })
+      logReceiptActivity(
+        'Receipt Replaced',
+        `Replaced receipt "${oldReceipt.name || 'Receipt'}" for ${recordTypeLabel} "${recordName}"`,
+        { remarks: metadata?.receiptNumber ? `Receipt no: ${metadata.receiptNumber}` : '' },
+      )
 
       setScanModalOpen(false)
       setReplacingReceipt(null)
@@ -550,16 +558,11 @@ function RecordReceiptsModal({ record, onClose }) {
     const message = `Receipt verified for ${recordName} at ${currency.format(amount)}.`
     setFeedback({ type: 'success', message })
     addNotification({ type: 'system', title: 'Receipt Verified', message })
-    addLog({
-      action: 'Receipt Verified',
-      actionType: 'Receipt Verified',
-      module: 'Receipts',
-      recordType: recordTypeLabel,
-      recordId: String(record.id),
-      description: `Manually verified receipt for ${recordName}`,
-      status: 'Success',
-      remarks: `Verified amount: ${currency.format(amount)}`,
-    })
+    logReceiptActivity(
+      'Receipt Verified',
+      `Verified a receipt for ${recordTypeLabel} "${recordName}"`,
+      { remarks: `Verified amount: ${currency.format(amount)}` },
+    )
   }
 
   async function saveReceiptDetails(receipt, metadata) {
@@ -592,15 +595,10 @@ function RecordReceiptsModal({ record, onClose }) {
     const message = `Receipt details updated for ${recordName}.`
     setFeedback({ type: 'success', message })
     addNotification({ type: 'system', title: 'Receipt Updated', message })
-    addLog({
-      action: 'Receipt Details Edited',
-      actionType: 'Receipt Updated',
-      module: 'Receipts',
-      recordType: recordTypeLabel,
-      recordId: String(record.id),
-      description: `Edited receipt details for ${recordName}`,
-      status: 'Success',
-    })
+    logReceiptActivity(
+      'Receipt Information Updated',
+      `Updated receipt information for ${recordTypeLabel} "${recordName}"`,
+    )
   }
 
   return (

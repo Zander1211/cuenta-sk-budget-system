@@ -37,9 +37,8 @@ export const ACTION_TYPE_GROUPS = [
       { label: 'Request Updated', values: ['Request Updated'] },
       { label: 'Request Approved', values: ['Request Approved'] },
       { label: 'Request Rejected', values: ['Request Rejected'] },
+      { label: 'Rejection Undone', values: ['Rejection Undone'] },
       { label: 'Request Cancelled', values: ['Request Cancelled'] },
-      { label: 'Request Archived', values: ['Request Archived'] },
-      { label: 'Request Restored', values: ['Request Restored'] },
     ],
   },
   {
@@ -61,14 +60,24 @@ export const ACTION_TYPE_GROUPS = [
     group: 'Expenses & Receipts',
     options: [
       { label: 'Expense Added', values: ['Expense Added'] },
-      { label: 'Expense Archived', values: ['Expense Archived'] },
-      { label: 'Expense Restored', values: ['Expense Restored'] },
       { label: 'Requisition Added', values: ['Requisition Added', 'Record Updated'] },
+      // Receipt entries are written from Approved Records → Receipts.
+      // Replacements used to be filed under "Receipt Uploaded" and edits under
+      // "Receipt Updated"; those older rows keep their old type.
       { label: 'Receipt Uploaded', values: ['Receipt Uploaded', 'Upload'] },
+      { label: 'Receipt Replaced', values: ['Receipt Replaced'] },
+      { label: 'Receipt Information Updated', values: ['Receipt Information Updated', 'Receipt Updated'] },
       { label: 'Receipt Verified', values: ['Receipt Verified', 'Update'] },
-      // Written by RecordReceiptsModal's delete flow — was missing here
-      // entirely, so a deleted-receipt entry could never be filtered to.
-      { label: 'Receipt Deleted', values: ['Receipt Deleted'] },
+    ],
+  },
+  {
+    group: 'Documents & Reports',
+    options: [
+      // Project / Event / Payroll documents, made and edited from Approved Records.
+      { label: 'Document Generated', values: ['Document Generated'] },
+      { label: 'Document Updated', values: ['Document Updated'] },
+      // The Annual Report is generated once and never edited — a change is a new version.
+      { label: 'Annual Report Generated', values: ['Annual Report Generated'] },
     ],
   },
   {
@@ -107,7 +116,8 @@ export function resolveActionTypeValues(label) {
 // wrote the singular "Project"/"Event" while everything else wrote the plural,
 // so picking "Projects" quietly missed a fifth of the project rows. The
 // writers are consistent now; the singular stays here to reach older entries.
-// "Documents" is absent on purpose — the Documents module logs nothing.
+// "Documents" is present now that document and annual-report generation are
+// logged; older rows simply never have it.
 
 export const MODULE_OPTIONS = [
   { label: 'Authentication', values: ['Authentication'] },
@@ -117,17 +127,18 @@ export const MODULE_OPTIONS = [
   { label: 'Events', values: ['Events', 'Event'] },
   { label: 'Payroll', values: ['Payroll'] },
   { label: 'Expenses', values: ['Expenses'] },
-  { label: 'Receipts', values: ['Receipts'] },
+  { label: 'Approved Records', values: ['Approved Records', 'Receipts'] },
+  { label: 'Documents', values: ['Documents'] },
   { label: 'Backup & Restore', values: ['Backup & Restore'] },
   { label: 'User Management', values: ['User Management'] },
 ]
 
 // ── Record types ───────────────────────────────────────────────────────────
 //
-// "Document" and "Receipt" are absent: no writer sets them. Receipt entries
-// record the project/event/expense they belong to, and documents are not
-// logged at all. "Restore History" was missing and is written by the restore
-// flow, so its rows used to be unreachable.
+// "Receipt" is absent: no writer sets it — receipt entries record the
+// project/event/expense they belong to. "Document" is written by the document
+// and annual-report generators. "Restore History" was missing and is written
+// by the restore flow, so its rows used to be unreachable.
 
 export const RECORD_TYPE_OPTIONS = [
   { label: 'User', values: ['User'] },
@@ -137,6 +148,7 @@ export const RECORD_TYPE_OPTIONS = [
   { label: 'Event', values: ['Event'] },
   { label: 'Payroll', values: ['Payroll'] },
   { label: 'Expense', values: ['Expense'] },
+  { label: 'Document', values: ['Document'] },
   { label: 'Backup', values: ['Backup'] },
   { label: 'Restore History', values: ['Restore History'] },
 ]
@@ -154,4 +166,74 @@ export function resolveModuleValues(label) {
 
 export function resolveRecordTypeValues(label) {
   return lookup(RECORD_TYPE_OPTIONS, label)
+}
+
+// ── Dates ──────────────────────────────────────────────────────────────────
+
+export const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+// The Year and Month dropdowns as a [start, end) window of local time, or null
+// when neither is set. A month on its own means that month of the current year
+// — the page sets the year itself when a month is picked, so this is only a
+// safety net.
+export function resolveMonthYearWindow({ year, month } = {}) {
+  const hasYear = year && year !== 'All'
+  const hasMonth = month && month !== 'All'
+  if (!hasYear && !hasMonth) return null
+  const y = hasYear ? Number(year) : new Date().getFullYear()
+  if (hasMonth) {
+    const m = Number(month) - 1
+    return { start: new Date(y, m, 1), end: new Date(y, m + 1, 1) }
+  }
+  return { start: new Date(y, 0, 1), end: new Date(y + 1, 0, 1) }
+}
+
+function monthIndexFromName(token) {
+  const t = token.toLowerCase()
+  if (t.length < 3) return -1
+  return MONTH_NAMES.findIndex((name) => name.toLowerCase().startsWith(t))
+}
+
+// Reads what a person types into the search box as a calendar date, so
+// "Sept. 21, 2026", "September 21", "2026-09-21", "9/21/2026" or
+// "September 2026" all find that day's (or month's) entries. Returns a
+// [start, end) window of local time, or null when the text is not a date —
+// which keeps ordinary searches ("budget", "Maria") untouched. A day without
+// a year means the current year.
+export function parseSearchDate(text) {
+  const raw = String(text || '').trim().replace(/\s+/g, ' ')
+  if (!raw) return null
+  const thisYear = new Date().getFullYear()
+  const day = (y, m, d) => {
+    const start = new Date(y, m, d)
+    // Reject overflow like "Feb 31", which Date would silently roll into March.
+    if (start.getMonth() !== m || start.getDate() !== d) return null
+    return { start, end: new Date(y, m, d + 1) }
+  }
+
+  let match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+  if (match) return day(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+
+  match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/)
+  if (match) {
+    const year = match[3].length === 2 ? 2000 + Number(match[3]) : Number(match[3])
+    return day(year, Number(match[1]) - 1, Number(match[2]))
+  }
+
+  match = raw.match(/^([a-z]{3,9})\.? (\d{1,2})(?:st|nd|rd|th)?(?:,? (\d{4}))?$/i)
+  if (match) {
+    const m = monthIndexFromName(match[1])
+    if (m >= 0) return day(match[3] ? Number(match[3]) : thisYear, m, Number(match[2]))
+  }
+
+  match = raw.match(/^([a-z]{3,9})\.?,? (\d{4})$/i)
+  if (match) {
+    const m = monthIndexFromName(match[1])
+    if (m >= 0) return { start: new Date(Number(match[2]), m, 1), end: new Date(Number(match[2]), m + 1, 1) }
+  }
+
+  return null
 }

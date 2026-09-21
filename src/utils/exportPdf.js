@@ -218,7 +218,7 @@ async function loadImageAsDataUrl(url) {
   return promise
 }
 
-async function drawOfficialLetterheadHeader(doc, { title, meta }) {
+async function drawOfficialLetterheadHeader(doc, { title, subtitle, meta }) {
   const centerX = PAGE_W / 2
   const logoSize = 18
   let y = MARGIN
@@ -270,6 +270,16 @@ async function drawOfficialLetterheadHeader(doc, { title, meta }) {
   setColor(doc, COLORS.dark)
   doc.text(title, centerX, y, { align: 'center' })
   y += 4
+
+  // Names the period the report covers (e.g. the month) right under the
+  // title, so it is the first thing read rather than a field further down.
+  if (subtitle) {
+    y += 2.5
+    doc.setFontSize(11)
+    doc.setFont('Roboto', 'bold')
+    setColor(doc, COLORS.dark)
+    doc.text(subtitle, centerX, y, { align: 'center' })
+  }
 
   if (meta) {
     y += 4
@@ -1196,6 +1206,7 @@ export async function exportExpensesReportPdf({ reportType, reportTitle, periodL
 
   let y = await drawOfficialLetterheadHeader(doc, {
     title: reportTitle || `${typeLabel} Expense Report`,
+    subtitle: reportType === 'monthly' ? `For the Month of ${periodLabel}` : undefined,
   })
 
   y = drawSectionLabel(doc, { text: 'Report Information', startY: y })

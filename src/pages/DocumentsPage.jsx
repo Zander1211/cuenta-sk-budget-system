@@ -7,7 +7,7 @@ const TABS = [
   {
     key: 'documents',
     label: 'Documents',
-    description: 'Create, view, edit, print, and export the SK Annual Report.',
+    description: 'Generate, view, print, and export the SK Annual Report. Generated reports are final; changes are made by generating a new version.',
   },
   {
     key: 'receipts',

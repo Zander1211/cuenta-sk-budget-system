@@ -54,6 +54,7 @@ No Vercel CLI needed for local work: `vite.config.js` reimplements every
 
 - [docs/COLLABORATOR_SETUP.md](docs/COLLABORATOR_SETUP.md) — onboarding, credentials, troubleshooting
 - [docs/SYSTEM_FLOW.md](docs/SYSTEM_FLOW.md) — how data moves through the system
+- [docs/PROGRAM_FLOW.md](docs/PROGRAM_FLOW.md) — runtime control flow, branch by branch
 - [System_Manual.md](System_Manual.md) — end-user manual
 
 ## Security

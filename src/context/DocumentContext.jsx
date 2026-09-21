@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../supabase/supabaseClient'
 import { useAuth } from './AuthContext'
+import { useAuditLog } from './AuditLogContext'
 
 const DocumentContext = createContext(null)
 const DEFAULT_DOCUMENT_QUERY = {
@@ -47,6 +48,7 @@ function normalizeDocumentSearch(value) {
 
 export function DocumentProvider({ children }) {
   const { user, isLoading: isAuthLoading } = useAuth()
+  const { addLog } = useAuditLog()
   const userId = user?.id
   const [documents, setDocuments] = useState([])
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false)
@@ -182,6 +184,42 @@ export function DocumentProvider({ children }) {
     }
   }, [isAuthLoading, userId, loadDocuments, loadDocumentStats])
 
+  // Documents made from a Project, Event or Payroll record are filed under
+  // Approved Records and name that record and the document type; the Annual
+  // Report is the one document that belongs to the Documents page instead.
+  function logDocumentActivity(doc, saved, verb) {
+    if (doc.type === 'Annual Report') {
+      addLog({
+        action: `Annual Report Generated \u2014 ${doc.name}`,
+        actionType: 'Annual Report Generated',
+        module: 'Documents',
+        recordType: 'Document',
+        recordId: saved.id,
+        description: `Annual Report generated: ${doc.name}`,
+        newValue: { documentType: doc.type, reportingYear: doc.relatedEntityId ?? null },
+        status: 'Success',
+      })
+      return
+    }
+
+    const actionType = verb === 'updated' ? 'Document Updated' : 'Document Generated'
+    const subject = doc.project || doc.name
+    addLog({
+      action: `${actionType} \u2014 ${doc.name}`,
+      actionType,
+      module: 'Approved Records',
+      recordType: 'Document',
+      recordId: saved.id,
+      description: `${doc.type} ${verb} for ${subject}`,
+      newValue: {
+        documentType: doc.type,
+        [doc.relatedEntityType || 'record']: subject,
+        documentName: doc.name,
+      },
+      status: 'Success',
+    })
+  }
+
   async function addDocument(doc) {
     if (!userId) {
       throw new Error('You must be signed in before generating a document.')
@@ -234,6 +272,13 @@ export function DocumentProvider({ children }) {
     }
 
     const savedDocument = mapDocument({ ...trackingPayload, ...insertedData })
+
+    // Every generator (Project/Event/Payroll documents, Narrative Report,
+    // Annual Report) saves through here, so this is the one place a generation
+    // is recorded. Logged only once the row is stored — a failed save throws
+    // above.
+    logDocumentActivity(doc, savedDocument, 'generated')
+
     await Promise.all([
       loadDocuments({ ...currentQueryRef.current, page: 1 }),
       loadDocumentStats(),
@@ -272,6 +317,7 @@ export function DocumentProvider({ children }) {
       .from('documents')
       .update(updatePayload)
       .eq('id', docId)
+      .neq('type', 'Annual Report')
       .select()
       .single()
 
@@ -283,6 +329,7 @@ export function DocumentProvider({ children }) {
     }
 
     const savedDocument = mapDocument({ id: docId, ...updatePayload, ...updatedData })
+    logDocumentActivity(doc, savedDocument, 'updated')
     await Promise.all([
       loadDocuments({ ...currentQueryRef.current, page: 1 }),
       loadDocumentStats(),

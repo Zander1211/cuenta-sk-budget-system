@@ -1,10 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
-import ArchivedRequestModal from '../components/ArchivedRequestModal'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -13,22 +11,13 @@ const currency = new Intl.NumberFormat('en-PH', {
 })
 
 function RequestPage() {
-  const { requests, archiveRequest, restoreRequest } = useBudget()
+  const { requests } = useBudget()
   const navigate = useNavigate()
-  const { profileName, profileSurname } = useAuth()
   
-  const [activeTab, setActiveTab] = useState('active')
   const [requestType, setRequestType] = useState('Project') // 'Project', 'Event', 'Payroll'
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const [selectedArchivedRequest, setSelectedArchivedRequest] = useState(null)
 
   const activeRequests = requests.filter((request) => !request.archivedAt && (request.type || 'Project') === requestType)
-  const archivedRequests = requests.filter((request) => request.archivedAt && (request.type || 'Project') === requestType)
-
-  async function handleArchive(requestId) {
-    const result = await archiveRequest(requestId, `${profileName} ${profileSurname}`.trim())
-    if (!result?.error) setActiveTab('archive')
-  }
 
   function handleEdit(request) {
     navigate(`/dashboard/request/new?type=${request.type || 'Project'}&editId=${request.id}`)
@@ -79,21 +68,6 @@ function RequestPage() {
       </header>
 
       <section className="dashboard-content">
-        <div className="page-tabs" role="tablist" style={{ marginBottom: '24px' }}>
-          <button
-            className={`page-tab ${activeTab === 'active' ? 'is-active' : ''}`}
-            onClick={() => setActiveTab('active')}
-          >
-            Active
-          </button>
-          <button
-            className={`page-tab ${activeTab === 'archive' ? 'is-active' : ''}`}
-            onClick={() => setActiveTab('archive')}
-          >
-            Archive
-          </button>
-        </div>
-
         <div className="overview-card" style={{ marginBottom: '24px' }}>
           <div className="filter-group">
             <span className="filter-label" style={{ marginRight: '16px', fontWeight: 600 }}>Filter by Type:</span>
@@ -120,126 +94,61 @@ function RequestPage() {
           </div>
         </div>
 
-        {activeTab === 'active' ? (
-          <div className="overview-card">
-            <p className="eyebrow">Requests</p>
-            <h2>Active {requestType} requests</h2>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>{requestType === 'Payroll' ? 'Payroll Title' : 'Title'}</th>
-                  {requestType !== 'Payroll' && <th>Category</th>}
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th>Note</th>
-                  <th>Submitted</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeRequests.length ? (
-                  activeRequests.map((request) => (
-                    <tr key={request.id}>
-                      <td data-label={requestType === 'Payroll' ? 'Payroll Title' : 'Title'}>{request.event}</td>
-                      {requestType !== 'Payroll' && <td data-label="Category">{request.category}</td>}
-                      <td data-label="Amount">{currency.format(request.amount)}</td>
-                      <td data-label="Status">
-                        <span className={`status-pill status-${(request.status || 'Pending').toLowerCase()}`}>
-                          {request.status || 'Pending'}
-                        </span>
-                      </td>
-                      <td data-label="Note">{request.rejectionReason || '—'}</td>
-                      <td data-label="Submitted">{new Date(request.submittedAt || new Date()).toLocaleDateString()}</td>
-                      <td data-label="Actions" className="table-actions">
-                        {request.status === 'Rejected' && (
-                          <button
-                            className="text-button"
-                            type="button"
-                            onClick={() => handleEdit(request)}
-                            style={{ fontWeight: 500 }}
-                          >
-                            Edit
-                          </button>
-                        )}
+        <div className="overview-card">
+          <p className="eyebrow">Requests</p>
+          <h2>Active {requestType} requests</h2>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>{requestType === 'Payroll' ? 'Payroll Title' : 'Title'}</th>
+                {requestType !== 'Payroll' && <th>Category</th>}
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Note</th>
+                <th>Submitted</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeRequests.length ? (
+                activeRequests.map((request) => (
+                  <tr key={request.id}>
+                    <td data-label={requestType === 'Payroll' ? 'Payroll Title' : 'Title'}>{request.event}</td>
+                    {requestType !== 'Payroll' && <td data-label="Category">{request.category}</td>}
+                    <td data-label="Amount">{currency.format(request.amount)}</td>
+                    <td data-label="Status">
+                      <span className={`status-pill status-${(request.status || 'Pending').toLowerCase()}`}>
+                        {request.status || 'Pending'}
+                      </span>
+                    </td>
+                    <td data-label="Note">{request.rejectionReason || '—'}</td>
+                    <td data-label="Submitted">{new Date(request.submittedAt || new Date()).toLocaleDateString()}</td>
+                    <td data-label="Actions" className="table-actions">
+                      {request.status === 'Rejected' && (
                         <button
-                          className="secondary-button"
+                          className="text-button"
                           type="button"
-                          onClick={() => handleArchive(request.id)}
+                          onClick={() => handleEdit(request)}
+                          style={{ fontWeight: 500 }}
                         >
-                          Archive
+                          Edit
                         </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={requestType === 'Payroll' ? 6 : 7} className="empty-state">
-                      No {requestType.toLowerCase()} requests submitted yet.
+                      )}
                     </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="overview-card">
-            <p className="eyebrow">Archive</p>
-            <h2>Archived {requestType} requests</h2>
-            <table className="data-table">
-              <thead>
+                ))
+              ) : (
                 <tr>
-                  <th>{requestType === 'Payroll' ? 'Payroll Title' : 'Title'}</th>
-                  {requestType !== 'Payroll' && <th>Category</th>}
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th>Note</th>
-                  <th>Archived Date</th>
-                  <th>Archived By</th>
-                  <th></th>
+                  <td colSpan={requestType === 'Payroll' ? 6 : 7} className="empty-state">
+                    No {requestType.toLowerCase()} requests submitted yet.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {archivedRequests.length ? (
-                  archivedRequests.map((request) => (
-                    <tr key={request.id}>
-                      <td data-label={requestType === 'Payroll' ? 'Payroll Title' : 'Title'}>{request.event}</td>
-                      {requestType !== 'Payroll' && <td data-label="Category">{request.category}</td>}
-                      <td data-label="Amount">{currency.format(request.amount)}</td>
-                      <td data-label="Status">
-                        <span className={`status-pill status-${(request.status || 'Pending').toLowerCase()}`}>
-                          {request.status || 'Pending'}
-                        </span>
-                      </td>
-                      <td data-label="Note">{request.rejectionReason || '—'}</td>
-                      <td data-label="Archived Date">{new Date(request.archivedAt).toLocaleDateString()}</td>
-                      <td data-label="Archived By">{request.archivedBy || '—'}</td>
-                      <td data-label="Actions" className="table-actions">
-                        <button className="secondary-button" type="button" onClick={() => setSelectedArchivedRequest(request)}>
-                          View Details
-                        </button>
-                        <button className="secondary-button" type="button" onClick={() => restoreRequest(request.id)}>
-                          Restore
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={requestType === 'Payroll' ? 6 : 7} className="empty-state">No archived requests yet.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
 
-      {selectedArchivedRequest && (
-        <ArchivedRequestModal
-          request={selectedArchivedRequest}
-          onClose={() => setSelectedArchivedRequest(null)}
-        />
-      )}
     </RoleGate>
   )
 }
