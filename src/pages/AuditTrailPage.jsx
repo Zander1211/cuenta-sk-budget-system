@@ -238,11 +238,21 @@ function AuditTrailPage() {
     setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
-  function formatDateTime(iso) {
+  // Split into date + time so the "Date & Time" column can stack them on two
+  // short lines instead of one long nowrap string — the single-line version
+  // ("Sep 26, 2026, 03:42:15 PM") was wide enough on its own to force the
+  // table to outgrow its column and need horizontal scrolling.
+  function formatLogDate(iso) {
     if (!iso) return '—'
-    return new Date(iso).toLocaleString('en-US', {
+    return new Date(iso).toLocaleDateString('en-US', {
       month: 'short', day: 'numeric', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    })
+  }
+
+  function formatLogTime(iso) {
+    if (!iso) return ''
+    return new Date(iso).toLocaleTimeString('en-US', {
+      hour: '2-digit', minute: '2-digit',
     })
   }
 
@@ -474,14 +484,23 @@ function AuditTrailPage() {
             <table className="audit-table audit-table-v2">
               <thead>
                 <tr>
-                  <th style={{ width: '160px' }}>Date &amp; Time</th>
-                  <th style={{ width: '155px' }}>User / Role</th>
-                  <th style={{ width: '140px' }}>Action Type</th>
-                  <th style={{ width: '120px' }}>Module</th>
-                  <th style={{ width: '110px' }}>Record Type</th>
-                  <th>Description</th>
-                  <th style={{ width: '80px' }}>Status</th>
-                  <th style={{ width: '48px' }} aria-label="Expand row"></th>
+                  {/* Percentage widths + `table-layout: fixed` (see .audit-table-v2)
+                      keep every column's share of the table predictable, so the
+                      table never has to grow wider than its card and force
+                      horizontal scrolling — Description gets by far the most
+                      room since it carries the most important information. */}
+                  <th style={{ width: '11%' }}>Date &amp; Time</th>
+                  <th style={{ width: '11%' }}>User / Role</th>
+                  <th style={{ width: '11%' }}>Action Type</th>
+                  {/* "Authentication" (Module's longest single unbroken word — no
+                      space to wrap at) needs ~13% to stay on one line instead of
+                      fracturing mid-word; the date/time split freed up room here
+                      since it no longer needs one long nowrap line. */}
+                  <th style={{ width: '13%' }}>Module</th>
+                  <th style={{ width: '10%' }}>Record Type</th>
+                  <th style={{ width: '32%' }}>Description</th>
+                  <th style={{ width: '7%' }}>Status</th>
+                  <th style={{ width: '5%' }} aria-label="Expand row"></th>
                 </tr>
               </thead>
               <tbody>
@@ -513,7 +532,8 @@ function AuditTrailPage() {
                         aria-expanded={hasDetail ? isExpanded : undefined}
                       >
                         <td className="audit-timestamp" data-label="Date & Time">
-                          {formatDateTime(log.created_at)}
+                          <span className="audit-date">{formatLogDate(log.created_at)}</span>
+                          <span className="audit-time">{formatLogTime(log.created_at)}</span>
                         </td>
                         <td data-label="User / Role">
                           <div className="audit-user-cell">
@@ -539,7 +559,9 @@ function AuditTrailPage() {
                             <span className="audit-record-type-badge">{log.record_type}</span>
                           ) : '—'}
                         </td>
-                        <td className="audit-description" data-label="Description" title={log.description || log.action}>
+                        {/* Full text, always — no truncation, no title tooltip. Long
+                            descriptions wrap onto extra lines and the row grows to fit. */}
+                        <td className="audit-description" data-label="Description">
                           {log.description || log.action || '—'}
                         </td>
                         <td data-label="Status">

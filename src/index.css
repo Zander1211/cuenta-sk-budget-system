@@ -1147,9 +1147,14 @@ button:disabled,
 	display: grid;
 	gap: var(--space-7);
 	min-width: 0;
-	/* The reading column stops before the text gets too wide to scan; on an
-	   ultra-wide monitor a full-bleed table is unreadable. */
-	max-width: 1400px;
+	/* `.dashboard` already caps the whole shell at 1920px and centers it for
+	   ultra-wide monitors, so this only needs to stop the main column from
+	   outrunning that outer cap — not re-impose a second, tighter one. The
+	   old 1400px cap left a bare gap on the right of every laptop/external
+	   monitor between ~1600–1920px wide, since flex items don't self-center
+	   inside their row. 1760px keeps a floor of sensible margins at the
+	   1920px cap while using the rest of that width for cards and charts. */
+	max-width: 1760px;
 }
 
 .dashboard-topbar {
@@ -5589,6 +5594,12 @@ td.nr-info-label {
 	border-collapse: collapse;
 	font-size: 0.88rem;
 	/* was 0.82rem */
+	/* Fixed layout + the % widths on each <th> (see AuditTrailPage.jsx) are
+	   what let Description claim most of the row without the table ever
+	   needing to grow past its card — the old auto layout let nowrap cells
+	   (module, action text, the old single-line timestamp) push the table
+	   wider than the wrapper, which is what forced horizontal scrolling. */
+	table-layout: fixed;
 }
 
 .audit-table-v2 thead th {
@@ -5599,17 +5610,23 @@ td.nr-info-label {
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
-	padding: 12px 14px;
+	padding: 14px 16px;
 	text-align: left;
 	border-bottom: 1px solid var(--border);
-	white-space: nowrap;
+	/* Headers wrap (e.g. "Record Type" → two lines) rather than overflow
+	   their column on the narrower end of the desktop range. */
+	white-space: normal;
+	line-height: 1.3;
 }
 
 .audit-table-v2 tbody td {
-	padding: 12px 14px;
+	padding: 14px 16px;
 	border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-	vertical-align: top;
+	/* Shorter cells (date, role, status…) center against a Description cell
+	   that has wrapped onto several lines, instead of hugging the top. */
+	vertical-align: middle;
 	color: var(--ink);
+	line-height: 1.5;
 }
 
 .audit-row {
@@ -5630,12 +5647,27 @@ td.nr-info-label {
 	outline-offset: -2px;
 }
 
-/* Timestamps */
+/* Timestamps — date and time stack on their own short lines (see the
+   .audit-date / .audit-time spans) instead of one long nowrap string, so the
+   column can stay narrow without ever overflowing it. */
 .audit-timestamp {
-	font-size: 0.75rem;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-variant-numeric: tabular-nums;
+}
+
+.audit-timestamp .audit-date {
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--ink);
+	white-space: nowrap;
+}
+
+.audit-timestamp .audit-time {
+	font-size: 0.74rem;
 	color: var(--ink-soft);
 	white-space: nowrap;
-	font-variant-numeric: tabular-nums;
 }
 
 /* User cell */
@@ -5650,12 +5682,18 @@ td.nr-info-label {
 	font-size: 0.88rem;
 	/* was 0.82rem */
 	color: var(--ink);
+	/* User names are frequently email addresses — one long token with no
+	   space to wrap at. Without this, the browser has no break opportunity
+	   and just lets the email overflow past the column, straight into
+	   Action Type (the bug this fixes). */
+	overflow-wrap: break-word;
 }
 
 .audit-user-role {
 	font-size: 0.78rem;
 	/* was 0.72rem */
 	color: var(--ink-soft);
+	overflow-wrap: break-word;
 }
 
 /* Action type column — pill stacked above the action text, like the user cell */
@@ -5673,33 +5711,52 @@ td.nr-info-label {
 	margin-top: 3px;
 }
 
-/* Module column */
+/* Module column — wraps instead of forcing the column wide enough for the
+   longest module name ("Backup & Restore", "User Management", …). */
 .audit-module {
 	font-size: 0.8rem;
 	/* was 0.75rem */
 	color: var(--ink-soft);
-	white-space: nowrap;
+	white-space: normal;
+	overflow-wrap: break-word;
+	line-height: 1.4;
 }
 
-/* Record type badge */
+/* Record type badge — wraps and stays inside its column rather than
+   overflowing into Description on the narrower end of the desktop range
+   (an inline-block doesn't shrink to fit a fixed-width cell on its own). */
 .audit-record-type-badge {
 	display: inline-block;
-	padding: 2px 8px;
+	max-width: 100%;
+	padding: 2px 7px;
 	border-radius: 0;
 	background: var(--accent-soft);
 	color: var(--sea);
-	font-size: 0.76rem;
-	/* was 0.72rem */
+	font-size: 0.74rem;
 	font-weight: 700;
-	white-space: nowrap;
+	line-height: 1.3;
+	white-space: normal;
+	overflow-wrap: break-word;
 }
 
-/* Description */
+/* NOTE: Action Type / Status pills intentionally do NOT get the same
+   max-width/wrap treatment as the record-type badge above. `.status-pill` is
+   `display: inline-flex` (base rule, index.css ~2211), and flex items default
+   to `min-width: auto` — a plain `max-width: 100%` there shrinks the pill's
+   background/border box without letting the text (a bare flex item with no
+   break opportunity) shrink to match, so the text visibly spills outside its
+   own pill. The badges here are always short single words (Success, Failed,
+   Login, Created, …), so the fix is just giving Status/Action Type columns
+   enough width (see the <th> widths in AuditTrailPage.jsx) rather than
+   forcing an inline-flex box to shrink-wrap, which it doesn't do cleanly. */
+
+/* Description — the column's whole reason to exist is to be read at a
+   glance, so the text is never truncated: it wraps onto as many lines as it
+   needs and the row grows to fit (no max-width, no ellipsis, no tooltip). */
 .audit-description {
-	max-width: 280px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	white-space: normal;
+	overflow-wrap: break-word;
+	line-height: 1.55;
 	font-size: 0.85rem;
 	/* was 0.8rem */
 }

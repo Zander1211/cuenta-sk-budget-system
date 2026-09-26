@@ -139,7 +139,7 @@ function BudgetAllocationPanel() {
   }
 
   return (
-    <section className="dashboard-content" style={{ gap: '24px', alignItems: 'start' }}>
+    <section className="dashboard-content" style={{ gap: '20px' }}>
         <div className="overview-card budgets-filter-bar">
           <div>
             <p className="eyebrow" style={{ margin: 0 }}>Period</p>
@@ -189,14 +189,20 @@ function BudgetAllocationPanel() {
           </div>
         </div>
 
+        {/* Form and history sit side by side on desktop (≥1024px) instead of
+            stacking full-width — the form only ever needs a few input-width
+            columns, so giving it the whole row wasted the space history could
+            use for a second card per line. `.two-column` already collapses
+            back to a single column below 1024px. */}
+        <div className={canEdit ? 'dashboard-content two-column' : undefined} style={canEdit ? { gap: '20px' } : undefined}>
         {canEdit && (
-          <div className="overview-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div className="overview-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div>
               <p className="eyebrow">New budget</p>
               <h2 style={{ margin: 0 }}>Add a monthly budget</h2>
             </div>
-            <form className="user-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div className="form-grid" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <form className="user-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <div className="form-grid">
                 <label className="field">
                   <span>Month</span>
                   <select
@@ -240,7 +246,7 @@ function BudgetAllocationPanel() {
                   </select>
                 </label>
                 {sourceOption === 'Other' && (
-                  <label className="field" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label className="field" style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: '1 / -1' }}>
                     <span style={{ fontWeight: 500, fontSize: '0.9rem', color: 'var(--ink)' }}>Specify Other Source</span>
                     <input
                       type="text"
@@ -252,7 +258,7 @@ function BudgetAllocationPanel() {
                     />
                   </label>
                 )}
-                <label className="field">
+                <label className="field" style={{ gridColumn: '1 / -1' }}>
                   <span>Description (Optional)</span>
                   <textarea
                     value={description}
@@ -289,7 +295,7 @@ function BudgetAllocationPanel() {
         )}
 
         <div className="overview-card" style={{ padding: '24px' }}>
-          <div className="card-header-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
+          <div className="card-header-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
             <div>
               <p className="eyebrow">History</p>
               <h2 style={{ margin: 0 }}>Recorded budgets</h2>
@@ -298,13 +304,13 @@ function BudgetAllocationPanel() {
               </p>
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px' }}>
             {displayedBudgets.length ? (
               paginatedBudgets.map((budget) => (
-                <div key={budget.id} style={{ border: '1px solid var(--line)', borderRadius: 'var(--radius-surface)', padding: '24px', backgroundColor: 'var(--surface)', boxShadow: 'var(--shadow)', display: 'flex', flexDirection: 'column' }}>
-                  
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--ink)', lineHeight: '1.3' }}>
+                <div key={budget.id} style={{ border: '1px solid var(--line)', borderRadius: 'var(--radius-surface)', padding: '20px', backgroundColor: 'var(--surface)', boxShadow: 'var(--shadow)', display: 'flex', flexDirection: 'column' }}>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, color: 'var(--ink)', lineHeight: '1.3' }}>
                       {budget.periodLabel} {budget.year}
                     </h3>
                     <span className="status-pill status-approved" style={{ flexShrink: 0, marginLeft: '12px' }}>
@@ -312,7 +318,7 @@ function BudgetAllocationPanel() {
                     </span>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
                     <div>
                       <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Budget Amount</p>
                       <p style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: 'var(--positive)' }}>{currency.format(budget.amount)}</p>
@@ -349,7 +355,8 @@ function BudgetAllocationPanel() {
             pageSize={BUDGETS_PAGE_SIZE}
             onPageChange={setBudgetPage}
             idPrefix="budgets"
-        />
+          />
+        </div>
       </div>
     </section>
   )
