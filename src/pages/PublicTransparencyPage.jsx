@@ -32,6 +32,7 @@ import { getPublicTransparencyData } from '../services/publicTransparencyService
 import { AllocationComposition, SpendComparison } from '../components/transparency/AllocationCharts'
 import { useAllocationByCategory } from '../hooks/useAllocationByCategory'
 import { useScrollReveal } from '../hooks/useScrollReveal'
+import ReportSummaryNote from '../components/ReportSummaryNote'
 import skLogo from '../assets/cuenta-logo.png'
 import './PublicTransparencyPage.css'
 
@@ -405,6 +406,10 @@ export default function PublicTransparencyPage() {
                 ) : (
                   <Empty>No completed projects have been published yet.</Empty>
                 )}
+
+                <div className="pub-reveal" style={{ marginTop: '36px' }}>
+                  <ReportSummaryNote variant="public" />
+                </div>
               </div>
             </section>
 
@@ -538,6 +543,9 @@ export default function PublicTransparencyPage() {
               {new Date(lastUpdated).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}
             </p>
           )}
+        </div>
+        <div className="pub-container" style={{ marginTop: '24px' }}>
+          <ReportSummaryNote variant="public" style={{ width: '100%' }} />
         </div>
       </footer>
     </div>

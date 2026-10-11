@@ -210,6 +210,33 @@ function localUserLoginHandler(env) {
           }
           return
         }
+
+        // ── GET ACTIVE SK CHAIRMAN NAME ─────────────────────────
+        if (req.url === '/api/sk-chairman' && req.method === 'GET') {
+          try {
+            const supabaseUrl = env.VITE_SUPABASE_URL || 'https://imxwgkwlxjqadwigjuxz.supabase.co'
+            const supabaseServiceKey = env.SUPABASE_SERVICE_ROLE_KEY
+            const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+            const { data, error } = await supabase
+              .from('created_accounts')
+              .select('full_name')
+              .eq('role', 'SK Chairman')
+              .eq('is_active', true)
+              .maybeSingle()
+
+            res.setHeader('Content-Type', 'application/json')
+            if (error || !data?.full_name) {
+              res.end(JSON.stringify({ fullName: 'John Zander Zerrudo' }))
+            } else {
+              res.end(JSON.stringify({ fullName: data.full_name.trim() }))
+            }
+          } catch (err) {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ fullName: 'John Zander Zerrudo' }))
+          }
+          return
+        }
         next()
       })
     }

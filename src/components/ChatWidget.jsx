@@ -6,6 +6,7 @@ import { useBudget } from '../context/BudgetContext'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
 import { materializeActualExpenseRows, summarizeApprovedBudgetFinancials } from '../utils/projectEventFinancials'
+import { useActiveSkChairmanName } from '../hooks/useActiveSkChairmanName'
 
 const PAGE_NAMES = {
   '/dashboard': 'Main Dashboard',
@@ -197,6 +198,22 @@ function ChatWidgetInner() {
   const [showWelcome, setShowWelcome] = useState(false)
 
   const { user, role, profileName } = useAuth()
+  const skChairmanName = useActiveSkChairmanName()
+  const [skTreasurerName, setSkTreasurerName] = useState(null)
+
+  // Fetch the SK Treasurer name from user profiles
+  useEffect(() => {
+    let mounted = true
+    supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('role', 'SK Treasurer')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (mounted && data?.full_name) setSkTreasurerName(data.full_name)
+      })
+    return () => { mounted = false }
+  }, [])
 
   useEffect(() => {
     if (user && !sessionStorage.getItem('chatbotWelcomeShown')) {
@@ -468,6 +485,9 @@ function ChatWidgetInner() {
       currentYear,
       currentMonthName,
       prediction,
+      // SK role assignments — lets Cue answer "who is the SK Chairman" accurately
+      skChairman: skChairmanName || null,
+      skTreasurer: skTreasurerName || null,
       totals: {
         // Total Budget = sum of all monthly budgets (SK Treasurer entries)
         totalBudget: totals?.totalBudget || 0,
@@ -503,7 +523,7 @@ function ChatWidgetInner() {
       'ai analysis', 'financial analysis', 'spending trend',
       'dashboard', 'chart', 'statistic', 'overview', 'total',
       'audit', 'log', 'trail', 'activity log', 'approval', 'pending', 'approved', 'rejected',
-      'how to', 'how do i', 'how can i', 'where is', 'where can', 'what is the',
+      'how to', 'how do i', 'how can i', 'where is', 'where can', 'what is the', 'who is', 'who manages', 'what does',
       'create', 'submit', 'request', 'generate', 'update', 'profile', 'manage',
       'cuenta', 'system', 'sk', 'sangguniang kabataan', 'barangay',
       'purchase request', 'budget request', 'requisition',
@@ -514,7 +534,7 @@ function ChatWidgetInner() {
       'category', 'breakdown', 'comparison', 'compare', 'vs', 'versus',
       'archive', 'archived', 'status', 'missing receipt',
       'implement', 'implemented', 'implementation', 'utilized', 'utilization',
-      'user management', 'user role', 'chairman', 'treasurer', 'secretary',
+      'user management', 'user role', 'chairman', 'treasurer', 'secretary', 'kagawad', 'role', 'responsibility', 'responsibilities', 'position', 'official',
       'dilg', 'procurement', 'bidding'
     ]
     for (const keyword of cuentaKeywords) {
@@ -646,14 +666,16 @@ function ChatWidgetInner() {
       }
 
       if (isRemainingQuery) {
+        // remainingMonthlyAllocation = Monthly Budget - Approved Allocations (matches dashboard "Remaining Budget" card)
         const working = monthlySummaries.find((row) => (
           Number(row.year) === targetYear
           && String(row.month).toLowerCase() === targetMonth.toLowerCase()
         ))
-        if (!working || Number(working.approvedBudget) <= 0) {
-          return `No approved Project, Event, or Payroll budget was recorded for ${targetMonth} ${targetYear}.`
+        if (!working || working.allocatedBudget <= 0) {
+          return `No monthly budget has been recorded for ${targetMonth} ${targetYear}.`
         }
-        return `The remaining approved working budget for ${targetMonth} ${targetYear} is ₱${Number(working.remainingBalance).toLocaleString('en-PH')} (Approved: ₱${Number(working.approvedBudget).toLocaleString('en-PH')}, Spent: ₱${Number(working.totalExpenses).toLocaleString('en-PH')}).`
+        const remainingAlloc = Number(working.remainingMonthlyAllocation ?? (working.allocatedBudget - (working.approvedBudget || 0)))
+        return `The remaining budget for ${targetMonth} ${targetYear} is ₱${remainingAlloc.toLocaleString('en-PH')} (Monthly Budget: ₱${Number(working.allocatedBudget).toLocaleString('en-PH')} minus Approved Allocations: ₱${Number(working.approvedBudget || 0).toLocaleString('en-PH')}).`
       }
 
       // Default Budget Query for specific Month & Year
@@ -682,12 +704,12 @@ function ChatWidgetInner() {
 
       if (isRemainingQuery) {
         const workingRows = monthlySummaries.filter((row) => Number(row.year) === targetYear)
-        const approvedBudget = workingRows.reduce((sum, row) => sum + Number(row.approvedBudget || 0), 0)
-        const remainingVal = workingRows.reduce((sum, row) => sum + Number(row.remainingBalance || 0), 0)
-        if (approvedBudget <= 0) {
-          return `No approved Project, Event, or Payroll budget was recorded for ${targetYear}.`
+        const totalAllocatedBudget = workingRows.reduce((sum, row) => sum + Number(row.allocatedBudget || 0), 0)
+        const remainingVal = workingRows.reduce((sum, row) => sum + Number(row.remainingMonthlyAllocation ?? (row.allocatedBudget - (row.approvedBudget || 0))), 0)
+        if (totalAllocatedBudget <= 0) {
+          return `No monthly budget has been recorded for ${targetYear}.`
         }
-        return `The remaining approved working budget for ${targetYear} is ₱${Number(remainingVal).toLocaleString('en-PH')} from ₱${Number(approvedBudget).toLocaleString('en-PH')} in approved requests.`
+        return `The remaining budget for ${targetYear} is ₱${Number(remainingVal).toLocaleString('en-PH')} (Total Monthly Budget: ₱${Number(totalAllocatedBudget).toLocaleString('en-PH')} minus Approved Allocations).`
       }
 
       // Budget query for specific year
@@ -717,14 +739,16 @@ function ChatWidgetInner() {
       }
 
       if (isRemainingQuery) {
+        // remainingMonthlyAllocation = Monthly Budget - Approved Allocations (matches dashboard "Remaining Budget" card)
         const working = monthlySummaries.find((row) => (
           Number(row.year) === effectiveYear
           && String(row.month).toLowerCase() === targetMonth.toLowerCase()
         ))
-        if (!working || Number(working.approvedBudget) <= 0) {
-          return `No approved Project, Event, or Payroll budget was recorded for ${targetMonth} ${effectiveYear}.`
+        if (!working || working.allocatedBudget <= 0) {
+          return `No monthly budget has been recorded for ${targetMonth} ${effectiveYear}.`
         }
-        return `The remaining approved working budget for ${targetMonth} ${effectiveYear} is ₱${Number(working.remainingBalance).toLocaleString('en-PH')}.`
+        const remainingAlloc = Number(working.remainingMonthlyAllocation ?? (working.allocatedBudget - (working.approvedBudget || 0)))
+        return `The remaining budget for ${targetMonth} ${effectiveYear} is ₱${remainingAlloc.toLocaleString('en-PH')} (Monthly Budget: ₱${Number(working.allocatedBudget).toLocaleString('en-PH')} minus Approved Allocations: ₱${Number(working.approvedBudget || 0).toLocaleString('en-PH')}).`
       }
 
       if (monthBudgets.length === 0) {

@@ -1005,6 +1005,35 @@
 	color: color-mix(in srgb, #FFFFFF 70%, var(--pub-brand));
 }
 
+/* ── Summary Report Disclaimer Note ───────────────────────────────────── */
+.report-summary-note--public {
+	background: rgba(2, 53, 60, 0.85);
+	background: color-mix(in srgb, var(--pub-brand) 90%, #10b981);
+	border: 1px solid rgba(52, 211, 153, 0.35);
+	color: #D1E7E2;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+	backdrop-filter: blur(8px);
+}
+.report-summary-note--public strong {
+	color: #FFFFFF;
+}
+.report-summary-note--public .report-summary-note__chairman {
+	color: #6EE7B7;
+}
+
+.report-summary-note--dashboard {
+	background: var(--surface-2, #EAF2EF);
+	border: 1px solid var(--line-strong, #B4CBC5);
+	color: var(--ink-2, #40605F);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+.report-summary-note--dashboard strong {
+	color: var(--ink, #0C2225);
+}
+.report-summary-note--dashboard .report-summary-note__chairman {
+	color: var(--accent, #0E6B4D);
+}
+
 @media (prefers-color-scheme: dark) {
 	.public-footer {
 		background: var(--pub-surface-2);

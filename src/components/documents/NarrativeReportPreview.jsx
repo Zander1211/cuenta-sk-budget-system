@@ -3,6 +3,7 @@ import '../PrintPreview.css'
 import './AdditionalDocuments.css'
 import { Printer, X } from 'lucide-react'
 import logo from '../../assets/logo.png'
+import brgyLogo from '../../assets/brgy-logo-2.png'
 import { capturePrintPagesToPdfBlob } from '../../utils/documentPdfCapture'
 
 const currency = new Intl.NumberFormat('en-PH', {
@@ -86,18 +87,23 @@ function NarrativeReportPreview({ data, onClose, onSave }) {
         {/* ════════════════════════════════════════════════ */}
         {showCoverPage && (
           <div className="print-page nr-print-page">
-          <div className="nr-title-page">
-            <div className="nr-logo-area" style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px', padding: '0 50px' }}>
-              <img src={logo} alt="SK Logo" style={{ width: '120px', height: '120px', objectFit: 'contain' }} />
-            </div>
-
-            <div className="nr-title-block" style={{ textAlign: 'center', marginBottom: '40px', lineHeight: '1.3' }}>
-              <p style={{ margin: 0 }}>Republic of the Philippines</p>
-              <p style={{ margin: 0 }}>
-                Barangay {data.barangay}, {data.municipality}, {data.province}
-              </p>
-              <br/>
-              <p style={{ margin: 0, fontWeight: 'bold', fontSize: '14pt' }}>SANGGUNIANG KABATAAN</p>
+          <div className="nr-title-page" style={{ justifyContent: 'flex-start' }}>
+            {/* Government Letterhead Header */}
+            <div className="gov-letterhead" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', width: '100%', marginBottom: '35px', padding: '0 20px', minHeight: '95px' }}>
+              <img src={brgyLogo} alt="Barangay Logo" style={{ width: '90px', height: '90px', position: 'absolute', left: '20px', top: '50%', transform: 'translateY(-50%)', objectFit: 'contain' }} />
+              <div style={{ textAlign: 'center', lineHeight: '1.35' }}>
+                <p style={{ margin: 0, fontSize: '11pt' }}>Republic of the Philippines</p>
+                <p style={{ margin: 0, fontSize: '11pt', fontWeight: 'bold' }}>REGION XII</p>
+                <p style={{ margin: 0, fontSize: '11pt' }}>Province of {data.province || 'Cotabato'}</p>
+                <p style={{ margin: 0, fontSize: '11pt' }}>Municipality of {data.municipality || 'Midsayap'}</p>
+                <p style={{ margin: 0, fontSize: '11.5pt', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                  BARANGAY {data.barangay?.toUpperCase() || 'UPPER GLAD 2'}
+                </p>
+                <p style={{ margin: '5px 0 0', fontWeight: 'bold', fontSize: '13pt', letterSpacing: '0.5px' }}>
+                  OFFICE OF THE SANGGUNIANG KABATAAN
+                </p>
+              </div>
+              <img src={logo} alt="SK Logo" style={{ width: '90px', height: '90px', position: 'absolute', right: '20px', top: '50%', transform: 'translateY(-50%)', objectFit: 'contain' }} />
             </div>
 
             <div className="nr-title-main">
@@ -119,11 +125,6 @@ function NarrativeReportPreview({ data, onClose, onSave }) {
                 <span className="nr-detail-label">Target Beneficiaries:</span>
                 <span className="nr-detail-value">{data.beneficiaries || '_______________'}</span>
               </div>
-            </div>
-
-            <div className="nr-title-footer">
-              <p>Barangay {data.barangay}</p>
-              <p>{data.municipality}, {data.province}</p>
             </div>
           </div>
         </div>

@@ -168,15 +168,14 @@ This is the main program loop — budget allocation through approval.
 flowchart TD
     B1([SK Treasurer opens Budgets]) --> B2{canEdit — role is SK Treasurer?}
     B2 -->|No| B3["Read-only view"] --> STOP1([End])
-    B2 -->|Yes| B4["Enter month · year · amount · source"]
-    B4 --> B5{"month within 1-12 and year numeric?"}
+    B2 -->|Yes| B4["Enter month · year · amount to add · source"]
+    B4 --> B5{"Valid month, year, and positive amount?"}
     B5 -->|No| B4
-    B5 -->|Yes| B6["quarter = floor((month-1)/3)+1<br/>optimistic UI update applied first"]
-    B6 --> B7{Row exists for that month and year?}
-    B7 -->|Yes| B8["UPDATE budgets"]
-    B7 -->|No| B9["INSERT budgets"]
-    B8 --> B10["addLog → audit_trail"]
-    B9 --> B10
+    B5 -->|Yes| B6["RPC add_monthly_budget_funds<br/>atomically add to the monthly total<br/>record addition; retries use the same operation ID"]
+    B6 --> B7{Database confirmed saved row?}
+    B7 -->|No| B8["Show error and preserve entered values"] --> B4
+    B7 -->|Yes| B9["Update shared budget state and selected-period history<br/>show success; realtime sync for other sessions"]
+    B9 --> B10["addLog to audit_trail"]
 
     B10 --> C1([Treasurer opens Request → New Request])
     C1 --> C2["Choose type: Project · Event · Payroll<br/>fill event, category, amount, date,<br/>venue, description, breakdown lines"]

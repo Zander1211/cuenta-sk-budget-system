@@ -617,6 +617,49 @@
 	color: var(--auth-ink-3);
 }
 
+/* ── Legal Links (Privacy Policy & Terms) ──────────────────────────────── */
+.login-legal-links {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	margin-top: 14px;
+	font-size: .82rem;
+	color: var(--auth-ink-3);
+}
+
+.login-legal-link {
+	background: none;
+	border: none;
+	padding: 2px 4px;
+	color: var(--auth-ink-2);
+	font-family: inherit;
+	font-size: inherit;
+	font-weight: 600;
+	cursor: pointer;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	text-decoration-color: var(--auth-line-strong);
+	transition: color .16s ease, text-decoration-color .16s ease;
+}
+
+.login-legal-link:hover {
+	color: var(--auth-accent);
+	text-decoration-color: var(--auth-accent);
+}
+
+.login-legal-link:focus-visible {
+	outline: 2px solid var(--auth-focus);
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+.login-legal-divider {
+	color: var(--auth-line-strong);
+	user-select: none;
+	font-size: .8rem;
+}
+
 /* ── Responsive ───────────────────────────────────────────────────────── */
 
 @media (max-width: 880px) {

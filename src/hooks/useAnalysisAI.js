@@ -39,13 +39,13 @@ export function useAnalysisAI(payload, { fallback = [], enabled = true } = {}) {
   const signature = JSON.stringify(payload)
 
   const run = useCallback(async () => {
+    const id = ++requestId.current
     if (!enabled) {
       setState({ status: 'ready', summary: '', insights: [], recommendations: [], updatedAt: null })
       return
     }
-    const id = ++requestId.current
     setError('')
-    setState((prev) => ({ ...prev, status: 'loading' }))
+    setState({ status: 'loading', summary: '', insights: [], recommendations: [], updatedAt: null })
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('ai-analysis', {
@@ -75,6 +75,7 @@ export function useAnalysisAI(payload, { fallback = [], enabled = true } = {}) {
     // Intentional fetch-on-change effect; `run` sets loading/ready/error state.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     run()
+    return () => { requestId.current += 1 }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature, enabled])
 

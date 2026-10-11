@@ -1,9 +1,11 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuditLog } from './AuditLogContext'
 import { useNotifications } from './NotificationContext'
 import { useAuth } from './AuthContext'
 import { supabase } from '../supabase/supabaseClient'
 import { calculateProjectEventFinancials } from '../utils/projectEventFinancials'
+
+import { mapBudgetRow, mapBudgetAllocationRow, saveMonthlyBudget } from '../services/monthlyBudget'
 
 const BudgetContext = createContext(null)
 const STORAGE_KEY = 'cuenta.budgetData.v4'
@@ -99,21 +101,10 @@ function mapRequestRow(row) {
 }
 
 function getInitialState() {
-  const year = new Date().getFullYear();
-  const defaultBudgets = Array.from({ length: 12 }, (_, i) => ({
-    id: `default-${year}-${i + 1}`,
-    month: i + 1,
-    quarter: Math.floor(i / 3) + 1,
-    year: year,
-    amount: 0,
-    source: '',
-    createdAt: new Date().toISOString()
-  }));
-
   if (typeof window === 'undefined') {
 
     return {
-      budgets: defaultBudgets,
+      budgets: [],
       requests: defaultRequests,
       expenses: [],
     }
@@ -123,56 +114,13 @@ function getInitialState() {
     const stored = window.localStorage.getItem(STORAGE_KEY)
     if (!stored) {
       return {
-        budgets: defaultBudgets,
+        budgets: [],
         requests: defaultRequests,
         expenses: [],
       }
     }
 
     const parsed = JSON.parse(stored)
-    let budgets = (parsed.budgets ?? [])
-      .map((item) => {
-        let quarter = Number(item.quarter)
-        let month = Number(item.month)
-        if (!Number.isFinite(quarter) && Number.isFinite(month)) {
-          quarter = Math.floor((month - 1) / 3) + 1
-        } else if (!Number.isFinite(month) && Number.isFinite(quarter)) {
-          month = (quarter - 1) * 3 + 1 // Default to first month of quarter if missing
-        }
-        const year = Number(item.year)
-        if (!Number.isFinite(quarter) || !Number.isFinite(year)) {
-          return null
-        }
-        if (quarter < 1 || quarter > 4) {
-          return null
-        }
-
-        return {
-          id: item.id || `${Date.now()}-${Math.random()}`,
-          month,
-          quarter,
-          year,
-          amount: Number(item.amount) || 0,
-          source: item.source || '',
-          createdAt: item.createdAt || new Date().toISOString(),
-        }
-      })
-      .filter(Boolean)
-      
-    if (budgets.length === 0) {
-      const year = new Date().getFullYear();
-      for (let i = 1; i <= 12; i++) {
-        budgets.push({
-          id: `default-${year}-${i}`,
-          month: i,
-          quarter: Math.floor((i - 1) / 3) + 1,
-          year,
-          amount: 0,
-          source: '',
-          createdAt: new Date().toISOString()
-        });
-      }
-    }
     const requests = (parsed.requests ?? defaultRequests)
       .filter(r => !r.notes?.includes('Cuenta sample seed data') && !r.description?.includes('approved expenditure for'))
       .map((item) => {
@@ -200,13 +148,13 @@ function getInitialState() {
     )
 
     return {
-      budgets,
+      budgets: [],
       requests,
       expenses,
     }
   } catch {
     return {
-      budgets: defaultBudgets,
+      budgets: [],
       requests: defaultRequests,
       expenses: [],
     }
@@ -217,7 +165,11 @@ function BudgetProvider({ children }) {
   const { addLog } = useAuditLog()
   const { addNotification } = useNotifications()
   const { isAuthenticated, user, role, profileName } = useAuth()
-  const [budgets, setBudgets] = useState(() => getInitialState().budgets)
+  // Budgets are always loaded from the database; old optimistic cache entries
+  // must never masquerade as persisted allocations after a login.
+  const [budgets, setBudgets] = useState([])
+  const [budgetAllocations, setBudgetAllocations] = useState([])
+  const budgetLoadVersion = useRef(0)
   const [requests, setRequests] = useState(() => getInitialState().requests)
   const [expenses, setExpenses] = useState(() => getInitialState().expenses)
   const [expensesSyncStatus, setExpensesSyncStatus] = useState('idle')
@@ -267,59 +219,19 @@ function BudgetProvider({ children }) {
 
   async function loadBudgetsFromSupabase() {
     if (typeof window === 'undefined') return
-
+    const version = ++budgetLoadVersion.current
     try {
-      const { data, error } = await supabase
-        .from('budgets')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        throw error
-      }
-
-      if (Array.isArray(data)) {
-        const fetchedBudgets = data.map((item) => ({
-          id: String(item.id),
-          month: Number(item.month),
-          quarter: Number(item.quarter),
-          year: Number(item.year),
-          amount: Number(item.amount),
-          source: item.source || '',
-          createdAt: item.created_at || new Date().toISOString(),
-        }));
-        
-        setBudgets(() => {
-          const currentYear = new Date().getFullYear();
-          const mergedBudgets = [];
-
-          // For each month, aggregate ALL budget sources (Regular + Donation + Solicitation etc.)
-          // Previously used .find() which silently discarded all but the first source per month.
-          for (let i = 1; i <= 12; i++) {
-            const monthBudgets = fetchedBudgets.filter(b => b.month === i && b.year === currentYear);
-            if (monthBudgets.length > 0) {
-              // Push every individual source so the reducer in useBudgetCalculations sums them all
-              mergedBudgets.push(...monthBudgets);
-            } else {
-              mergedBudgets.push({
-                id: `default-${currentYear}-${i}`,
-                month: i,
-                quarter: Math.floor((i - 1) / 3) + 1,
-                year: currentYear,
-                amount: 0,
-                source: '',
-                createdAt: new Date().toISOString()
-              });
-            }
-          }
-
-          const otherYears = fetchedBudgets.filter(b => b.year !== currentYear);
-
-          return [...otherYears, ...mergedBudgets].sort((a, b) => {
-            if (a.year !== b.year) return b.year - a.year;
-            return b.month - a.month;
-          });
-        });
+      const [totalsResult, allocationsResult] = await Promise.all([
+        supabase.from('budgets').select('*')
+          .order('year', { ascending: false }).order('month', { ascending: false }),
+        supabase.from('monthly_budget_additions').select('*').order('created_at', { ascending: false }),
+      ])
+      if (totalsResult.error) throw totalsResult.error
+      if (allocationsResult.error) throw allocationsResult.error
+      // A read started before a successful save must not overwrite its result.
+      if (version === budgetLoadVersion.current) {
+        setBudgets((totalsResult.data || []).map(mapBudgetRow))
+        setBudgetAllocations((allocationsResult.data || []).map(mapBudgetAllocationRow))
       }
     } catch (error) {
       console.warn('Supabase budgets sync failed', error?.message || error)
@@ -386,7 +298,6 @@ function BudgetProvider({ children }) {
     try {
       const stored = getInitialState()
       if (stored) {
-        setBudgets(stored.budgets || [])
         setRequests(stored.requests || [])
         setExpenses(stored.expenses || [])
       }
@@ -407,7 +318,14 @@ function BudgetProvider({ children }) {
 
   // Sync expenses and budgets from Supabase on mount and when auth state changes
   useEffect(() => {
-    if (!isAuthenticated) return
+    if (!isAuthenticated) {
+      budgetLoadVersion.current += 1
+      // Clear the previous session's financial state when auth changes.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBudgets([])
+      setBudgetAllocations([])
+      return
+    }
     loadExpensesFromSupabase()
     loadBudgetsFromSupabase()
     loadRequestsFromSupabase()
@@ -415,6 +333,7 @@ function BudgetProvider({ children }) {
 
     const refreshRequests = () => {
       if (document.visibilityState === 'visible') {
+        loadBudgetsFromSupabase()
         loadRequestsFromSupabase()
       }
     }
@@ -431,6 +350,16 @@ function BudgetProvider({ children }) {
       .channel('budget-data-sync')
       .on(
         'postgres_changes',
+        { event: '*', schema: 'public', table: 'monthly_budget_additions' },
+        () => loadBudgetsFromSupabase()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'budgets' },
+        () => loadBudgetsFromSupabase()
+      )
+      .on(
+        'postgres_changes',
         { event: '*', schema: 'public', table: 'budget_requests' },
         () => loadRequestsFromSupabase()
       )
@@ -439,105 +368,46 @@ function BudgetProvider({ children }) {
         { event: '*', schema: 'public', table: 'expenses' },
         () => loadExpensesFromSupabase()
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') loadBudgetsFromSupabase()
+      })
 
     return () => {
+      budgetLoadVersion.current += 1
       window.removeEventListener('focus', refreshRequests)
       document.removeEventListener('visibilitychange', refreshRequests)
       window.removeEventListener('cuenta:rollback-complete', handleRollbackSync)
       supabase.removeChannel(channel)
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, user?.id])
 
-  async function addMonthlyBudget({ month, year, amount, source }) {
-    const normalizedMonth = Number(month)
-    const normalizedYear = Number(year)
-    const normalizedAmount = Number(amount) || 0
-
-    if (!Number.isFinite(normalizedMonth) || !Number.isFinite(normalizedYear)) {
-      return
+  async function addMonthlyBudget(input) {
+    if (!isAuthenticated || !user?.id || role !== 'SK Treasurer') {
+      return { error: new Error('Sign in as SK Treasurer to save a budget.') }
     }
-    if (normalizedMonth < 1 || normalizedMonth > 12) {
-      return
-    }
+    const result = await saveMonthlyBudget(supabase, input)
+    if (result.error) return result
 
-    const quarter = Math.floor((normalizedMonth - 1) / 3) + 1
+    const saved = result.data
+    budgetLoadVersion.current += 1
+    setBudgets((prev) => [saved, ...prev.filter(
+      (b) => b.month !== saved.month || b.year !== saved.year
+    )])
+    setBudgetAllocations((prev) => [result.allocation, ...prev.filter(
+      (allocation) => allocation.id !== result.allocation.id
+    )])
 
-    const id =
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `${Date.now()}`
-
-    const newBudget = {
-      id,
-      month: normalizedMonth,
-      quarter,
-      year: normalizedYear,
-      amount: normalizedAmount,
-      source: source || '',
-      createdAt: new Date().toISOString(),
-    }
-
-    // Optimistically update UI
-    setBudgets((prev) => {
-      const existingIdx = prev.findIndex(
-        (b) => Number(b.month) === normalizedMonth && Number(b.year) === normalizedYear
-      )
-      if (existingIdx !== -1) {
-        const newArr = [...prev]
-        newArr[existingIdx] = { ...newArr[existingIdx], ...newBudget }
-        return newArr
-      }
-      return [newBudget, ...prev]
-    })
-
-    try {
-      const { data: existingBudgets, error: fetchError } = await supabase
-        .from('budgets')
-        .select('id')
-        .eq('month', normalizedMonth)
-        .eq('year', normalizedYear)
-
-      if (fetchError) throw fetchError
-
-      if (existingBudgets && existingBudgets.length > 0) {
-        // Update the first matching budget
-        const { error: updateError } = await supabase
-          .from('budgets')
-          .update({
-            amount: normalizedAmount,
-            source: source || '',
-          })
-          .eq('id', existingBudgets[0].id)
-          
-        if (updateError) throw updateError
-      } else {
-        // Insert new budget
-        const { error: insertError } = await supabase
-          .from('budgets')
-          .insert({
-            month: normalizedMonth,
-            quarter,
-            year: normalizedYear,
-            amount: normalizedAmount,
-            source: source || '',
-          })
-          
-        if (insertError) throw insertError
-      }
-    } catch (err) {
-      console.warn('Failed to save monthly budget to Supabase:', err)
-    }
-
-    addLog({
-      action: `Monthly Budget Created — ${monthLabels[normalizedMonth - 1]} ${normalizedYear}`,
-      actionType: 'Budget Created',
+    if (!result.replayed) addLog({
+      action: `Monthly Budget Saved — ${monthLabels[saved.month - 1]} ${saved.year}`,
+      actionType: 'Budget Saved',
       module: 'Monthly Budget',
       recordType: 'Budget',
-      recordId: `${normalizedYear}-${normalizedMonth}`,
-      description: `Set ${monthLabels[normalizedMonth - 1]} ${normalizedYear} budget to ₱${normalizedAmount.toLocaleString()}${source ? ` (Source: ${source})` : ''}`,
-      newValue: { month: normalizedMonth, year: normalizedYear, amount: normalizedAmount, source: source || '' },
+      recordId: saved.id,
+      description: `Added ₱${result.addedAmount.toLocaleString()} to ${monthLabels[saved.month - 1]} ${saved.year}; monthly total is ₱${saved.amount.toLocaleString()}`,
+      previousValue: { amount: result.previousAmount },
+      newValue: { ...saved, addedAmount: result.addedAmount },
     })
+    return result
   }
 
   async function approveRequest(requestId) {
@@ -1048,6 +918,14 @@ function BudgetProvider({ children }) {
     breakdown = [],
     expensesBreakdown = [],
   }) {
+    if (!description || !description.trim()) {
+      return {
+        error: {
+          message: 'Purpose / Description is required. Please provide the purpose or justification for this budget request before submitting.'
+        }
+      }
+    }
+
     const id =
       typeof crypto !== 'undefined' && crypto.randomUUID
         ? crypto.randomUUID()
@@ -1061,7 +939,7 @@ function BudgetProvider({ children }) {
       amount: Number(amount) || 0,
       eventDate,
       venue,
-      description,
+      description: description.trim(),
       notes,
       archivedAt: null,
       breakdown: Array.isArray(breakdown)
@@ -1159,6 +1037,14 @@ function BudgetProvider({ children }) {
   async function resubmitRequest(requestId, updatedData) {
     const request = requests.find((item) => String(item.id) === String(requestId))
     if (!request) return { error: { message: 'Request not found' } }
+
+    if (updatedData.description !== undefined && (!updatedData.description || !updatedData.description.trim())) {
+      return {
+        error: {
+          message: 'Purpose / Description is required. Please provide the purpose or justification for this budget request before submitting.'
+        }
+      }
+    }
 
     const revisionEntry = {
       rejectedAt: request.rejectedAt,
@@ -1786,6 +1672,7 @@ function BudgetProvider({ children }) {
   const value = useMemo(
     () => ({
       budgets,
+      budgetAllocations,
       requests,
       expenses,
       expensesSyncStatus,
@@ -1809,7 +1696,7 @@ function BudgetProvider({ children }) {
       refreshExpensesFromSupabase,
       refreshAllBudgetData,
     }),
-    [budgets, requests, expenses, expensesSyncStatus, totals, verifiedReceiptTotals]
+    [budgets, budgetAllocations, requests, expenses, expensesSyncStatus, totals, verifiedReceiptTotals, isAuthenticated, user, role, profileName]
   )
 
   return <BudgetContext.Provider value={value}>{children}</BudgetContext.Provider>

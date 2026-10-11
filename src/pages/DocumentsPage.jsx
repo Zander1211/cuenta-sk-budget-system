@@ -1,9 +1,17 @@
 import { useState } from 'react'
 import RoleGate from '../components/RoleGate'
+import { useAuth } from '../context/AuthContext'
 import DocumentsPanel from './documents/DocumentsPanel'
 import ReceiptsPanel from './documents/ReceiptsPanel'
+import ReportsSummaryPanel from './documents/ReportsSummaryPanel'
 
-const TABS = [
+const ALL_TABS = [
+  {
+    key: 'summary',
+    label: 'Summary',
+    description: 'Consolidated overview of all reports, documents, receipts, and financial records.',
+    rolesOnly: ['SK Chairman', 'SK Treasurer'],
+  },
   {
     key: 'documents',
     label: 'Documents',
@@ -17,8 +25,11 @@ const TABS = [
 ]
 
 function DocumentsPage() {
-  const [activeTab, setActiveTab] = useState('documents')
-  const current = TABS.find((tab) => tab.key === activeTab) || TABS[0]
+  const { role } = useAuth()
+  const tabs = ALL_TABS.filter(tab => !tab.rolesOnly || tab.rolesOnly.includes(role))
+  const defaultTab = tabs[0]?.key || 'documents'
+  const [activeTab, setActiveTab] = useState(defaultTab)
+  const current = tabs.find((tab) => tab.key === activeTab) || tabs[0]
 
   return (
     <RoleGate allow={['SK Chairman', 'SK Treasurer', 'SK Kagawad', 'Barangay Treasurer']}>
@@ -27,12 +38,12 @@ function DocumentsPage() {
           <div>
             <p className="eyebrow">Compliance</p>
             <h1>Documents &amp; Receipts</h1>
-            <p>{current.description}</p>
+            <p>{current?.description}</p>
           </div>
         </div>
         <div className="header-actions">
           <div className="page-tabs" role="tablist">
-            {TABS.map((tab) => (
+            {tabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
@@ -48,7 +59,9 @@ function DocumentsPage() {
         </div>
       </header>
 
-      {activeTab === 'documents' ? <DocumentsPanel /> : <ReceiptsPanel />}
+      {activeTab === 'summary' && <ReportsSummaryPanel />}
+      {activeTab === 'documents' && <DocumentsPanel />}
+      {activeTab === 'receipts' && <ReceiptsPanel />}
     </RoleGate>
   )
 }

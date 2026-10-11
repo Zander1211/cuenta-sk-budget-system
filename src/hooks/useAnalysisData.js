@@ -95,7 +95,8 @@ export function useAnalysisData(filters) {
       pendingRequests,
       missingReceipts,
       hasAnyData:
-        approvedFinancials.records.length > 0
+        periodBudgets.some((budget) => Number(budget.amount) > 0)
+        || approvedFinancials.records.length > 0
         || pendingRequests.length > 0,
     }
   }, [budgets, expenses, requests, verifiedReceiptTotals, filters])

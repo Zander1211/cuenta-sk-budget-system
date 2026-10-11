@@ -1,16 +1,18 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useBudget } from '../../context/BudgetContext'
 import CurrencyInput from '../../components/CurrencyInput'
 import YearSpinner from '../../components/YearSpinner'
 import PaginationControls from '../../components/PaginationControls'
+import { parseBudgetAmount } from '../../services/monthlyBudget'
 
 const BUDGETS_PAGE_SIZE = 2
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
   currency: 'PHP',
-  maximumFractionDigits: 0,
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
 })
 
 
@@ -39,22 +41,33 @@ const quarterOptions = [
 
 function BudgetAllocationPanel() {
   const { role } = useAuth()
-  const { budgets, addMonthlyBudget } = useBudget()
+  const { budgets, budgetAllocations, addMonthlyBudget } = useBudget()
   const now = new Date()
   const initialMonth = now.getMonth() + 1
-  const [month, setMonth] = useState(initialMonth)
-  const [year, setYear] = useState(now.getFullYear())
-  const [amount, setAmount] = useState('')
-  const [sourceOption, setSourceOption] = useState('')
-  const [customSource, setCustomSource] = useState('')
-  const [description, setDescription] = useState('')
+  const [draft, setDraft] = useState(null)
   const [viewMode, setViewMode] = useState('monthly')
   const [filterMonth, setFilterMonth] = useState(initialMonth)
   const [filterQuarter, setFilterQuarter] = useState(Math.floor((initialMonth - 1) / 3) + 1)
   const [filterYear, setFilterYear] = useState(now.getFullYear())
   const [budgetPage, setBudgetPage] = useState(1)
   const [savedMessage, setSavedMessage] = useState('')
+  const [saveError, setSaveError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const saving = useRef(false)
+  const pendingAddition = useRef(null)
+  const month = filterMonth
+  const year = filterYear
   const canEdit = role === 'SK Treasurer'
+  const periodKey = `${year}-${month}`
+  const selectedBudget = budgets.find((budget) => budget.month === month && budget.year === year)
+  // This form enters an additional allocation, never the existing total.
+  const values = draft?.periodKey === periodKey ? draft : {
+    amount: '', sourceOption: '', customSource: '', description: '',
+  }
+  const { amount, sourceOption, customSource, description } = values
+  function editDraft(patch) {
+    setDraft({ ...values, ...patch, periodKey })
+  }
 
   useEffect(() => {
     if (!savedMessage) return
@@ -65,39 +78,43 @@ function BudgetAllocationPanel() {
   async function handleSubmit(event) {
     event.preventDefault()
 
-    if (!canEdit) {
-      return
+    if (!canEdit || saving.current) return
+    setSavedMessage('')
+    setSaveError('')
+    // Capture the visible value before disabling controls. Autofill and native
+    // input changes can occur without the formatted-input state callback.
+    const enteredAmount = new FormData(event.currentTarget).get('amount')
+    saving.current = true
+    setIsSaving(true)
+    try {
+      const finalSource = sourceOption === 'Other' ? customSource : sourceOption
+      const submittedAmount = parseBudgetAmount(enteredAmount)
+      editDraft({ amount: String(submittedAmount) })
+      const fingerprint = JSON.stringify([month, year, submittedAmount, finalSource || '', description.trim()])
+      if (pendingAddition.current?.fingerprint !== fingerprint) {
+        pendingAddition.current = { fingerprint, id: crypto.randomUUID() }
+      }
+      const result = await addMonthlyBudget({ month, year, amount: submittedAmount,
+        operationId: pendingAddition.current.id,
+        source: finalSource || '', description: description.trim() })
+      if (result?.error) throw result.error
+      if (!result?.data) throw new Error('The budget could not be saved. Please try again.')
+
+      const monthLabel = monthOptions.find((m) => m.value === month)?.label
+      setSavedMessage(`${currency.format(result.addedAmount)} added to ${monthLabel} ${year}. Monthly budget is now ${currency.format(result.data.amount)}.`)
+      pendingAddition.current = null
+      changePeriod({ viewMode: 'monthly', month, year })
+      setDraft(null)
+    } catch (error) {
+      setSaveError(error?.message || 'The budget could not be saved. Please try again.')
+    } finally {
+      saving.current = false
+      setIsSaving(false)
     }
-
-    const cleanedAmount = Number(amount)
-    if (Number.isNaN(cleanedAmount) || cleanedAmount <= 0) {
-      return
-    }
-
-    const finalSource = sourceOption === 'Other' ? customSource : sourceOption
-
-    const result = await addMonthlyBudget({
-      month,
-      year,
-      amount: cleanedAmount,
-      source: finalSource || '',
-      description: description.trim(),
-    })
-
-    if (result?.error) return
-
-    const monthLabel = monthOptions.find((m) => m.value === month)?.label || `Month ${month}`
-    setSavedMessage(`Budget for ${monthLabel} ${year} was added successfully.`)
-
-    setAmount('')
-    setSourceOption('')
-    setCustomSource('')
-    setDescription('')
-    setBudgetPage(1)
   }
 
   const displayedBudgets = useMemo(() => {
-    let filtered = budgets.filter(b => Number(b.year) === Number(filterYear));
+    let filtered = budgetAllocations.filter(b => Number(b.year) === Number(filterYear));
     
     if (viewMode === 'monthly') {
       filtered = filtered.filter(b => Number(b.month) === Number(filterMonth));
@@ -111,7 +128,7 @@ function BudgetAllocationPanel() {
         periodLabel: monthOptions.find(m => m.value === b.month)?.label || `Month ${b.month}`
       }))
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-  }, [budgets, viewMode, filterMonth, filterQuarter, filterYear])
+  }, [budgetAllocations, viewMode, filterMonth, filterQuarter, filterYear])
 
   const displayedTotal = useMemo(
     () => displayedBudgets.reduce((sum, budget) => sum + (Number(budget.amount) || 0), 0),
@@ -131,9 +148,16 @@ function BudgetAllocationPanel() {
   // Changing the period re-scopes the recorded budgets below and resets the
   // pager so it is never left on a page that no longer exists.
   function changePeriod(patch) {
+    setDraft(null)
     if ('viewMode' in patch) setViewMode(patch.viewMode)
-    if ('month' in patch) setFilterMonth(patch.month)
-    if ('quarter' in patch) setFilterQuarter(patch.quarter)
+    if ('month' in patch) {
+      setFilterMonth(patch.month)
+      setFilterQuarter(Math.floor((patch.month - 1) / 3) + 1)
+    }
+    if ('quarter' in patch) {
+      setFilterQuarter(patch.quarter)
+      setFilterMonth((patch.quarter - 1) * 3 + 1)
+    }
     if ('year' in patch) setFilterYear(patch.year)
     setBudgetPage(1)
   }
@@ -198,16 +222,19 @@ function BudgetAllocationPanel() {
         {canEdit && (
           <div className="overview-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div>
-              <p className="eyebrow">New budget</p>
-              <h2 style={{ margin: 0 }}>Add a monthly budget</h2>
+              <p className="eyebrow">Monthly budget</p>
+              <h2 style={{ margin: 0 }}>Add to monthly budget</h2>
+              <p className="form-note">Current total: {currency.format(selectedBudget?.amount || 0)}. The amount entered below will be added to this total.</p>
             </div>
             <form className="user-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <fieldset disabled={isSaving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
               <div className="form-grid">
                 <label className="field">
                   <span>Month</span>
                   <select
                     value={month}
-                    onChange={(event) => setMonth(Number(event.target.value))}
+                    required
+                    onChange={(event) => changePeriod({ month: Number(event.target.value) })}
                   >
                     {monthOptions.map((m) => (
                       <option key={m.value} value={m.value}>
@@ -219,14 +246,17 @@ function BudgetAllocationPanel() {
                 <label className="field" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <span style={{ fontWeight: 500, fontSize: '0.9rem', color: 'var(--ink)' }}>Year</span>
                   <div>
-                    <YearSpinner year={year} onYearChange={setYear} />
+                    <YearSpinner year={year} onYearChange={(nextYear) => changePeriod({ year: nextYear })} />
                   </div>
                 </label>
                 <label className="field">
-                  <span>Allocation amount (PHP)</span>
+                  <span>Amount to add (PHP)</span>
                   <CurrencyInput
+                    name="amount"
                     value={amount}
-                    onValueChange={(val) => setAmount(val)}
+                    onValueChange={(val, _name, sourceInfo) => {
+                      if (sourceInfo?.source !== 'prop') editDraft({ amount: val })
+                    }}
                     placeholder="250,000"
                     required
                   />
@@ -235,7 +265,7 @@ function BudgetAllocationPanel() {
                   <span>Budget Source (Optional)</span>
                   <select
                     value={sourceOption}
-                    onChange={(event) => setSourceOption(event.target.value)}
+                    onChange={(event) => editDraft({ sourceOption: event.target.value })}
                   >
                     <option value="">Select a source (Optional)</option>
                     <option value="Regular SK Budget">Regular SK Budget</option>
@@ -251,7 +281,7 @@ function BudgetAllocationPanel() {
                     <input
                       type="text"
                       value={customSource}
-                      onChange={(event) => setCustomSource(event.target.value)}
+                      onChange={(event) => editDraft({ customSource: event.target.value })}
                       placeholder="e.g. Fundraising Event"
                       required
                       style={{ width: '100%' }}
@@ -262,12 +292,14 @@ function BudgetAllocationPanel() {
                   <span>Description (Optional)</span>
                   <textarea
                     value={description}
-                    onChange={(event) => setDescription(event.target.value)}
+                    onChange={(event) => editDraft({ description: event.target.value })}
                     placeholder="Purpose or notes for this allocation"
                     rows={3}
                   />
                 </label>
               </div>
+              </fieldset>
+              {saveError && <p role="alert" className="form-note">{saveError}</p>}
               {savedMessage && (
                 <div
                   role="status"
@@ -287,8 +319,8 @@ function BudgetAllocationPanel() {
                   <span>{savedMessage}</span>
                 </div>
               )}
-              <button type="submit" className="primary-button" style={{ alignSelf: 'flex-start', padding: '10px 24px' }}>
-                Save Budget
+              <button type="submit" disabled={isSaving} className="primary-button" style={{ alignSelf: 'flex-start', padding: '10px 24px' }}>
+                {isSaving ? 'Saving...' : 'Save Budget'}
               </button>
             </form>
           </div>
@@ -333,7 +365,11 @@ function BudgetAllocationPanel() {
                     </div>
                     <div>
                       <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Added By</p>
-                      <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{budget.addedBy || 'SK Treasurer'}</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{budget.addedBy || 'Not recorded'}</p>
+                    </div>
+                    <div>
+                      <p style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)' }}>Last Updated</p>
+                      <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>{budget.updatedAt ? new Date(budget.updatedAt).toLocaleString() : 'Not recorded'}</p>
                     </div>
                   </div>
                   <div style={{ borderTop: '1px solid var(--line)', paddingTop: '12px' }}>

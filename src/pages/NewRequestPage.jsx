@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import CurrencyInput from '../components/CurrencyInput';
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { PlusCircle, Trash2, ArrowLeft } from 'lucide-react'
+import { PlusCircle, Trash2, ArrowLeft, AlertCircle } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBudget, useBudgetCalculations } from '../context/BudgetContext'
 import { supabase } from '../supabase/supabaseClient'
@@ -41,6 +41,8 @@ function NewRequestPage() {
   const [eventDate, setEventDate] = useState('')
   const [venue, setVenue] = useState('')
   const [description, setDescription] = useState('')
+  const [descriptionError, setDescriptionError] = useState('')
+  const descriptionRef = useRef(null)
 
   const [breakdownItems, setBreakdownItems] = useState([
     { itemName: '', quantity: 1, unitCost: 0 },
@@ -188,6 +190,19 @@ function NewRequestPage() {
   async function handleSubmit(eventSubmit) {
     eventSubmit.preventDefault()
     setFormError('')
+    setDescriptionError('')
+
+    const trimmedDescription = description.trim()
+    if (!trimmedDescription) {
+      const errorMsg = 'Purpose / Description is required. Please provide the purpose or justification for this budget request before submitting.'
+      setDescriptionError(errorMsg)
+      setFormError(errorMsg)
+      if (descriptionRef.current) {
+        descriptionRef.current.focus()
+        descriptionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+      return
+    }
 
     if (!isValidDate || !selectedMonth || !selectedYear) {
       setFormError('Please select a valid request date.')
@@ -396,13 +411,52 @@ function NewRequestPage() {
                 )}
 
                 <label className="field req-span">
-                  <span>Purpose / Description</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    Purpose / Description <strong style={{ color: 'var(--negative, #dc2626)', fontSize: '0.95rem' }} title="Required">*</strong>
+                  </span>
                   <textarea
+                    ref={descriptionRef}
                     rows="3"
                     value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe the goals and outcomes"
+                    onChange={(e) => {
+                      setDescription(e.target.value)
+                      if (descriptionError && e.target.value.trim()) {
+                        setDescriptionError('')
+                        setFormError((prev) => prev.includes('Purpose / Description') ? '' : prev)
+                      }
+                    }}
+                    placeholder="Describe the purpose, justification, and expected outcomes"
+                    required
+                    aria-required="true"
+                    aria-invalid={!!descriptionError}
+                    aria-describedby={descriptionError ? "description-error-message" : undefined}
+                    style={{
+                      borderColor: descriptionError ? 'var(--negative, #dc2626)' : undefined,
+                      borderWidth: descriptionError ? '1.5px' : undefined,
+                      boxShadow: descriptionError ? '0 0 0 3px rgba(220, 38, 38, 0.15)' : undefined,
+                    }}
                   />
+                  {descriptionError && (
+                    <div
+                      id="description-error-message"
+                      role="alert"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '6px',
+                        color: 'var(--negative, #dc2626)',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        marginTop: '4px',
+                        textTransform: 'none',
+                        letterSpacing: 'normal',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      <AlertCircle size={15} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--negative, #dc2626)' }} />
+                      <span>{descriptionError}</span>
+                    </div>
+                  )}
                 </label>
               </div>
             </div>

@@ -1,4 +1,3 @@
-import React from 'react';
 import { NumericFormat } from 'react-number-format';
 
 export default function CurrencyInput({
@@ -26,7 +25,7 @@ export default function CurrencyInput({
         const val = values.value;
 
         if (onValueChange) {
-          onValueChange(val, name);
+          onValueChange(val, name, sourceInfo);
         }
         if (onChange) {
           onChange({

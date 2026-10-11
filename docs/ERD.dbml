@@ -1,0 +1,263 @@
+// Paste this entire file into the dbdiagram.io editor.
+// Diagram model based on ERD.md; selected fields, not a migration.
+// fk_* = confirmed foreign key; app_* = application association only.
+// DBML draws both as relationships. Do not export app_* links as real SQL FKs.
+// deployment_id is an unresolved type, not a real PostgreSQL data type.
+
+Project cuenta {
+  database_type: 'PostgreSQL'
+  Note: 'Cuenta SK Budget Monitoring System. Repository-based ERD; live database not inspected. Application links are named app_. Nullability is not exhaustively modeled. expenses ID type and created_accounts base constraints need live confirmation.'
+}
+
+Table auth.users {
+  id uuid [pk]
+  email text
+  raw_app_meta_data jsonb
+  raw_user_meta_data jsonb
+}
+
+Table public.created_accounts {
+  id uuid [note: 'Shared auth.users ID; original PK and FK definitions unavailable']
+  full_name text
+  email text
+  role text
+  is_active boolean
+  disabled_at timestamptz
+  disabled_by uuid [note: 'Application reference to administrator']
+}
+
+Table public.member_biodata {
+  id uuid [pk]
+  birthdate date
+  sex text
+  civil_status text
+  citizenship text
+  complete_address text
+  mobile_number text
+  updated_at timestamptz
+}
+
+Table public.budgets {
+  id uuid [pk]
+  month integer
+  quarter integer
+  year integer
+  amount numeric
+  source text
+  description text
+  added_by uuid
+  added_by_name text
+  transparency_status text
+  public_category text
+  published_at timestamptz
+  created_at timestamptz
+
+  Note: 'Multiple allocations per month/year are intentional. Spending is matched by period; there is no budget_id FK in expenses or budget_requests.'
+}
+
+Table public.budget_requests {
+  id uuid [pk]
+  created_by uuid
+  requested_by text
+  type text
+  event text
+  category text
+  amount numeric
+  approved_amount numeric
+  event_date date
+  status text
+  project_status text
+  breakdown jsonb
+  expenses_breakdown jsonb
+  revision_history jsonb
+  submitted_at timestamptz
+  approved_at timestamptz
+  archived_at timestamptz
+}
+
+Table public.expenses {
+  id deployment_id [pk, note: 'Unresolved deployed type; older environments use BIGINT. Confirm in Supabase.']
+  request_id uuid [unique, note: 'Nullable; actual SQL uses a unique index WHERE request_id IS NOT NULL']
+  parent_project_id deployment_id [note: 'Same deployed type as expenses.id']
+  created_by uuid
+  is_additional boolean
+  type text
+  event text
+  project text
+  category text
+  amount numeric
+  requested_budget numeric
+  approved_budget numeric
+  original_approved_budget numeric
+  returned_budget numeric
+  month integer
+  year integer
+  event_date date
+  status text
+  project_status text
+  expenses_breakdown jsonb
+  transparency_status text
+  returned_at timestamptz
+
+  Note: 'Projects, events, payroll allocations and requisitions share this table. A requisition has is_additional=true and points to a parent expense.'
+}
+
+Table public.receipt_records {
+  id uuid [pk]
+  record_type text
+  record_id text [note: 'Application link to the approved parent expense']
+  requisition_id text [note: 'Optional application link to a child expense']
+  file_path text
+  original_path text
+  file_name text
+  uploaded_by_id text [note: 'User ID stored as text, without a declared FK']
+  is_scanned boolean
+  ocr_metadata jsonb
+  scan_settings jsonb
+  ocr_verified_at timestamptz
+  ocr_verified_by text
+  uploaded_at timestamptz
+}
+
+Table public.documents {
+  id uuid [pk]
+  created_by uuid
+  name text
+  type text
+  generated_by text
+  related_entity_type text
+  related_entity_id text [note: 'Polymorphic: request ID, expense ID or reporting year. Links are alternatives.']
+  file_path text
+  storage_url text
+  status text
+  data jsonb
+  date_generated timestamptz
+  archived_at timestamptz
+}
+
+Table public.chat_history {
+  id uuid [pk]
+  user_id uuid [not null]
+  role text [note: 'Message speaker: user or assistant; not an officer role']
+  content text
+  created_at timestamptz
+}
+
+Table public.audit_trail {
+  id uuid [pk]
+  user_id uuid
+  user_name text
+  user_role text
+  action text
+  action_type text
+  module text
+  record_type text
+  record_id text [note: 'Polymorphic audit target; no declared target FK']
+  previous_value jsonb
+  new_value jsonb
+  status text
+  created_at timestamptz
+}
+
+Table public.backups {
+  id uuid [pk]
+  filename text
+  backup_size bigint
+  created_by_id uuid
+  created_by_name text
+  created_at timestamptz
+}
+
+Table public.restore_history {
+  id uuid [pk]
+  filename text
+  restored_by_id uuid
+  restored_by_name text
+  restore_status text
+  details text
+  snapshot jsonb
+  restored_at timestamptz
+
+  Note: 'Stores filename and snapshot. No backup_id relationship is declared.'
+}
+
+Table public.notifications {
+  id uuid [pk]
+  actor_id uuid
+  request_id uuid
+  actor_role text
+  recipient_role text [note: 'Recipients are targeted by role, not recipient user ID']
+  type text
+  title text
+  message text
+  created_at timestamptz
+}
+
+Table public.project_photos {
+  id uuid [pk]
+  project_id text
+  url text
+  caption text
+  created_at timestamptz
+
+  Note: 'Migration-defined SQL table with no FK. Current narrative report photos use browser IndexedDB, so no active SQL project link is asserted here.'
+}
+
+Table public.document_counters {
+  id text [pk]
+  last_number integer
+  year integer
+}
+
+Table public.report_summaries {
+  id bigint [pk, increment]
+  report_id text
+  model text
+  summary text
+  updated_at timestamptz
+
+  indexes {
+    (report_id, model) [unique]
+  }
+
+  Note: 'report_id is a text key, not a document FK. Also used for annual report settings.'
+}
+
+Table public.verification_codes {
+  id uuid [pk]
+  email text
+  code text
+  expires_at timestamptz
+  verified boolean
+  created_at timestamptz
+
+  Note: 'May exist before account creation; no user FK.'
+}
+
+// CONFIRMED DATABASE FOREIGN KEYS
+Ref fk_biodata_user: auth.users.id - public.member_biodata.id [delete: cascade]
+Ref fk_request_creator: public.budget_requests.created_by > auth.users.id [delete: set null]
+Ref fk_expense_parent: public.expenses.parent_project_id > public.expenses.id [delete: cascade]
+Ref fk_chat_user: public.chat_history.user_id > auth.users.id [delete: cascade]
+Ref fk_audit_user: public.audit_trail.user_id > auth.users.id [delete: set null]
+Ref fk_backup_creator: public.backups.created_by_id > auth.users.id [delete: set null]
+Ref fk_restore_user: public.restore_history.restored_by_id > auth.users.id [delete: set null]
+
+// APPLICATION ASSOCIATIONS: diagram links, not confirmed database FKs.
+// Text/UUID/deployment_id differences reflect the source fields.
+Ref app_account_user: auth.users.id - public.created_accounts.id
+Ref app_account_disabled_by: public.created_accounts.disabled_by > auth.users.id
+Ref app_budget_author: public.budgets.added_by > auth.users.id
+Ref app_expense_creator: public.expenses.created_by > auth.users.id
+Ref app_request_expense: public.budget_requests.id - public.expenses.request_id
+Ref app_receipt_parent: public.receipt_records.record_id > public.expenses.id
+Ref app_receipt_requisition: public.receipt_records.requisition_id > public.expenses.id
+Ref app_receipt_uploader: public.receipt_records.uploaded_by_id > auth.users.id
+Ref app_document_creator: public.documents.created_by > auth.users.id
+Ref app_notification_actor: public.notifications.actor_id > auth.users.id
+Ref app_notification_request: public.notifications.request_id > public.budget_requests.id
+
+// POLYMORPHIC ALTERNATIVES: the entity type chooses the target.
+// A reporting-year value has no target table.
+Ref app_document_expense: public.documents.related_entity_id > public.expenses.id
+Ref app_document_request: public.documents.related_entity_id > public.budget_requests.id

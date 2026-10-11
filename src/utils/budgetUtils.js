@@ -41,9 +41,8 @@ export function isRecordInPeriod(record, month, year) {
   return month === null || month === undefined || period.month === Number(month)
 }
 
-// Each row is an individual allocation. Same-month entries are intentionally
-// cumulative; only an identical row id is ignored if a query result is merged
-// into local state more than once.
+// Each row is the total for one month/year. Summing also supports annual
+// reports; identical row ids are ignored if query results are merged twice.
 export function getBudgetTotalForPeriod(budgets = [], month, year) {
   const seen = new Set()
   return budgets.reduce((sum, budget) => {

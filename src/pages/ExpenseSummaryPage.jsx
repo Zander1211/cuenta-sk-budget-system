@@ -5,6 +5,7 @@ import { useBudget } from '../context/BudgetContext'
 import YearSpinner from '../components/YearSpinner'
 import { summarizeApprovedBudgetFinancials } from '../utils/projectEventFinancials'
 import { getBudgetTotalForPeriod } from '../utils/budgetUtils'
+import ReportSummaryNote from '../components/ReportSummaryNote'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -514,6 +515,10 @@ function ExpenseSummaryPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div style={{ marginTop: '20px' }}>
+          <ReportSummaryNote variant="dashboard" />
         </div>
       </section>
     </RoleGate>

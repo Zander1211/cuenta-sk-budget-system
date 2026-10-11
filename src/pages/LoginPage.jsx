@@ -7,6 +7,7 @@ import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
 import logo from '../assets/cuenta-logo.png'
+import PrivacyAndTermsModal from '../components/PrivacyAndTermsModal'
 import './LoginPage.css'
 
 const GMAIL_PATTERN = /^[a-zA-Z0-9._%+-]+@gmail\.com$/i
@@ -84,6 +85,7 @@ function LoginPage() {
   const [verificationStep, setVerificationStep] = useState(false)
   const [otpCode, setOtpCode] = useState('')
   const [pendingUser, setPendingUser] = useState(null)
+  const [legalModal, setLegalModal] = useState({ open: false, tab: 'privacy' })
 
   const recaptchaRef = useRef(null)
 
@@ -536,6 +538,24 @@ function LoginPage() {
                       ? 'Send verification code'
                       : 'Sign in'}
                 </button>
+
+                <div className="login-legal-links">
+                  <button
+                    type="button"
+                    className="login-legal-link"
+                    onClick={() => setLegalModal({ open: true, tab: 'privacy' })}
+                  >
+                    Privacy Policy
+                  </button>
+                  <span className="login-legal-divider" aria-hidden="true">|</span>
+                  <button
+                    type="button"
+                    className="login-legal-link"
+                    onClick={() => setLegalModal({ open: true, tab: 'terms' })}
+                  >
+                    Terms & Conditions
+                  </button>
+                </div>
               </form>
             )}
 
@@ -555,6 +575,12 @@ function LoginPage() {
           </div>
         </section>
       </div>
+
+      <PrivacyAndTermsModal
+        isOpen={legalModal.open}
+        initialTab={legalModal.tab}
+        onClose={() => setLegalModal(prev => ({ ...prev, open: false }))}
+      />
     </div>
   )
 }
