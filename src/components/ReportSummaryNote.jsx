@@ -1,19 +1,13 @@
 import React from 'react'
 import { Info } from 'lucide-react'
-import { useActiveSkChairmanName } from '../hooks/useActiveSkChairmanName'
 
 /**
  * ReportSummaryNote
  * Displays a clean, professional informational note for visitors and view-only users,
- * informing them that they are viewing a summary and instructing them to contact
- * the current active SK Chairman for the complete detailed financial report.
- * 
- * Automatically retrieves and updates the active SK Chairman's full name from the system.
+ * informing them that they are viewing a summary and instructing them to coordinate
+ * directly with the SK Chairman for the complete detailed financial report.
  */
-export default function ReportSummaryNote({ variant = 'default', style = {} }) {
-  const chairmanName = useActiveSkChairmanName()
-  const displayName = chairmanName?.trim() || 'John Zander Zerrudo'
-
+export default function ReportSummaryNote({ variant = 'default', message, style = {} }) {
   const isPublic = variant === 'public'
 
   return (
@@ -64,19 +58,24 @@ export default function ReportSummaryNote({ variant = 'default', style = {} }) {
           >
             Note:
           </strong>
-          You are currently viewing a summary of the financial report. If you need to access the complete and detailed report, please submit your request directly to the SK Chairman,{' '}
-          <strong
-            className="report-summary-note__chairman"
-            style={{
-              fontWeight: 700,
-              color: isPublic ? '#6ee7b7' : 'var(--accent, #0e6b4d)',
-            }}
-          >
-            {displayName}
-          </strong>
-          .
+          {message || (
+            <>
+              You are currently viewing a summary of this financial report. If you would like to see the complete and detailed financial report for this Project or Event, please personally coordinate with the{' '}
+              <strong
+                className="report-summary-note__chairman"
+                style={{
+                  fontWeight: 700,
+                  color: isPublic ? '#6ee7b7' : 'var(--accent, #0e6b4d)',
+                }}
+              >
+                SK Chairman
+              </strong>{' '}
+              for further assistance and verification.
+            </>
+          )}
         </p>
       </div>
     </aside>
   )
 }
+

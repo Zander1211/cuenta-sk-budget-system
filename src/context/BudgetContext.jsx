@@ -1750,4 +1750,4 @@ export function useBudgetCalculations(month, year) {
   }, [budgets, expenses, month, year])
 }
 
-export { BudgetProvider, useBudget }
+export { BudgetProvider, useBudget, mapExpenseRow, mapRequestRow }

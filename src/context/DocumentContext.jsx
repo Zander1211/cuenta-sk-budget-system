@@ -103,7 +103,13 @@ export function DocumentProvider({ children }) {
       ? query.not('archived_at', 'is', null)
       : query.is('archived_at', null)
 
-    if (type !== 'All') query = query.eq('type', type)
+    if (type !== 'All') {
+      if (Array.isArray(type)) {
+        query = query.in('type', type)
+      } else {
+        query = query.eq('type', type)
+      }
+    }
     if (year !== 'All') query = query.eq('related_entity_id', String(year))
     if (search) {
       query = query.or(`name.ilike.%${search}%,project.ilike.%${search}%`)
@@ -134,11 +140,12 @@ export function DocumentProvider({ children }) {
       return
     }
 
+    const supportedTypes = ['Annual Report', 'Full Summary Report']
     const [totalResult, activeResult, archivedResult, yearsResult] = await Promise.all([
-      supabase.from('documents').select('id', { count: 'exact', head: true }).eq('type', 'Annual Report'),
-      supabase.from('documents').select('id', { count: 'exact', head: true }).eq('type', 'Annual Report').is('archived_at', null),
-      supabase.from('documents').select('id', { count: 'exact', head: true }).eq('type', 'Annual Report').not('archived_at', 'is', null),
-      supabase.from('documents').select('related_entity_id').eq('type', 'Annual Report'),
+      supabase.from('documents').select('id', { count: 'exact', head: true }).in('type', supportedTypes),
+      supabase.from('documents').select('id', { count: 'exact', head: true }).in('type', supportedTypes).is('archived_at', null),
+      supabase.from('documents').select('id', { count: 'exact', head: true }).in('type', supportedTypes).not('archived_at', 'is', null),
+      supabase.from('documents').select('related_entity_id').in('type', supportedTypes),
     ])
 
     const countError = totalResult.error || activeResult.error || archivedResult.error

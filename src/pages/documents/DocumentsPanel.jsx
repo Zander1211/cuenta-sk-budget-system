@@ -1,14 +1,30 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, X, Eye, Download, Archive, RotateCcw, Search, Calendar } from 'lucide-react'
+import { Plus, X, Eye, Download, Archive, RotateCcw, Search, Calendar, ChevronDown, FileText, BarChart2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useDocuments } from '../../context/DocumentContext'
 import AnnualReportPreview from '../../components/documents/AnnualReportPreview'
+import FullSummaryReportPreview from '../../components/documents/FullSummaryReportPreview'
 import PaginationControls from '../../components/PaginationControls'
+import FullSummaryReportPanel from './FullSummaryReportPanel'
 
 const DOCUMENTS_PAGE_SIZE = 10
 
 function DocumentsPanel() {
+  const [showFullSummary, setShowFullSummary] = useState(false)
+  const [showNewMenu, setShowNewMenu] = useState(false)
+  const newMenuRef = useRef(null)
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (newMenuRef.current && !newMenuRef.current.contains(e.target)) {
+        setShowNewMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
   const navigate = useNavigate()
   const { role } = useAuth()
   const {
@@ -33,23 +49,24 @@ function DocumentsPanel() {
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('')
+  const [typeFilter, setTypeFilter] = useState('All') // 'All' | 'Annual Report' | 'Full Summary Report'
   const [yearFilter, setYearFilter] = useState('All')
   const [currentPage, setCurrentPage] = useState(1)
 
   const totalPages = Math.max(1, Math.ceil(totalCount / DOCUMENTS_PAGE_SIZE))
   const safeCurrentPage = Math.min(currentPage, totalPages)
-  const hasActiveFilters = Boolean(searchTerm.trim() || yearFilter !== 'All')
+  const hasActiveFilters = Boolean(searchTerm.trim() || typeFilter !== 'All' || yearFilter !== 'All')
 
   useEffect(() => {
     refreshDocuments({
       page: currentPage,
       pageSize: DOCUMENTS_PAGE_SIZE,
       search: searchTerm,
-      type: 'Annual Report',
+      type: typeFilter === 'All' ? ['Annual Report', 'Full Summary Report'] : typeFilter,
       year: yearFilter,
       archived: activeTab === 'archive',
     })
-  }, [activeTab, currentPage, refreshDocuments, searchTerm, yearFilter])
+  }, [activeTab, currentPage, refreshDocuments, searchTerm, typeFilter, yearFilter])
 
   useEffect(() => {
     refreshDocumentStats()
@@ -74,12 +91,28 @@ function DocumentsPanel() {
   function renderViewingDoc() {
     if (!viewingDoc) return null
     const storedData = viewingDoc.data || {}
-    const type = storedData.type || (viewingDoc.type === 'Annual Report' ? 'annual' : null)
+    const type = storedData.type || (viewingDoc.type === 'Annual Report' ? 'annual' : viewingDoc.type === 'Full Summary Report' ? 'full_summary' : null)
     const data = storedData.data || storedData
     const onClose = () => setViewingDoc(null)
 
     if (type === 'annual') return <AnnualReportPreview data={data} onClose={onClose} />
+    if (type === 'full_summary' || viewingDoc.type === 'Full Summary Report') {
+      return (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 999, backgroundColor: 'white', overflowY: 'auto' }}>
+          <FullSummaryReportPreview
+            records={storedData.records || []}
+            receiptLinks={storedData.receiptLinks || {}}
+            filters={storedData.filters || {}}
+            onClose={onClose}
+          />
+        </div>
+      )
+    }
     return null
+  }
+
+  if (showFullSummary) {
+    return <FullSummaryReportPanel onBack={() => setShowFullSummary(false)} />
   }
 
   return (
@@ -93,16 +126,83 @@ function DocumentsPanel() {
             </p>
           </div>
           {canCreate && (
-            <button
-              type="button"
-              className="primary-button"
-              onClick={handleCreateAnnualReport}
-            >
-              <Plus size={16} />
-              New Annual Report
-            </button>
+            <div ref={newMenuRef} style={{ position: 'relative' }}>
+              <button
+                id="documents-new-report-btn"
+                type="button"
+                className="primary-button"
+                onClick={() => setShowNewMenu(prev => !prev)}
+                aria-expanded={showNewMenu}
+                aria-haspopup="true"
+              >
+                <Plus size={16} />
+                New Report
+                <ChevronDown size={14} style={{ marginLeft: '2px', transition: 'transform 0.2s', transform: showNewMenu ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+              </button>
+
+              {showNewMenu && (
+                <div style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 6px)',
+                  right: 0,
+                  zIndex: 200,
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                  minWidth: '240px',
+                  overflow: 'hidden',
+                  animation: 'fadeInDown 0.15s ease',
+                }}>
+                  <button
+                    id="documents-new-annual-report"
+                    type="button"
+                    style={{
+                      width: '100%', textAlign: 'left', padding: '14px 18px',
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      display: 'flex', alignItems: 'flex-start', gap: '12px',
+                      borderBottom: '1px solid var(--border)',
+                      color: 'var(--text-primary)',
+                      transition: 'background-color 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--surface-2, #f8fafc)'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                    onClick={() => { setShowNewMenu(false); handleCreateAnnualReport() }}
+                  >
+                    <FileText size={18} style={{ color: 'var(--accent, #1a5c3a)', flexShrink: 0, marginTop: '2px' }} />
+                    <div>
+                      <p style={{ margin: 0, fontWeight: 600, fontSize: '0.92rem' }}>Annual Report</p>
+                      <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>Year-end financial report for SK compliance</p>
+                    </div>
+                  </button>
+
+                  <button
+                    id="documents-new-full-summary"
+                    type="button"
+                    style={{
+                      width: '100%', textAlign: 'left', padding: '14px 18px',
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      display: 'flex', alignItems: 'flex-start', gap: '12px',
+                      color: 'var(--text-primary)',
+                      transition: 'background-color 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--surface-2, #f8fafc)'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                    onClick={() => { setShowNewMenu(false); setShowFullSummary(true) }}
+                  >
+                    <BarChart2 size={18} style={{ color: '#0d7a5f', flexShrink: 0, marginTop: '2px' }} />
+                    <div>
+                      <p style={{ margin: 0, fontWeight: 600, fontSize: '0.92rem' }}>Full Summary Report</p>
+                      <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>All Projects &amp; Events with documents and receipts</p>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
+
+        <style>{`@keyframes fadeInDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
         {/* Document Summary Cards */}
         <div style={{
@@ -112,7 +212,7 @@ function DocumentsPanel() {
           marginBottom: '24px'
         }}>
           <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
-            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Annual Reports</p>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Reports</p>
             <h3 style={{ margin: '8px 0 0', fontSize: '1.75rem', color: 'var(--text-primary)' }}>{documentStats.total}</h3>
           </div>
           <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
@@ -132,10 +232,10 @@ function DocumentsPanel() {
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', marginBottom: '20px' }}>
               <div>
                 <h2 style={{ margin: '0 0 8px', fontSize: '1.25rem', color: 'var(--text-primary)' }}>
-                  {activeTab === 'active' ? 'Active Annual Reports' : 'Archived Annual Reports'}
+                  {activeTab === 'active' ? 'Active Reports' : 'Archived Reports'}
                 </h2>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
-                  {activeTab === 'active' ? 'Manage and preview your Annual Reports.' : 'View and restore archived Annual Reports.'}
+                  {activeTab === 'active' ? 'Manage and preview your Annual Reports and Full Summary Reports.' : 'View and restore archived Reports.'}
                 </p>
               </div>
               <div className="page-tabs" role="tablist">
@@ -156,11 +256,11 @@ function DocumentsPanel() {
 
             {/* Filter Toolbar */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-              <div className="search-input-container" style={{ flex: '1 1 300px', position: 'relative' }}>
+              <div className="search-input-container" style={{ flex: '1 1 260px', position: 'relative' }}>
                 <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 <input
                   type="text"
-                  placeholder="Search Annual Reports by name..."
+                  placeholder="Search reports by name..."
                   value={searchTerm}
                   onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                   style={{
@@ -169,7 +269,22 @@ function DocumentsPanel() {
                   }}
                 />
               </div>
-              <div style={{ flex: '1 1 200px', position: 'relative' }}>
+              <div style={{ flex: '1 1 180px', position: 'relative' }}>
+                <FileText size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <select
+                  value={typeFilter}
+                  onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
+                  style={{
+                    width: '100%', padding: '10px 12px 10px 40px', borderRadius: 'var(--radius-control)',
+                    border: '1px solid var(--border)', fontSize: '0.95rem', backgroundColor: 'var(--surface)'
+                  }}
+                >
+                  <option value="All">All Report Types</option>
+                  <option value="Annual Report">Annual Report</option>
+                  <option value="Full Summary Report">Full Summary Report</option>
+                </select>
+              </div>
+              <div style={{ flex: '1 1 160px', position: 'relative' }}>
                 <Calendar size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 <select
                   value={yearFilter}
@@ -254,7 +369,7 @@ function DocumentsPanel() {
                   <tr>
                     <td colSpan="5" style={{ padding: '48px 24px', textAlign: 'center' }}>
                       <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', margin: 0 }}>
-                        No Annual Reports found for the selected filters.
+                        No reports found for the selected filters.
                       </p>
                     </td>
                   </tr>

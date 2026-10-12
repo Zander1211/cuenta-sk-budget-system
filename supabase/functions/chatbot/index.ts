@@ -22,24 +22,53 @@ function buildSystemPrompt(ctx: any) {
     userName = 'the user',
     currentPage = 'Dashboard',
     currentYear = new Date().getFullYear(),
-    currentMonthName = 'August',
+    currentMonthName = 'October',
     totals = {} as any,
+    previousMonthsSummary = null,
     monthlySummaries = [],
     allBudgets = [],
     allExpenses = [],
     allRequests = [],
     topCategories = [],
     prediction = null,
+    skChairman = null,
+    skTreasurer = null,
+    activeOfficials = [],
+    recentReceipts = [],
+    recentDocuments = [],
+    recentActivityLogs = [],
+    reportSummaries = [],
   } = ctx
 
   const totalBudget = totals.totalBudget ?? ctx.totalBudget ?? 0
+  const totalApprovedAllocations = totals.totalApprovedAllocations ?? ctx.totalApprovedAllocations ?? 0
   const totalExpenses = totals.totalExpenses ?? ctx.totalExpenses ?? 0
   const remaining = totals.remaining ?? ctx.remaining ?? 0
+  const remainingMonthlyAllocation = totals.remainingMonthlyAllocation ?? ctx.remainingMonthlyAllocation ?? 0
   const budgetUtilization = totals.budgetUtilization ?? ctx.budgetUtilization ?? 0
 
   const monthlySummariesText = (monthlySummaries && monthlySummaries.length > 0)
-    ? monthlySummaries.map((m: any) => `- ${m.month} ${m.year}: Allocated Budget = ₱${Number(m.allocatedBudget).toLocaleString('en-PH')} | Total Expenses = ₱${Number(m.totalExpenses).toLocaleString('en-PH')} | Remaining = ₱${Number(m.remainingBalance).toLocaleString('en-PH')} (Source: ${m.sources})`).join('\n')
+    ? monthlySummaries.map((m: any) => {
+        const allocated = Number(m.allocatedBudget || 0)
+        const approved = Number(m.approvedBudget || 0)
+        const remainingBal = Number(m.remainingBudget ?? m.remainingBalance ?? (allocated - approved))
+        const actualExp = Number(m.totalExpenses ?? m.actualExpenses ?? 0)
+        const util = allocated > 0 ? Math.round((approved / allocated) * 100) : 0
+        const availablePct = 100 - util
+        return `- ${m.month} ${m.year}: Monthly Budget = ₱${allocated.toLocaleString('en-PH')} | Approved Allocations = ₱${approved.toLocaleString('en-PH')} | REMAINING BUDGET (Monthly Budget minus Approved Allocations) = ₱${remainingBal.toLocaleString('en-PH')} (${availablePct}% available) | Actual Expenses (Verified Receipts) = ₱${actualExp.toLocaleString('en-PH')} | Budget Utilization = ${util}% (Source: ${m.sources || 'Regular SK Budget'})`
+      }).join('\n')
     : '- No monthly breakdown recorded yet.'
+
+  const prevSummary = previousMonthsSummary || ctx.previousMonthsSummary || null
+  const previousMonthsText = prevSummary
+    ? `- Total Remaining (Unused Budget from Previous Months): ₱${Number(prevSummary.totalRemaining || 0).toLocaleString('en-PH')}\n` +
+      `- Completed Past Months: ${prevSummary.completedMonthsCount || 0} months (${prevSummary.completedPeriodLabel || ''})\n` +
+      `- Total Budget for Past Months: ₱${Number(prevSummary.totalAllocated || 0).toLocaleString('en-PH')}\n` +
+      `- Total Approved Budgets for Past Months: ₱${Number(prevSummary.totalApproved || 0).toLocaleString('en-PH')}\n` +
+      `- Current Active Month: ${prevSummary.currentActiveMonth || currentMonthName + ' ' + currentYear} (EXCLUDED from previous months summary)\n` +
+      `- Completed Months Breakdown:\n` +
+      (prevSummary.breakdown || []).map((b: any) => `  * ${b.month}: Total Budget ₱${Number(b.allocatedBudget || 0).toLocaleString('en-PH')} | Approved Budgets ₱${Number(b.approvedBudget || 0).toLocaleString('en-PH')} | Remaining Budget ₱${Number(b.remainingBudget || 0).toLocaleString('en-PH')} (${b.status})`).join('\n')
+    : '- No previous months carryover recorded.'
 
   const budgetsText = (allBudgets && allBudgets.length > 0)
     ? allBudgets.map((b: any) => `- Month: ${b.month} ${b.year} | Amount: ₱${Number(b.amount).toLocaleString('en-PH')} | Source: ${b.source}`).join('\n')
@@ -72,17 +101,6 @@ function buildSystemPrompt(ctx: any) {
   const renderGroup = (rows: any[], emptyLabel: string) =>
     rows.length > 0 ? rows.map(describeRecord).join('\n') : emptyLabel
 
-  /*
-   * Older clients do not send `type` at all. The projects filter still catches
-   * every record (it accepts a missing type), but the events and payroll
-   * filters match nothing — so the prompt would state "No approved events
-   * recorded" while four approved events sat in the projects list above it.
-   * That is asserting something false about real data, which is exactly the
-   * failure this whole section exists to prevent.
-   *
-   * When no record carries a type, those two empty labels stop making a claim
-   * and point at the combined list instead.
-   */
   const typesReported = liveRecords.some((e: any) => !!e.type)
 
   const untypedNote = (kind: string) =>
@@ -118,12 +136,40 @@ function buildSystemPrompt(ctx: any) {
     : '- No expense records.'
 
   const requestsText = (allRequests && allRequests.length > 0)
-    ? allRequests.map((r: any) => `- "${r.event}" | Month: ${r.month || 'Unspecified'} ${r.year} | Amount: ₱${Number(r.amount).toLocaleString('en-PH')} | Status: ${r.status} | Category: ${r.category}`).join('\n')
-    : '- No pending requests.'
+    ? allRequests.map((r: any) => {
+        let line = `- "${r.event}" (${r.type || 'Request'}) | Month: ${r.month || 'Unspecified'} ${r.year} | Amount: ₱${Number(r.amount).toLocaleString('en-PH')} | Status: ${r.status} | Category: ${r.category}`
+        if (r.rejectionReason) line += ` | Rejection Reason: ${r.rejectionReason}`
+        if (r.cancellationReason) line += ` | Cancellation Reason: ${r.cancellationReason}`
+        return line
+      }).join('\n')
+    : '- No pending or recorded requests.'
 
   const categoriesText = (topCategories && topCategories.length > 0)
     ? topCategories.map((c: any) => `- ${c.name}: ₱${Number(c.total).toLocaleString('en-PH')}`).join('\n')
     : '- No category data yet.'
+
+  const skChairmanName = skChairman || 'Not yet assigned'
+  const skTreasurerName = skTreasurer || 'Not yet assigned'
+
+  const officialsText = (activeOfficials && activeOfficials.length > 0)
+    ? activeOfficials.map((o: any) => `- ${o.role}: ${o.name} (${o.email || 'No email'})`).join('\n')
+    : `- SK Chairman: ${skChairmanName}\n- SK Treasurer: ${skTreasurerName}`
+
+  const receiptsText = (recentReceipts && recentReceipts.length > 0)
+    ? recentReceipts.map((r: any) => `- "${r.fileName}" | Merchant/Supplier: ${r.merchant || 'N/A'} | Amount: ₱${Number(r.amount || 0).toLocaleString('en-PH')} | Status: ${r.isVerified ? 'OCR Verified' : 'Pending Verification'} | Uploaded: ${r.uploadedAt ? new Date(r.uploadedAt).toLocaleDateString('en-PH') : 'Recently'}`).join('\n')
+    : '- No recent receipt records.'
+
+  const documentsText = (recentDocuments && recentDocuments.length > 0)
+    ? recentDocuments.map((d: any) => `- "${d.name}" (${d.type || 'Document'}) | Generated by: ${d.generatedBy || 'SK Official'} | Date: ${d.dateGenerated ? new Date(d.dateGenerated).toLocaleDateString('en-PH') : 'Recently'}`).join('\n')
+    : '- No generated documents recorded.'
+
+  const activityLogsText = (recentActivityLogs && recentActivityLogs.length > 0)
+    ? recentActivityLogs.map((a: any) => `- [${a.date ? new Date(a.date).toLocaleDateString('en-PH') : 'Recent'}] ${a.user} (${a.role || 'Official'}): ${a.action} — ${a.description || ''} (Module: ${a.module || 'System'})`).join('\n')
+    : '- No recent activity logs.'
+
+  const reportSummariesText = (reportSummaries && reportSummaries.length > 0)
+    ? reportSummaries.map((rep: any) => `- Report ID ${rep.reportId}: ${rep.summary}`).join('\n')
+    : '- No AI report summaries recorded.'
 
   /*
    * Prediction is computed client-side (buildSystemContext in ChatWidget.jsx)
@@ -172,6 +218,8 @@ YOU MAY ONLY ANSWER QUESTIONS ABOUT:
 - Documents: Uploaded Receipts, Supporting Documents, Narrative Reports, Generated Documents, Missing Documents
 - AI Analysis: Financial Summary, Spending Insights, Budget Recommendations, Risk Analysis, Budget Utilization, Spending Trends
 - Dashboard: Total Budget, Total Expenses, Remaining Budget, Pending Approvals, Charts, Statistics
+- User Accounts & Roles: SK Chairman, SK Treasurer, SK Kagawad, Barangay Treasurer, account assignments and permissions
+- Receipts & OCR: Uploaded receipts, verification status, OCR extracted details
 - Audit Trail: User Activities, Approvals, Budget Modifications, System Actions
 - User Guidance: How to create a budget request, upload receipts, generate reports, update a profile, use AI Analysis, manage projects/events/payroll/documents
 
@@ -191,41 +239,63 @@ DO NOT attempt to answer unrelated questions under any circumstances. DO NOT pro
 NEVER use that refusal for a question about budgets, expenses, projects, events, payroll, documents, receipts, reports, months, quarters or years. Those are IN SCOPE even when the answer turns out to be that nothing is recorded. "What is the budget for 2024?" is a Cuenta data question, not an unrelated one — the correct reply is that no budget is recorded for 2024, NOT the refusal above. A bare month, quarter or year is always a data question. Reserve the refusal for topics genuinely outside the system, such as sports results, weather, celebrities or programming help.
 
 ================================================================
-REAL-TIME FINANCIAL DATA & MONTHLY BREAKDOWN:
+REAL-TIME FINANCIAL & SYSTEM DATA (LIVE DATABASE RECORDS):
 ================================================================
 
 1. MONTHLY BUDGET & SUMMARY BREAKDOWN (PRIMARY SOURCE FOR MONTH QUESTIONS):
 ${monthlySummariesText}
 
-2. RECORDED MONTHLY BUDGET ALLOCATIONS:
+2. UNUSED BUDGET FROM PREVIOUS MONTHS (CARRIED OVER UNUSED FUNDS / REMAINING BUDGETS CARD):
+${previousMonthsText}
+
+3. RECORDED MONTHLY BUDGET ALLOCATIONS:
 ${budgetsText}
 
-3. APPROVED PROJECTS (this IS the project list — answer every "list/how many/newest project" question from here):
+4. APPROVED PROJECTS (this IS the project list — answer every "list/how many/newest project" question from here):
 ${projectsText}
 
-4. APPROVED EVENTS (this IS the event list — answer every "list/how many/newest event" question from here):
+5. APPROVED EVENTS (this IS the event list — answer every "list/how many/newest event" question from here):
 ${eventsText}
 
-5. APPROVED PAYROLL:
+6. APPROVED PAYROLL:
 ${payrollText}
 
-6. ADDITIONAL EXPENSES (extra costs attached to an approved project or event):
+7. ADDITIONAL EXPENSES (extra costs attached to an approved project or event):
 ${additionalText}
 
-7. ALL APPROVED SPENDING RECORDS COMBINED (projects + events + payroll):
+8. ALL APPROVED SPENDING RECORDS COMBINED (projects + events + payroll):
 ${expensesText}
 
-8. BUDGET REQUESTS (submitted; not all are approved yet):
+9. BUDGET REQUESTS (Status: Pending, Approved, Rejected, Cancelled):
 ${requestsText}
 
-9. TOP SPENDING CATEGORIES:
+10. TOP SPENDING CATEGORIES:
 ${categoriesText}
 
-10. BUDGET PREDICTION (NEXT MONTH — TREND ESTIMATE COMPUTED FROM PAST MONTHS, NOT A RECORDED FACT):
+11. BUDGET PREDICTION (NEXT MONTH — TREND ESTIMATE COMPUTED FROM PAST MONTHS, NOT A RECORDED FACT):
 ${predictionText}
 
-11. OVERALL ANNUAL / TOTAL SYSTEM SUMMARY (USE ONLY WHEN ASKED FOR TOTAL / ANNUAL / OVERALL BUDGET):
+12. CURRENT SK OFFICIALS & USER ACCOUNTS (ROLES & RESPONSIBILITIES):
+- Current Active SK Chairman: ${skChairmanName}
+- Current Active SK Treasurer: ${skTreasurerName}
+- All Registered Active User Accounts:
+${officialsText}
+
+13. RECEIPTS & OCR RECORDS:
+${receiptsText}
+
+14. GENERATED SYSTEM DOCUMENTS & NARRATIVE REPORTS:
+${documentsText}
+
+15. RECENT ACTIVITY LOGS (AUDIT TRAIL):
+${activityLogsText}
+
+16. AI REPORT SUMMARIES:
+${reportSummariesText}
+
+17. OVERALL ANNUAL / TOTAL SYSTEM SUMMARY (USE ONLY WHEN ASKED FOR TOTAL / ANNUAL / OVERALL BUDGET):
 - Overall Total Budget (All Months Combined): ₱${Number(totalBudget).toLocaleString('en-PH')}
+- Overall Total Approved Budget Allocations: ₱${Number(totalApprovedAllocations).toLocaleString('en-PH')}
 - Overall Total Expenses: ₱${Number(totalExpenses).toLocaleString('en-PH')}
 - Overall Remaining Balance: ₱${Number(remaining).toLocaleString('en-PH')}
 - Overall Budget Utilization: ${budgetUtilization}%
@@ -234,10 +304,48 @@ ${predictionText}
 STRICT FILTERING & RESPONSE ACCURACY RULES:
 ================================================================
 
-0. **THE DATA BLOCK ABOVE IS THE ONLY SOURCE OF FACT**:
-   - Every peso figure, month, project name and status you state MUST be copied from the REAL-TIME FINANCIAL DATA section above.
-   - This instruction block contains NO financial data. Any number appearing in these rules is a formatting placeholder, never a value to report.
-   - If a figure the user asks for is not present in the data block, say it is not recorded. NEVER estimate, infer, or invent a number yourself — the ONLY exception is section 10 (BUDGET PREDICTION), which is a precomputed trend estimate you may report, labeled as an estimate, per rule 1D below.
+0. **DYNAMIC DATA RETRIEVAL & SOURCE OF FACT**:
+   - The data sections above are dynamically fetched from the live database on every user interaction.
+   - Every peso figure, month, project name, user name, role, receipt, document, or log entry you state MUST be copied directly from the REAL-TIME DATA section above.
+   - Do NOT rely on previous conversation turns or static memory if the data block above reflects updated information.
+   - If a budget amount is updated, a new expense is added, a request is approved/rejected/cancelled, a receipt is uploaded, or a user role changes, the section above reflects it immediately — use that live figure.
+
+0A. **DATA PRIORITY ORDER (MANDATORY)**:
+   When answering questions, you MUST prioritize information in this exact order:
+   1. Latest database records (the live sections above).
+   2. Current approved financial records (approved budgets, expenses, allocations).
+   3. Current user roles and permissions (active officials from user accounts in Section 12).
+   4. Activity history (recent audit logs in Section 15).
+   5. General system knowledge.
+
+0B. **PREVENT INCORRECT ANSWERS / MISSING INFORMATION RULE**:
+   - Cue should NEVER guess, speculate, or provide outdated or invented information.
+   - If the user asks for a specific piece of information, record, document, receipt, or person that is NOT available in the data blocks above, respond clearly with:
+     "I could not find the latest record for this information. Please check the related module or try again."
+     (If responding in Tagalog/Filipino: "Hindi ko mahanap ang pinakabagong tala para sa impormasyong ito. Pakisuri ang kaugnay na module o subukang muli.")
+     (If responding in Taglish: "Hindi ko mahanap ang latest record para sa information na ito. Please check the related module or try again.")
+
+0C. **DYNAMIC SYSTEM ROLE & USER ACCOUNT AWARENESS**:
+   - Always provide the currently assigned SK Chairman and SK Treasurer from the system records above, NEVER an old stored name or placeholder.
+   - User: "Who is the current SK Chairman?" → Answer with the current active SK Chairman: "${skChairmanName}".
+   - User: "Who is the SK Treasurer?" → Answer with the current active SK Treasurer: "${skTreasurerName}".
+   - If asked about user accounts or positions, refer directly to Section 12.
+   - Role Responsibilities:
+     * SK Chairman: Approves/rejects budget requests, cancels approved requests, monitors financial records, manages user accounts, has full access.
+     * SK Treasurer: Sets monthly budget allocations, creates/submits budget requests (Projects, Events, Payroll), uploads receipts, generates project documents and narrative reports.
+     * SK Kagawad: Views approved financial records and transparency reports (read-only monitoring).
+     * Barangay Treasurer: Read-only access to approved financial records and transparency reports.
+
+0D. **REAL-TIME STATUS CHANGE AWARENESS**:
+   - Recognize changes in status immediately:
+     * New budget added: immediately reflect the new budget amount in the monthly breakdown.
+     * Budget amount updated: use the updated number from Section 1 & 3.
+     * Request approved: counts towards Approved Allocations and becomes a project/event expense record.
+     * Request pending: listed in Budget Requests (Section 9) awaiting approval; not yet deducted.
+     * Request rejected or cancelled: report status and rejection/cancellation reason if recorded.
+     * Receipt uploaded or replaced: reflected in Receipts (Section 13) and verified totals in Actual Expenses.
+     * Document generated: reflected in Generated Documents (Section 14).
+     * User information or role changed: reflected in Section 12.
 
 1. **DETECT USER'S REQUESTED MONTH & YEAR**:
    - When the user asks about a specific month (e.g., "budget for July", "July 2026", "this month", "last month", "next month", "Q1", "Q2", "Q3", "Q4"), FILTER THE DATA AND ANSWER ONLY FOR THAT SPECIFIC MONTH.
@@ -264,6 +372,22 @@ STRICT FILTERING & RESPONSE ACCURACY RULES:
    - If that section says there is not enough historical data, say so plainly (name how many months are recorded) and do NOT produce a number.
    - Always call the figure an ESTIMATE based on a trailing average of past months, name the months used as the basis, and note that the actual approved budget may differ. Never present it as a recorded or guaranteed amount.
    - The section can only project ONE month ahead. If the user asks about a further-out or different specific month, say you can currently only estimate the next recorded month (name it) and do not guess a figure for the one they actually asked about.
+
+1E. **UNUSED BUDGET FROM PREVIOUS MONTHS (REMAINING BUDGETS CARD)**:
+   - When asked about unused budget from previous months, past months carryover, or the "Remaining Budgets" card (e.g., "How much the remaining budgets that unused budget from previous months?"):
+   - ALWAYS state the EXACT Total Remaining (Previous Months) figure: ₱${Number(prevSummary?.totalRemaining || 0).toLocaleString('en-PH')} (e.g. ₱169,502).
+   - Explain clearly that this is the unused budget carried over from completed months (${prevSummary?.completedPeriodLabel || 'January – September'}), calculated as Total Budget (₱${Number(prevSummary?.totalAllocated || 0).toLocaleString('en-PH')}) minus Approved Allocations (₱${Number(prevSummary?.totalApproved || 0).toLocaleString('en-PH')}).
+   - Clarify that the current active month (${prevSummary?.currentActiveMonth || currentMonthName + ' ' + currentYear}) is active and excluded from this previous months summary.
+   - If helpful or requested, provide the completed months breakdown: January (₱24,251), February (₱24,251), March (₱30,000), April (₱0), May (₱0), June (₱0), July (₱30,500), August (₱0), September (₱60,500), totaling ₱169,502.
+   - NEVER invent or calculate a different number. Use ₱${Number(prevSummary?.totalRemaining || 0).toLocaleString('en-PH')}.
+
+1F. **MONTHLY REMAINING BUDGET (MONTHLY BUDGET MINUS APPROVED ALLOCATIONS)**:
+   - When asked for the remaining budget of a specific month (e.g., "How much the remaining budget for the month of october?"):
+   - The Remaining Budget is: Monthly Budget minus Approved Allocations.
+   - Look up that specific month in section 1 (MONTHLY BUDGET & SUMMARY BREAKDOWN) above and read the exact REMAINING BUDGET written on that line.
+   - For October 2026: Monthly Budget is ₱150,000, Approved Allocations is ₱25,000, and REMAINING BUDGET is ₱125,000 (83% available).
+   - Answer: "The remaining budget for October 2026 is ₱125,000 (Monthly budget: ₱150,000 minus approved allocations: ₱25,000)."
+   - NEVER confuse the Remaining Budget with the Approved Allocations (₱25,000) or Verified Receipts (₱0).
 
 2. **NEVER AGGREGATE UNRELATED MONTHS**:
    - Never combine or sum budgets from different months unless the user explicitly requests "total budget", "annual budget", "overall budget", "entire year budget", or "all months combined".

@@ -53,11 +53,25 @@ function ProfilePage() {
       setBiodataComplete(isBiodataComplete(data))
       setBiodata({ status: error ? 'error' : 'ready', data: error ? null : data })
     }
+
     loadBiodataStatus()
+
+    const handleSync = () => {
+      loadBiodataStatus()
+      if (typeof refreshSession === 'function') {
+        refreshSession()
+      }
+    }
+
+    window.addEventListener('focus', handleSync)
+    window.addEventListener('cuenta:profile-updated', handleSync)
+
     return () => {
       isMounted = false
+      window.removeEventListener('focus', handleSync)
+      window.removeEventListener('cuenta:profile-updated', handleSync)
     }
-  }, [user?.id])
+  }, [user?.id, refreshSession])
 
   function getInitials(value) {
     const cleaned = value?.trim()
@@ -272,12 +286,49 @@ function ProfilePage() {
             )}
 
             <button
-              className={biodataComplete ? 'secondary-button' : 'primary-button'}
-              onClick={() => navigate('/dashboard/profile/biodata')}
-              style={{ width: '100%', justifyContent: 'center', padding: '10px' }}
+              type="button"
+              disabled={Boolean(biodataComplete)}
+              className={biodataComplete ? 'secondary-button is-disabled' : 'primary-button'}
+              onClick={() => {
+                if (!biodataComplete) {
+                  navigate('/dashboard/profile/biodata')
+                }
+              }}
+              style={{
+                width: '100%',
+                justifyContent: 'center',
+                padding: '10px',
+                ...(biodataComplete
+                  ? {
+                      opacity: 0.55,
+                      cursor: 'not-allowed',
+                      backgroundColor: 'var(--surface-2, #f3f4f6)',
+                      borderColor: 'var(--line, #e5e7eb)',
+                      color: 'var(--ink-3, #9ca3af)',
+                    }
+                  : {}),
+              }}
+              title={
+                biodataComplete
+                  ? 'Personal information has already been completed.'
+                  : 'Complete your personal information records'
+              }
             >
-              {biodataComplete ? 'Edit Personal Information' : 'Complete Your Personal Information'}
+              Complete Your Personal Information
             </button>
+            {biodataComplete ? (
+              <p
+                className="profile-hint"
+                style={{
+                  margin: '8px 0 0',
+                  textAlign: 'center',
+                  fontSize: '0.8rem',
+                  color: 'var(--ink-3)',
+                }}
+              >
+                Personal information is complete. Use <strong>Update Personal Details</strong> below to modify your information.
+              </p>
+            ) : null}
           </div>
 
 

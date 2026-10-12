@@ -69,8 +69,8 @@ export default function PrivacyAndTermsModal({ isOpen, onClose, initialTab = 'pr
         className="modal-content"
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 'min(760px, 100%)',
-          maxWidth: '760px',
+          width: 'min(820px, 100%)',
+          maxWidth: '820px',
           maxHeight: '88vh',
           display: 'flex',
           flexDirection: 'column',
@@ -219,24 +219,18 @@ export default function PrivacyAndTermsModal({ isOpen, onClose, initialTab = 'pr
           style={{
             flex: 1,
             overflowY: 'auto',
-            padding: '24px clamp(20px, 4vw, 32px)',
-            fontSize: '0.92rem',
-            lineHeight: 1.65,
-            color: 'var(--ink-2, #40605f)',
+            padding: '28px clamp(24px, 4vw, 40px)',
             backgroundColor: 'var(--surface, #ffffff)',
           }}
         >
           {activeTab === 'privacy' ? (
-            <div className="legal-doc-content" style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+            <div className="legal-doc-content">
               <div
+                className="legal-doc-notice"
                 style={{
-                  padding: '14px 18px',
-                  borderRadius: '10px',
                   backgroundColor: 'var(--accent-soft, #e4f3ec)',
                   border: '1px solid var(--accent-line, #a8d9c4)',
                   color: 'var(--accent, #0e6b4d)',
-                  fontSize: '0.86rem',
-                  lineHeight: 1.5,
                 }}
               >
                 <strong>System Notice:</strong> This Privacy Policy applies to the{' '}
@@ -245,12 +239,10 @@ export default function PrivacyAndTermsModal({ isOpen, onClose, initialTab = 'pr
                 utilized.
               </div>
 
-              {/* 1. Introduction */}
-              <section>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink, #0c2225)' }}>
-                  1. Introduction
-                </h3>
-                <p style={{ margin: 0 }}>
+              {/* Introduction */}
+              <section className="legal-doc-section">
+                <h3>Introduction</h3>
+                <p>
                   <strong>Cuenta</strong> is a specialized, web-based financial management system engineered to help the
                   Sangguniang Kabataan (SK) efficiently monitor SK budget allocations, manage financial records, track
                   procurement and disbursement documentation, and foster public transparency and accountability within the
@@ -259,16 +251,14 @@ export default function PrivacyAndTermsModal({ isOpen, onClose, initialTab = 'pr
                 </p>
               </section>
 
-              {/* 2. Information Collected */}
-              <section>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink, #0c2225)' }}>
-                  2. Information Collected
-                </h3>
-                <p style={{ margin: '0 0 8px' }}>
+              {/* Information We Collect */}
+              <section className="legal-doc-section">
+                <h3>Information We Collect</h3>
+                <p>
                   The system collects and maintains the following categories of information strictly for official SK
                   operations:
                 </p>
-                <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <ul>
                   <li><strong>Full Name:</strong> For user identification and signature attribution on reports.</li>
                   <li><strong>Email Address:</strong> Used for account sign-in, multi-factor OTP verification, and notices.</li>
                   <li><strong>User Role:</strong> Designating specific access privileges (SK Chairman, SK Treasurer, SK Kagawad, or Barangay Treasurer).</li>
@@ -277,21 +267,19 @@ export default function PrivacyAndTermsModal({ isOpen, onClose, initialTab = 'pr
                   <li><strong>Budget Requests:</strong> Project, event, and honoraria requisitions submitted for review.</li>
                   <li><strong>Approved Records:</strong> Official allocation figures, committee classifications, and disbursement approvals.</li>
                   <li><strong>Uploaded Documents:</strong> Resolutions, CBYDP, ABYIP, minutes of meetings, transmittals, and purchase orders.</li>
-                  <li><strong>Uploaded Receipts & Invoices:</strong> Supporting official receipts, delivery receipts, and OCR verification metadata.</li>
-                  <li><strong>Activity Logs & Audit Trails:</strong> Cryptographic and chronological transaction events.</li>
+                  <li><strong>Uploaded Receipts &amp; Invoices:</strong> Supporting official receipts, delivery receipts, and OCR verification metadata.</li>
+                  <li><strong>Activity Logs &amp; Audit Trails:</strong> Cryptographic and chronological transaction events.</li>
                   <li><strong>System Usage Information:</strong> Diagnostics and security telemetry required for system integrity.</li>
                 </ul>
               </section>
 
-              {/* 3. Purpose of Data Collection */}
-              <section>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink, #0c2225)' }}>
-                  3. Purpose of Data Collection
-                </h3>
-                <p style={{ margin: '0 0 8px' }}>
+              {/* How We Use Your Information */}
+              <section className="legal-doc-section">
+                <h3>How We Use Your Information</h3>
+                <p>
                   The data collected is processed exclusively for legitimate government and public administrative purposes:
                 </p>
-                <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <ul>
                   <li><strong>Authenticate Users:</strong> Verifying authorized access and blocking unauthorized entries.</li>
                   <li><strong>Manage User Accounts and Roles:</strong> Enforcing separation of duties and administrative controls.</li>
                   <li><strong>Process Budget Requests:</strong> Validating requests against approved monthly allocation ceilings.</li>
@@ -302,15 +290,13 @@ export default function PrivacyAndTermsModal({ isOpen, onClose, initialTab = 'pr
                 </ul>
               </section>
 
-              {/* 4. Data Protection */}
-              <section>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink, #0c2225)' }}>
-                  4. Data Protection
-                </h3>
-                <p style={{ margin: '0 0 8px' }}>
+              {/* Data Protection */}
+              <section className="legal-doc-section">
+                <h3>Data Protection</h3>
+                <p>
                   Cuenta protects user data and financial documentation through a comprehensive multi-layered security framework:
                 </p>
-                <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <ul>
                   <li><strong>Secure Authentication:</strong> Password hashing via bcrypt, bot detection with Google reCAPTCHA, and email-based one-time passwords (OTP).</li>
                   <li><strong>Role-Based Access Control (RBAC):</strong> Strict boundary enforcement preventing unauthorized privilege escalation.</li>
                   <li><strong>Encrypted Communication:</strong> End-to-end transport layer security (TLS/HTTPS) across all network exchanges.</li>
@@ -319,15 +305,13 @@ export default function PrivacyAndTermsModal({ isOpen, onClose, initialTab = 'pr
                 </ul>
               </section>
 
-              {/* 5. User Rights */}
-              <section>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink, #0c2225)' }}>
-                  5. User Rights
-                </h3>
-                <p style={{ margin: '0 0 8px' }}>
+              {/* User Rights */}
+              <section className="legal-doc-section">
+                <h3>User Rights</h3>
+                <p>
                   In accordance with the Data Privacy Act of 2012 (RA 10173), registered users have the right to:
                 </p>
-                <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <ul>
                   <li>View their registered account details and historical system activities.</li>
                   <li>Update their profile credentials, contact information, and security passwords.</li>
                   <li>Request corrections to any inaccurate, outdated, or incomplete records.</li>
@@ -335,12 +319,10 @@ export default function PrivacyAndTermsModal({ isOpen, onClose, initialTab = 'pr
                 </ul>
               </section>
 
-              {/* 6. Data Retention */}
-              <section>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink, #0c2225)' }}>
-                  6. Data Retention
-                </h3>
-                <p style={{ margin: 0 }}>
+              {/* Data Retention */}
+              <section className="legal-doc-section">
+                <h3>Data Retention</h3>
+                <p>
                   Financial records, budget allocations, uploaded documents, scanned receipts, and audit trail logs are
                   retained in accordance with Commission on Audit (COA) accounting rules, Department of the Interior and
                   Local Government (DILG) directives, and the National Historical and Records Management guidelines.
@@ -349,62 +331,61 @@ export default function PrivacyAndTermsModal({ isOpen, onClose, initialTab = 'pr
                 </p>
               </section>
 
-              {/* 7. Contact Information */}
-              <section style={{ backgroundColor: 'var(--surface-2, #eaf2ef)', padding: '16px 20px', borderRadius: '12px' }}>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink, #0c2225)' }}>
-                  7. Contact Information
-                </h3>
-                <p style={{ margin: '0 0 8px' }}>
+              {/* Contact Information */}
+              <section
+                className="legal-doc-section"
+                style={{
+                  backgroundColor: 'var(--surface-2, #eaf2ef)',
+                  padding: '18px 22px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--line, #d5e3de)',
+                }}
+              >
+                <h3>Contact Information</h3>
+                <p>
                   For inquiries, data verification, or privacy-related concerns regarding the Cuenta system, please contact
                   the Sangguniang Kabataan administration:
                 </p>
-                <div style={{ display: 'grid', gap: '4px', fontSize: '0.88rem' }}>
+                <div style={{ display: 'grid', gap: '6px', fontSize: '0.9rem', marginTop: '6px' }}>
                   <div><strong>SK Chairman:</strong> {activeChairman}</div>
-                  <div><strong>System Administration:</strong> Cuenta IT & Secretariat Team</div>
-                  <div><strong>Office Location:</strong> Barangay Hall & Sangguniang Kabataan Office</div>
+                  <div><strong>System Administration:</strong> Cuenta IT &amp; Secretariat Team</div>
+                  <div><strong>Office Location:</strong> Barangay Hall &amp; Sangguniang Kabataan Office</div>
                 </div>
               </section>
             </div>
           ) : (
-            <div className="legal-doc-content" style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+            <div className="legal-doc-content">
               <div
+                className="legal-doc-notice"
                 style={{
-                  padding: '14px 18px',
-                  borderRadius: '10px',
                   backgroundColor: 'var(--warn-soft, #fcf1e1)',
                   border: '1px solid var(--warn, #9a5b12)40',
                   color: 'var(--warn, #9a5b12)',
-                  fontSize: '0.86rem',
-                  lineHeight: 1.5,
                 }}
               >
-                <strong>Terms of Service:</strong> Please review these Terms & Conditions carefully. All authorized
+                <strong>Terms of Service:</strong> Please review these Terms &amp; Conditions carefully. All authorized
                 personnel accessing Cuenta must comply with these operational guidelines and statutory responsibilities.
               </div>
 
-              {/* 1. Acceptance of Terms */}
-              <section>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink, #0c2225)' }}>
-                  1. Acceptance of Terms
-                </h3>
-                <p style={{ margin: 0 }}>
+              {/* Acceptance of Terms */}
+              <section className="legal-doc-section">
+                <h3>Acceptance of Terms</h3>
+                <p>
                   By accessing, browsing, or signing in to <strong>Cuenta: SK Budget Monitoring and Documentation Tracking with AI Analysis</strong>,
-                  you explicitly agree to abide by these Terms & Conditions, the system Privacy Policy, and all applicable
+                  you explicitly agree to abide by these Terms &amp; Conditions, the system Privacy Policy, and all applicable
                   statutory laws and barangay resolutions governing youth governance and financial reporting. If you do not
                   agree, you must refrain from accessing this platform.
                 </p>
               </section>
 
-              {/* 2. Authorized Use */}
-              <section>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink, #0c2225)' }}>
-                  2. Authorized Use
-                </h3>
-                <p style={{ margin: '0 0 8px' }}>
+              {/* Authorized Use */}
+              <section className="legal-doc-section">
+                <h3>Authorized Use</h3>
+                <p>
                   Access to the authenticated administrative portal is strictly restricted to designated officials who have
                   been issued valid credentials. Permitted roles and authorization scopes include:
                 </p>
-                <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <ul>
                   <li>
                     <strong>SK Chairman:</strong> Full executive administration, user account creation and management,
                     budget request approvals, system-wide analytics, and audit log supervision.
@@ -428,13 +409,11 @@ export default function PrivacyAndTermsModal({ isOpen, onClose, initialTab = 'pr
                 </ul>
               </section>
 
-              {/* 3. User Responsibilities */}
-              <section>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink, #0c2225)' }}>
-                  3. User Responsibilities
-                </h3>
-                <p style={{ margin: '0 0 8px' }}>All authorized users must:</p>
-                <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {/* User Responsibilities */}
+              <section className="legal-doc-section">
+                <h3>User Responsibilities</h3>
+                <p>All authorized users must:</p>
+                <ul>
                   <li>Provide accurate, truthful, and up-to-date data for all financial entries and requests.</li>
                   <li>Maintain the strict confidentiality of their personal login credentials, OTP codes, and access sessions.</li>
                   <li>Ensure the system is utilized exclusively for legitimate, official Sangguniang Kabataan purposes.</li>
@@ -443,13 +422,11 @@ export default function PrivacyAndTermsModal({ isOpen, onClose, initialTab = 'pr
                 </ul>
               </section>
 
-              {/* 4. Prohibited Activities */}
-              <section>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink, #0c2225)' }}>
-                  4. Prohibited Activities
-                </h3>
-                <p style={{ margin: '0 0 8px' }}>Users are expressly forbidden from engaging in the following actions:</p>
-                <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {/* Prohibited Activities */}
+              <section className="legal-doc-section">
+                <h3>Prohibited Activities</h3>
+                <p>Users are expressly forbidden from engaging in the following actions:</p>
+                <ul>
                   <li>Modifying, falsifying, or deleting financial requests, budget figures, or receipts without legitimate administrative justification.</li>
                   <li>Attempting to bypass security barriers or access modules outside their assigned role permissions.</li>
                   <li>Sharing, leasing, or transferring system credentials to unauthorized individuals.</li>
@@ -458,24 +435,20 @@ export default function PrivacyAndTermsModal({ isOpen, onClose, initialTab = 'pr
                 </ul>
               </section>
 
-              {/* 5. System Availability */}
-              <section>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink, #0c2225)' }}>
-                  5. System Availability
-                </h3>
-                <p style={{ margin: 0 }}>
+              {/* System Availability */}
+              <section className="legal-doc-section">
+                <h3>System Availability</h3>
+                <p>
                   While the administration undertakes reasonable efforts to ensure 24/7 service reliability, the platform
                   may experience temporary downtime for scheduled maintenance, database backups, security patches, or
                   unforeseen technical disruptions. Advance notice will be provided whenever possible.
                 </p>
               </section>
 
-              {/* 6. Limitation of Liability */}
-              <section>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink, #0c2225)' }}>
-                  6. Limitation of Liability
-                </h3>
-                <p style={{ margin: 0 }}>
+              {/* Limitation of Liability */}
+              <section className="legal-doc-section">
+                <h3>Limitation of Liability</h3>
+                <p>
                   The developers, capstone researchers, and barangay administrators shall not be held liable for incidental,
                   indirect, or consequential damages resulting from unauthorized account compromise due to user negligence,
                   local internet connection failures, hardware malfunctions, or circumstances beyond reasonable operational
@@ -484,13 +457,11 @@ export default function PrivacyAndTermsModal({ isOpen, onClose, initialTab = 'pr
                 </p>
               </section>
 
-              {/* 7. Updates to the Policy */}
-              <section>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink, #0c2225)' }}>
-                  7. Updates to the Policy
-                </h3>
-                <p style={{ margin: 0 }}>
-                  These Terms & Conditions and the accompanying Privacy Policy may be updated periodically to accommodate
+              {/* Policy Updates */}
+              <section className="legal-doc-section">
+                <h3>Policy Updates</h3>
+                <p>
+                  These Terms &amp; Conditions and the accompanying Privacy Policy may be updated periodically to accommodate
                   system enhancements, legislative updates, or revised auditing guidelines. Continued utilization of the
                   system following any posted modifications constitutes unconditional agreement to the updated provisions.
                 </p>

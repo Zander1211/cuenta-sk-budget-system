@@ -2,10 +2,12 @@ import React, { useState, useRef, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, Bot, Send } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
-import { useBudget } from '../context/BudgetContext'
+import { useBudget, mapExpenseRow, mapRequestRow } from '../context/BudgetContext'
+import { mapBudgetRow } from '../services/monthlyBudget'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
-import { materializeActualExpenseRows, summarizeApprovedBudgetFinancials } from '../utils/projectEventFinancials'
+import { materializeActualExpenseRows, summarizeApprovedBudgetFinancials, buildVerifiedReceiptTotals } from '../utils/projectEventFinancials'
+import { getBudgetTotalForPeriod, getApprovedAllocationTotal } from '../utils/budgetUtils'
 import { useActiveSkChairmanName } from '../hooks/useActiveSkChairmanName'
 
 const PAGE_NAMES = {
@@ -237,7 +239,7 @@ function ChatWidgetInner() {
   const inputRef = useRef(null)
 
   const location = useLocation()
-  const { requests, expenses, totals, budgets, verifiedReceiptTotals } = useBudget()
+  const { requests, expenses, totals, budgets, verifiedReceiptTotals, refreshAllBudgetData } = useBudget()
 
   const approvedFinancials = summarizeApprovedBudgetFinancials(expenses, verifiedReceiptTotals)
   const actualExpenseRows = materializeActualExpenseRows(expenses, verifiedReceiptTotals)
@@ -325,13 +327,25 @@ function ChatWidgetInner() {
     'July', 'August', 'September', 'October', 'November', 'December'
   ]
 
-  function buildSystemContext() {
+  function buildSystemContext(overrides = {}) {
     const currentYear = new Date().getFullYear()
     const currentMonthNum = new Date().getMonth() + 1
     const currentMonthName = MONTH_NAMES[currentMonthNum - 1]
 
+    const effectiveBudgets = overrides.budgetsData || budgets || []
+    const effectiveExpenses = overrides.expensesData || expenses || []
+    const effectiveRequests = overrides.requestsData || requests || []
+    const effectiveReceiptTotals = overrides.verifiedReceiptTotalsData || verifiedReceiptTotals || {}
+    const effectiveChairman = overrides.skChairmanName || skChairmanName || null
+    const effectiveTreasurer = overrides.skTreasurerName || skTreasurerName || null
+    const activeOfficials = overrides.activeOfficials || []
+    const recentReceipts = overrides.recentReceipts || []
+    const recentDocuments = overrides.recentDocuments || []
+    const recentActivityLogs = overrides.recentActivityLogs || []
+    const reportSummaries = overrides.reportSummaries || []
+
     // Group budgets by month and year
-    const budgetsList = (budgets || []).map(b => {
+    const budgetsList = (effectiveBudgets || []).map(b => {
       const mNum = Number(b.month)
       const mName = typeof b.month === 'number' || !isNaN(mNum) ? MONTH_NAMES[mNum - 1] : String(b.month)
       return {
@@ -344,24 +358,12 @@ function ChatWidgetInner() {
       }
     })
 
-    // Group expenses by month and year.
-    //
-    // type / projectStatus / isAdditional used to be dropped here, which is
-    // why Cue answered "No approved projects are recorded in the system" while
-    // the Projects & Events page listed four. An approved request becomes an
-    // expense row, so these ARE the projects and events — but without `type`
-    // nothing in the payload was identifiable as a project or an event, and
-    // without `projectStatus` nothing could be reported as Ongoing/Completed.
-    const expensesList = actualExpenseRows.map(e => {
-      /*
-       * Matches useBudgetCalculations' bucketing (BudgetContext.jsx), which is
-       * what MainDashboardPage/AiAnalysisPage use for their own monthly
-       * totals: eventDate first, then date, then approval/creation time. The
-       * expense's raw `month`/`year` columns are NOT used here on purpose —
-       * they are set once at submission and can go stale relative to the
-       * event date, and using them would make Cue's month bucketing diverge
-       * from what the rest of the app actually displays for "this month".
-       */
+    const dynActualExpenseRows = materializeActualExpenseRows(effectiveExpenses, effectiveReceiptTotals)
+      .filter((expense) => !expense.isAdditional && !expense.archivedAt)
+    const dynApprovedFinancials = summarizeApprovedBudgetFinancials(effectiveExpenses, effectiveReceiptTotals)
+    const dynActualExpenseTotal = dynApprovedFinancials.totalExpenses
+
+    const expensesList = dynActualExpenseRows.map(e => {
       const dateVal = e.eventDate || e.date || e.approvedAt || e.createdAt
       const d = dateVal ? new Date(dateVal) : null
       const mNum = d && !isNaN(d.getTime()) ? d.getMonth() + 1 : null
@@ -389,7 +391,7 @@ function ChatWidgetInner() {
     })
 
     // Group requests by month and year
-    const requestsList = (requests || []).map(r => {
+    const requestsList = (effectiveRequests || []).map(r => {
       const dateVal = r.date || r.eventDate || r.approvedAt || r.createdAt
       const d = dateVal ? new Date(dateVal) : null
       const mNum = d && !isNaN(d.getTime()) ? d.getMonth() + 1 : null
@@ -403,7 +405,9 @@ function ChatWidgetInner() {
         category: r.category || 'Other',
         month: mNum ? MONTH_NAMES[mNum - 1] : null,
         monthNumber: mNum,
-        year: yNum
+        year: yNum,
+        rejectionReason: r.rejectionReason || null,
+        cancellationReason: r.cancellationReason || null,
       }
     })
 
@@ -415,26 +419,29 @@ function ChatWidgetInner() {
       for (let m = 1; m <= 12; m++) {
         const mName = MONTH_NAMES[m - 1]
         const mBudgets = budgetsList.filter(b => b.year === yr && (b.monthNumber === m || b.month === mName))
-        const mBudgetTotal = mBudgets.reduce((sum, b) => sum + b.amount, 0)
+        const mBudgetTotal = getBudgetTotalForPeriod(effectiveBudgets, m, yr)
+        const mApprovedTotal = getApprovedAllocationTotal(effectiveExpenses, m, yr)
+        const mRemainingBudget = mBudgetTotal - mApprovedTotal
         
         const workingBudget = summarizeApprovedBudgetFinancials(
-          expenses,
-          verifiedReceiptTotals,
+          effectiveExpenses,
+          effectiveReceiptTotals,
           { view: 'monthly', year: yr, month: m },
         )
         const mExpenseTotal = workingBudget.totalExpenses
-        const mRemaining = workingBudget.remainingBudget
 
-        if (mBudgetTotal > 0 || workingBudget.records.length > 0) {
+        if (mBudgetTotal > 0 || mApprovedTotal > 0 || workingBudget.records.length > 0) {
           monthlySummaries.push({
             month: mName,
             monthNumber: m,
             year: yr,
             allocatedBudget: mBudgetTotal,
-            approvedBudget: workingBudget.totalApprovedBudget,
+            approvedBudget: mApprovedTotal,
             totalExpenses: mExpenseTotal,
-            remainingBalance: mRemaining,
-            remainingMonthlyAllocation: mBudgetTotal - workingBudget.totalApprovedBudget,
+            actualExpenses: mExpenseTotal,
+            remainingBalance: mRemainingBudget,
+            remainingBudget: mRemainingBudget,
+            remainingMonthlyAllocation: mRemainingBudget,
             sources: mBudgets.map(b => b.source).join(', ') || 'Regular SK Budget',
             approvedRecordCount: workingBudget.records.length,
           })
@@ -442,13 +449,63 @@ function ChatWidgetInner() {
       }
     }
 
-    /*
-     * Trend-based prediction for the next unrecorded month, using a trailing
-     * average of the most recent months that actually have budget or expense
-     * data. Computed once here — deterministically, not by the LLM — so Cue
-     * never averages figures itself; it only reads the result (same reason
-     * remainingBalance is precomputed per rule 3 in the edge function prompt).
-     */
+    // Previous Months Unused Budget (matches "Remaining Budgets" card & modal on Dashboard)
+    // Only includes completed past months strictly prior to the current active month
+    const previousMonths = []
+    for (let m = 1; m < currentMonthNum; m++) {
+      const mName = MONTH_NAMES[m - 1]
+      const allocated = getBudgetTotalForPeriod(effectiveBudgets, m, currentYear)
+      const approved = getApprovedAllocationTotal(effectiveExpenses, m, currentYear)
+      const remaining = allocated - approved
+      let status = 'Remaining'
+      if (allocated <= 0) {
+        status = 'No Budget Allocated'
+      } else if (remaining === 0) {
+        status = 'Fully Utilized'
+      } else if (remaining < 0) {
+        status = 'Over Budget'
+      } else {
+        status = 'Remaining'
+      }
+      previousMonths.push({
+        month: mName,
+        monthNumber: m,
+        year: currentYear,
+        allocatedBudget: allocated,
+        approvedBudget: approved,
+        remainingBudget: remaining,
+        status,
+      })
+    }
+    const previousMonthsRemainingTotal = Math.max(0, previousMonths.reduce((sum, m) => sum + m.remainingBudget, 0))
+    const previousMonthsAllocatedTotal = previousMonths.reduce((sum, m) => sum + m.allocatedBudget, 0)
+    const previousMonthsApprovedTotal = previousMonths.reduce((sum, m) => sum + m.approvedBudget, 0)
+    const previousMonthsSummary = {
+      totalRemaining: previousMonthsRemainingTotal,
+      totalAllocated: previousMonthsAllocatedTotal,
+      totalApproved: previousMonthsApprovedTotal,
+      completedMonthsCount: previousMonths.length,
+      completedPeriodLabel: previousMonths.length > 0 ? `${previousMonths[0].month} – ${previousMonths[previousMonths.length - 1].month}` : 'None',
+      currentActiveMonth: `${currentMonthName} ${currentYear}`,
+      breakdown: previousMonths,
+    }
+
+    // Total approved allocations across all non-archived non-cancelled records
+    const totalApprovedAllocationsSum = (effectiveExpenses || []).reduce((sum, exp) => {
+      if (exp.archivedAt || exp.status === 'Cancelled' || exp.isAdditional) return sum
+      if (!['Approved', 'Released'].includes(exp.status || 'Approved')) return sum
+      return sum + Number(exp.approvedBudget ?? exp.amount ?? 0)
+    }, 0)
+
+    const currentMonthAllocated = getBudgetTotalForPeriod(effectiveBudgets, currentMonthNum, currentYear)
+    const currentMonthApproved = getApprovedAllocationTotal(effectiveExpenses, currentMonthNum, currentYear)
+    const currentMonthRemaining = currentMonthAllocated - currentMonthApproved
+
+    const effectiveTotalBudget = (effectiveBudgets || []).reduce((sum, b) => sum + Number(b.amount || 0), 0)
+    const dynUtilization = effectiveTotalBudget > 0
+      ? Math.round((totalApprovedAllocationsSum / effectiveTotalBudget) * 100)
+      : 0
+
     const PREDICTION_WINDOW = 3
     const MIN_MONTHS_FOR_PREDICTION = 2
     const historicalMonths = monthlySummaries
@@ -485,25 +542,169 @@ function ChatWidgetInner() {
       currentYear,
       currentMonthName,
       prediction,
-      // SK role assignments — lets Cue answer "who is the SK Chairman" accurately
-      skChairman: skChairmanName || null,
-      skTreasurer: skTreasurerName || null,
+      skChairman: effectiveChairman,
+      skTreasurer: effectiveTreasurer,
+      activeOfficials,
+      recentReceipts,
+      recentDocuments,
+      recentActivityLogs,
+      reportSummaries,
       totals: {
-        // Total Budget = sum of all monthly budgets (SK Treasurer entries)
-        totalBudget: totals?.totalBudget || 0,
-        // Total Approved Allocations = sum of all approved budget requests
-        totalApprovedAllocations: totals?.totalApprovedAllocations || 0,
-        totalExpenses: actualExpenseTotal,
-        remaining: totals?.remaining || 0,
-        remainingMonthlyAllocation: totals?.remainingMonthlyAllocation || 0,
-        budgetUtilization,
+        totalBudget: effectiveTotalBudget,
+        totalApprovedAllocations: totalApprovedAllocationsSum,
+        totalExpenses: dynActualExpenseTotal,
+        remaining: effectiveTotalBudget - totalApprovedAllocationsSum,
+        remainingMonthlyAllocation: currentMonthRemaining,
+        previousMonthsRemaining: previousMonthsRemainingTotal,
+        budgetUtilization: dynUtilization,
       },
+      previousMonthsSummary,
       monthlySummaries,
       allBudgets: budgetsList,
       allExpenses: expensesList,
       allRequests: requestsList,
-      topCategories: computeTopCategories(actualExpenseRows),
+      topCategories: computeTopCategories(dynActualExpenseRows),
     }
+  }
+
+  /**
+   * Dynamically queries the latest data across all Cuenta database tables
+   * right before generating a chatbot response, guaranteeing real-time awareness.
+   */
+  async function fetchDynamicSystemContext() {
+    let freshBudgets = budgets
+    let freshExpenses = expenses
+    let freshRequests = requests
+    let freshReceipts = []
+    let freshDocs = []
+    let freshAccounts = []
+    let freshAudit = []
+    let freshReports = []
+
+    try {
+      const [
+        budgetsRes,
+        expensesRes,
+        requestsRes,
+        receiptsRes,
+        docsRes,
+        accountsRes,
+        auditRes,
+        reportsRes,
+      ] = await Promise.allSettled([
+        supabase.from('budgets').select('*').order('year', { ascending: false }).order('month', { ascending: false }),
+        supabase.from('expenses').select('*').order('created_at', { ascending: false }).limit(200),
+        supabase.from('budget_requests').select('*').order('created_at', { ascending: false }),
+        supabase.from('receipt_records').select('*').order('uploaded_at', { ascending: false }).limit(100),
+        supabase.from('documents').select('id, name, type, generated_by, date_generated, related_entity_id').is('archived_at', null).order('date_generated', { ascending: false }).limit(50),
+        supabase.from('created_accounts').select('id, full_name, email, role, is_active, created_at').order('created_at', { ascending: false }),
+        supabase.from('audit_trail').select('id, action, action_type, user_name, user_role, description, module, created_at').order('created_at', { ascending: false }).limit(30),
+        supabase.from('report_summaries').select('id, report_id, model, summary, updated_at').order('updated_at', { ascending: false }).limit(10),
+      ])
+
+      if (budgetsRes.status === 'fulfilled' && !budgetsRes.value.error && Array.isArray(budgetsRes.value.data)) {
+        freshBudgets = budgetsRes.value.data.map(mapBudgetRow)
+      }
+      if (expensesRes.status === 'fulfilled' && !expensesRes.value.error && Array.isArray(expensesRes.value.data)) {
+        freshExpenses = expensesRes.value.data.map(mapExpenseRow)
+      }
+      if (requestsRes.status === 'fulfilled' && !requestsRes.value.error && Array.isArray(requestsRes.value.data)) {
+        freshRequests = requestsRes.value.data.map(mapRequestRow)
+      }
+      if (receiptsRes.status === 'fulfilled' && !receiptsRes.value.error && Array.isArray(receiptsRes.value.data)) {
+        freshReceipts = receiptsRes.value.data
+      }
+      if (docsRes.status === 'fulfilled' && !docsRes.value.error && Array.isArray(docsRes.value.data)) {
+        freshDocs = docsRes.value.data
+      }
+      if (accountsRes.status === 'fulfilled' && !accountsRes.value.error && Array.isArray(accountsRes.value.data)) {
+        freshAccounts = accountsRes.value.data
+      }
+      if (auditRes.status === 'fulfilled' && !auditRes.value.error && Array.isArray(auditRes.value.data)) {
+        freshAudit = auditRes.value.data
+      }
+      if (reportsRes.status === 'fulfilled' && !reportsRes.value.error && Array.isArray(reportsRes.value.data)) {
+        freshReports = reportsRes.value.data
+      }
+    } catch (err) {
+      console.warn('[Cue] Error dynamically retrieving latest database records:', err)
+    }
+
+    if (typeof refreshAllBudgetData === 'function') {
+      refreshAllBudgetData().catch(() => {})
+    }
+
+    const dynamicVerifiedReceiptTotals = freshReceipts.length > 0
+      ? buildVerifiedReceiptTotals(freshReceipts)
+      : verifiedReceiptTotals
+
+    const activeChairmanAcc = freshAccounts.find(a => a.role === 'SK Chairman' && a.is_active !== false)
+    const activeTreasurerAcc = freshAccounts.find(a => a.role === 'SK Treasurer' && a.is_active !== false)
+    const activeChairmanName = activeChairmanAcc?.full_name?.trim() || skChairmanName || 'Not yet assigned'
+    const activeTreasurerName = activeTreasurerAcc?.full_name?.trim() || skTreasurerName || 'Not yet assigned'
+
+    const activeOfficials = freshAccounts
+      .filter(a => a.is_active !== false)
+      .map(a => ({
+        name: a.full_name,
+        role: a.role,
+        email: a.email,
+      }))
+
+    const recentReceipts = freshReceipts.slice(0, 20).map(r => {
+      const meta = r.ocr_metadata || {}
+      return {
+        id: r.id,
+        fileName: r.file_name || 'Receipt',
+        recordId: r.record_id,
+        merchant: meta.merchantName || meta.supplier || 'N/A',
+        amount: Number(meta.totalAmount || 0),
+        isVerified: !!(r.ocr_verified_at || r.ocrVerifiedAt),
+        verifiedBy: r.ocr_verified_by || 'N/A',
+        uploadedAt: r.uploaded_at,
+      }
+    })
+
+    const recentDocuments = freshDocs.slice(0, 20).map(d => ({
+      id: d.id,
+      name: d.name || 'Untitled Document',
+      type: d.type || 'Document',
+      generatedBy: d.generated_by || 'SK Official',
+      dateGenerated: d.date_generated,
+      relatedEntityId: d.related_entity_id,
+    }))
+
+    const recentActivityLogs = freshAudit.slice(0, 25).map(a => ({
+      id: a.id,
+      action: a.action,
+      actionType: a.action_type || a.action,
+      user: a.user_name || 'Official',
+      role: a.user_role || '',
+      description: a.description || '',
+      module: a.module || '',
+      date: a.created_at,
+    }))
+
+    const reportSummaries = freshReports.map(rep => ({
+      id: rep.id,
+      reportId: rep.report_id,
+      summary: typeof rep.summary === 'string' ? rep.summary.slice(0, 500) : '',
+      updatedAt: rep.updated_at,
+    }))
+
+    return buildSystemContext({
+      budgetsData: freshBudgets,
+      expensesData: freshExpenses,
+      requestsData: freshRequests,
+      verifiedReceiptTotalsData: dynamicVerifiedReceiptTotals,
+      skChairmanName: activeChairmanName,
+      skTreasurerName: activeTreasurerName,
+      activeOfficials,
+      recentReceipts,
+      recentDocuments,
+      recentActivityLogs,
+      reportSummaries,
+    })
   }
 
   const CUENTA_SCOPE_RESPONSE = `I'm Cue, the AI assistant for the Cuenta: SK Budget Monitoring and Document Tracking with AI Analysis system. I can only assist with questions related to this system, such as budgets, expenses, projects, events, payroll, documents, reports, AI Analysis, and system features. Please ask a question related to the Cuenta system.`
@@ -646,6 +847,131 @@ function ChatWidgetInner() {
 
     if (mentionsRecordNoun && hasListingCue && !isExpenseQuery && !isRemainingQuery) {
       return buildProjectListing(allExpenses, allRequests, targetMonth, targetYear, currentYear, text)
+    }
+
+    // -------------------------------------------------------------
+    // RULE 0: PREVIOUS MONTHS UNUSED BUDGET ("Remaining Budgets" card & breakdown modal)
+    // -------------------------------------------------------------
+    const isPreviousMonthsQuery = /\b(previous month|previous months|past month|past months|prior month|prior months|unused budget|remaining budgets|carried over|carryover)\b/.test(text)
+    if (isPreviousMonthsQuery) {
+      const prev = systemCtx.previousMonthsSummary
+      if (prev && prev.totalRemaining !== undefined) {
+        const fmt = (n) => `₱${Number(n).toLocaleString('en-PH')}`
+        let reply = `The total unused (remaining) budget from the months prior to ${systemCtx.currentMonthName || 'October'} ${systemCtx.currentYear || currentYear} is ${fmt(prev.totalRemaining)}.\n\n`
+        reply += `This represents the unused budget carried over from ${prev.completedMonthsCount} completed months (${prev.completedPeriodLabel}) with a total budget of ${fmt(prev.totalAllocated)} minus approved allocations of ${fmt(prev.totalApproved)}. The current active month (${prev.currentActiveMonth}) is excluded from this summary.\n\n`
+        reply += `Completed Months Breakdown:\n`
+        for (const row of prev.breakdown || []) {
+          reply += `• ${row.month}: Total Budget ${fmt(row.allocatedBudget)} | Approved ${fmt(row.approvedBudget)} | Remaining ${fmt(row.remainingBudget)} (${row.status})\n`
+        }
+        return reply.trim()
+      }
+    }
+
+    // -------------------------------------------------------------
+    // RULE 0B: DYNAMIC SYSTEM ROLES & OFFICIALS
+    // -------------------------------------------------------------
+    if (/\b(sk chairman|chairman|punong barangay|sk treasurer|treasurer|sk secretary|secretary|sk kagawad|kagawad|officials?|accounts?|user accounts?|who is the chairman|who is the sk chairman|who is the treasurer|who is the sk treasurer|who is the secretary)\b/.test(text)) {
+      if (text.includes('chairman')) {
+        if (systemCtx.skChairman && systemCtx.skChairman !== 'Not yet assigned') {
+          return `The current active SK Chairman is ${systemCtx.skChairman}.`
+        }
+        return `I could not find the latest record for this information. Please check the related module or try again.`
+      }
+      if (text.includes('treasurer')) {
+        if (systemCtx.skTreasurer && systemCtx.skTreasurer !== 'Not yet assigned') {
+          return `The current active SK Treasurer is ${systemCtx.skTreasurer}.`
+        }
+        return `I could not find the latest record for this information. Please check the related module or try again.`
+      }
+      if (text.includes('secretary')) {
+        const sec = (systemCtx.activeOfficials || []).find(o => o.role && o.role.toLowerCase().includes('secretary'))
+        if (sec) {
+          return `The current active SK Secretary is ${sec.name}.`
+        }
+        return `I could not find the latest record for this information. Please check the related module or try again.`
+      }
+      if (systemCtx.activeOfficials && systemCtx.activeOfficials.length > 0) {
+        let reply = `Here are the currently active registered SK officials in the Cuenta system:\n`
+        for (const off of systemCtx.activeOfficials) {
+          reply += `• ${off.role}: ${off.name} (${off.email || 'No email'})\n`
+        }
+        return reply.trim()
+      }
+      return `I could not find the latest record for this information. Please check the related module or try again.`
+    }
+
+    // -------------------------------------------------------------
+    // RULE 0C: RECEIPTS & DOCUMENTS & ACTIVITY LOGS
+    // -------------------------------------------------------------
+    if (/\b(receipts?|uploaded receipt|ocr|receipt records?)\b/.test(text) && !isRemainingQuery && !isExpenseQuery) {
+      if (systemCtx.recentReceipts && systemCtx.recentReceipts.length > 0) {
+        let reply = `Here are the latest receipt records:\n`
+        for (const r of systemCtx.recentReceipts.slice(0, 8)) {
+          reply += `• "${r.fileName}" — Merchant: ${r.merchant} | Amount: ₱${Number(r.amount).toLocaleString('en-PH')} | Status: ${r.isVerified ? 'OCR Verified' : 'Pending Verification'}\n`
+        }
+        return reply.trim()
+      }
+      return `I could not find the latest record for this information. Please check the related module or try again.`
+    }
+
+    if (/\b(documents?|generated document|narrative report)\b/.test(text) && !isRemainingQuery && !isExpenseQuery) {
+      if (systemCtx.recentDocuments && systemCtx.recentDocuments.length > 0) {
+        let reply = `Here are the latest generated documents:\n`
+        for (const d of systemCtx.recentDocuments.slice(0, 8)) {
+          reply += `• "${d.name}" (${d.type}) — Generated by ${d.generatedBy} on ${d.dateGenerated ? new Date(d.dateGenerated).toLocaleDateString('en-PH') : 'recently'}\n`
+        }
+        return reply.trim()
+      }
+      return `I could not find the latest record for this information. Please check the related module or try again.`
+    }
+
+    if (/\b(activity logs?|audit trail|recent activities?|recent actions?|logs?)\b/.test(text)) {
+      if (systemCtx.recentActivityLogs && systemCtx.recentActivityLogs.length > 0) {
+        let reply = `Here are the recent system activity logs:\n`
+        for (const a of systemCtx.recentActivityLogs.slice(0, 8)) {
+          reply += `• [${a.date ? new Date(a.date).toLocaleDateString('en-PH') : 'Recent'}] ${a.user} (${a.role || 'Official'}): ${a.action} — ${a.description || ''}\n`
+        }
+        return reply.trim()
+      }
+      return `I could not find the latest record for this information. Please check the related module or try again.`
+    }
+
+    // -------------------------------------------------------------
+    // RULE 0D: BUDGET REQUESTS (Pending, Approved, Rejected, Cancelled)
+    // -------------------------------------------------------------
+    if (/\b(budget requests?|requests?|pending requests?|rejected requests?|cancelled requests?)\b/.test(text) && !mentionsRecordNoun && !isRemainingQuery && !isExpenseQuery) {
+      if (allRequests && allRequests.length > 0) {
+        let matching = allRequests
+        if (text.includes('pending')) {
+          matching = allRequests.filter(r => (r.status || '').toLowerCase() === 'pending')
+        } else if (text.includes('rejected')) {
+          matching = allRequests.filter(r => (r.status || '').toLowerCase() === 'rejected')
+        } else if (text.includes('cancelled') || text.includes('canceled')) {
+          matching = allRequests.filter(r => (r.status || '').toLowerCase() === 'cancelled')
+        }
+        if (matching.length > 0) {
+          let reply = `Here are the latest budget requests (${matching.length} record${matching.length === 1 ? '' : 's'}):\n`
+          for (const r of matching.slice(0, 8)) {
+            reply += `• "${r.event}" (${r.type || 'Request'}) — Month: ${r.month || 'Unspecified'} ${r.year} | Amount: ₱${Number(r.amount).toLocaleString('en-PH')} | Status: ${r.status}${r.rejectionReason ? ` (Reason: ${r.rejectionReason})` : ''}${r.cancellationReason ? ` (Reason: ${r.cancellationReason})` : ''}\n`
+          }
+          return reply.trim()
+        }
+      }
+      return `I could not find the latest record for this information. Please check the related module or try again.`
+    }
+
+    // -------------------------------------------------------------
+    // RULE 0E: REPORT SUMMARIES
+    // -------------------------------------------------------------
+    if (/\b(report summaries|report summary)\b/.test(text) && !isRemainingQuery && !isExpenseQuery) {
+      if (systemCtx.reportSummaries && systemCtx.reportSummaries.length > 0) {
+        let reply = `Here are the latest report summaries:\n`
+        for (const rep of systemCtx.reportSummaries.slice(0, 5)) {
+          reply += `• Report ID ${rep.reportId}: ${rep.summary}\n`
+        }
+        return reply.trim()
+      }
+      return `I could not find the latest record for this information. Please check the related module or try again.`
     }
 
     // -------------------------------------------------------------
@@ -1176,7 +1502,7 @@ function ChatWidgetInner() {
     setMessages(updatedMessages)
     setIsLoading(true)
 
-    const systemCtx = buildSystemContext()
+    const systemCtx = await fetchDynamicSystemContext()
 
     try {
       // Call Groq AI via Supabase Edge Function

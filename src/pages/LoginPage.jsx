@@ -357,7 +357,7 @@ function LoginPage() {
             <p className="subcopy">
               {isRegistering
                 ? 'Create the master account for the SK Chairman. This can only be done once.'
-                : 'Records, receipts and approvals live behind this door. Public figures need no account.'}
+                : 'Secure access portal for authorized SK officials to manage budgets, expenses, and official records.'}
             </p>
 
             <ul className="login-assurance">

@@ -4,7 +4,7 @@ import RoleGate from '../components/RoleGate'
 import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
-import { SEX_OPTIONS, CIVIL_STATUS_OPTIONS } from '../utils/biodata'
+import { SEX_OPTIONS, CIVIL_STATUS_OPTIONS, isBiodataComplete } from '../utils/biodata'
 
 const emptyForm = {
   birthdate: '',
@@ -21,6 +21,7 @@ function BiodataPage() {
   const navigate = useNavigate()
 
   const [form, setForm] = useState(emptyForm)
+  const [isComplete, setIsComplete] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
@@ -54,6 +55,7 @@ function BiodataPage() {
           complete_address: data.complete_address || '',
           mobile_number: data.mobile_number || '',
         })
+        setIsComplete(isBiodataComplete(data))
       }
       setIsLoading(false)
     }
@@ -81,7 +83,7 @@ function BiodataPage() {
 
     setIsSaving(true)
 
-    const { error: upsertError } = await supabase.from('member_biodata').upsert({
+    const payload = {
       id: user.id,
       birthdate: form.birthdate || null,
       sex: form.sex || null,
@@ -90,7 +92,9 @@ function BiodataPage() {
       complete_address: form.complete_address.trim() || null,
       mobile_number: form.mobile_number.trim() || null,
       updated_at: new Date().toISOString(),
-    })
+    }
+
+    const { error: upsertError } = await supabase.from('member_biodata').upsert(payload)
 
     if (upsertError) {
       setError(upsertError.message)
@@ -98,17 +102,25 @@ function BiodataPage() {
       return
     }
 
+    const nowComplete = isBiodataComplete(payload)
+    setIsComplete(nowComplete)
+    if (nowComplete) {
+      window.sessionStorage.setItem('cuenta.biodataBannerDismissed', 'true')
+    }
+
     addLog({
       action: 'Biodata Updated',
       actionType: 'Profile Updated',
       module: 'Authentication',
       recordType: 'User',
-      description: `${user.email || 'A member'} updated their biodata.`,
+      description: `${user.email || 'A member'} updated their personal information.`,
       status: 'Success',
       actor: user.email,
     })
 
-    setStatus('Biodata saved.')
+    window.dispatchEvent(new CustomEvent('cuenta:profile-updated'))
+
+    setStatus('Personal information saved successfully.')
     setIsSaving(false)
   }
 
@@ -118,7 +130,7 @@ function BiodataPage() {
         <div className="header-left">
           <div>
             <p className="eyebrow">Profile</p>
-            <h1>Biodata</h1>
+            <h1>Personal Information</h1>
             <p>
               This personal information is kept on file for SK records and is visible to the SK
               Chairman.
@@ -128,9 +140,37 @@ function BiodataPage() {
       </header>
 
       <section className="dashboard-content">
-        <div className="overview-card">
-          <p className="eyebrow">Personal Information</p>
-          <h2>Your Biodata</h2>
+        <div className="overview-card" style={{ maxWidth: '860px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
+            <div>
+              <p className="eyebrow" style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase' }}>Personal Records</p>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--ink)' }}>Your Personal Information</h2>
+            </div>
+            {isComplete ? (
+              <span className="an-chip positive" style={{ padding: '4px 12px', borderRadius: '999px', fontSize: '0.8rem', fontWeight: 600, backgroundColor: '#dcfce7', color: '#15803d' }}>
+                Complete
+              </span>
+            ) : (
+              <span className="an-chip warning" style={{ padding: '4px 12px', borderRadius: '999px', fontSize: '0.8rem', fontWeight: 600, backgroundColor: '#fef3c7', color: '#92400e' }}>
+                Incomplete
+              </span>
+            )}
+          </div>
+
+          {isComplete ? (
+            <div style={{ padding: '12px 16px', marginBottom: '20px', borderRadius: '8px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+              <span style={{ fontSize: '0.875rem' }}>Your personal records are already complete. You can update existing values here or via Update Personal Details.</span>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => navigate('/dashboard/profile/update-details')}
+                style={{ fontSize: '0.825rem', padding: '6px 12px' }}
+              >
+                Update Personal Details
+              </button>
+            </div>
+          ) : null}
+
           {isLoading ? (
             <p className="form-note">Loading...</p>
           ) : (
@@ -205,7 +245,7 @@ function BiodataPage() {
                   Back to Profile
                 </button>
                 <button type="submit" className="primary-button" disabled={isSaving}>
-                  {isSaving ? 'Saving...' : 'Save Biodata'}
+                  {isSaving ? 'Saving...' : 'Save Personal Information'}
                 </button>
               </div>
             </form>

@@ -3,15 +3,8 @@ import RoleGate from '../components/RoleGate'
 import { useAuth } from '../context/AuthContext'
 import DocumentsPanel from './documents/DocumentsPanel'
 import ReceiptsPanel from './documents/ReceiptsPanel'
-import ReportsSummaryPanel from './documents/ReportsSummaryPanel'
 
 const ALL_TABS = [
-  {
-    key: 'summary',
-    label: 'Summary',
-    description: 'Consolidated overview of all reports, documents, receipts, and financial records.',
-    rolesOnly: ['SK Chairman', 'SK Treasurer'],
-  },
   {
     key: 'documents',
     label: 'Documents',
@@ -59,7 +52,6 @@ function DocumentsPage() {
         </div>
       </header>
 
-      {activeTab === 'summary' && <ReportsSummaryPanel />}
       {activeTab === 'documents' && <DocumentsPanel />}
       {activeTab === 'receipts' && <ReceiptsPanel />}
     </RoleGate>

@@ -12,6 +12,10 @@ import {
   Folder,
   Calendar,
   PieChart as PieChartIcon,
+  Coins,
+  X,
+  ArrowRight,
+  ChevronRight,
 } from 'lucide-react'
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
 import NotificationBell from '../components/NotificationBell'
@@ -21,6 +25,7 @@ import GlobalSearch from '../components/GlobalSearch'
 import YearSpinner from '../components/YearSpinner'
 import { supabase } from '../supabase/supabaseClient'
 import { isBiodataComplete } from '../utils/biodata'
+import { getBudgetTotalForPeriod, getApprovedAllocationTotal } from '../utils/budgetUtils'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -64,6 +69,17 @@ function MainDashboardPage() {
   const [selectedYear, setSelectedYear] = useState(currentYear)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [showBiodataBanner, setShowBiodataBanner] = useState(false)
+  const [isRemainingBudgetsModalOpen, setIsRemainingBudgetsModalOpen] = useState(false)
+  const [modalViewScope, setModalViewScope] = useState('past')
+
+  useEffect(() => {
+    if (!isRemainingBudgetsModalOpen) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setIsRemainingBudgetsModalOpen(false)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isRemainingBudgetsModalOpen])
 
   useEffect(() => {
     let isMounted = true
@@ -246,6 +262,104 @@ function MainDashboardPage() {
     return monthName && year ? `${monthName} ${year}` : '—'
   }
 
+  const monthlyBudgetSummaries = useMemo(() => {
+    return monthOptions.map((m) => {
+      const monthNum = m.value
+      const allocated = getBudgetTotalForPeriod(budgets, monthNum, selectedYear)
+      const totalExp = getApprovedAllocationTotal(expenses, monthNum, selectedYear)
+      const remaining = allocated - totalExp
+
+      let status = 'Remaining'
+      if (allocated <= 0) {
+        status = 'No Budget Allocated'
+      } else if (remaining === 0) {
+        status = 'Fully Utilized'
+      } else if (remaining < 0) {
+        status = 'Over Budget'
+      } else {
+        status = 'Remaining'
+      }
+
+      const isCurrentMonth = selectedYear === currentYear && monthNum === currentMonth
+      const isSelectedMonth = viewMode === 'monthly' && monthNum === selectedMonth
+
+      return {
+        month: monthNum,
+        label: m.label,
+        allocatedBudget: allocated,
+        totalExpenses: totalExp,
+        remainingBudget: remaining,
+        status,
+        isCurrentMonth,
+        isSelectedMonth,
+      }
+    })
+  }, [budgets, expenses, selectedYear, currentYear, currentMonth, viewMode, selectedMonth])
+
+  const totalYearlyAllocated = useMemo(() => {
+    return monthlyBudgetSummaries.reduce((sum, r) => sum + r.allocatedBudget, 0)
+  }, [monthlyBudgetSummaries])
+
+  const totalYearlyExpenses = useMemo(() => {
+    return monthlyBudgetSummaries.reduce((sum, r) => sum + r.totalExpenses, 0)
+  }, [monthlyBudgetSummaries])
+
+  const totalYearlyRemaining = totalYearlyAllocated - totalYearlyExpenses
+
+  const monthsWithRemainingCount = useMemo(() => {
+    return monthlyBudgetSummaries.filter((r) => r.status === 'Remaining').length
+  }, [monthlyBudgetSummaries])
+
+  const previousMonths = useMemo(() => {
+    return monthlyBudgetSummaries.filter((m) => {
+      if (selectedYear < currentYear) return true
+      if (selectedYear === currentYear) return m.month < currentMonth
+      return false
+    })
+  }, [monthlyBudgetSummaries, selectedYear, currentYear, currentMonth])
+
+  const previousMonthsRemainingTotal = useMemo(() => {
+    return Math.max(0, previousMonths.reduce((sum, m) => sum + m.remainingBudget, 0))
+  }, [previousMonths])
+
+  const previousMonthsAllocatedTotal = useMemo(() => {
+    return previousMonths.reduce((sum, m) => sum + m.allocatedBudget, 0)
+  }, [previousMonths])
+
+  const previousMonthsExpensesTotal = useMemo(() => {
+    return previousMonths.reduce((sum, m) => sum + m.totalExpenses, 0)
+  }, [previousMonths])
+
+  const displayedMonthlyRows = useMemo(() => {
+    return modalViewScope === 'past' ? previousMonths : monthlyBudgetSummaries
+  }, [modalViewScope, previousMonths, monthlyBudgetSummaries])
+
+  const scopeAllocatedTotal = useMemo(() => {
+    return modalViewScope === 'past' ? previousMonthsAllocatedTotal : totalYearlyAllocated
+  }, [modalViewScope, previousMonthsAllocatedTotal, totalYearlyAllocated])
+
+  const scopeExpensesTotal = useMemo(() => {
+    return modalViewScope === 'past' ? previousMonthsExpensesTotal : totalYearlyExpenses
+  }, [modalViewScope, previousMonthsExpensesTotal, totalYearlyExpenses])
+
+  const scopeRemainingTotal = useMemo(() => {
+    return modalViewScope === 'past' ? previousMonthsRemainingTotal : totalYearlyRemaining
+  }, [modalViewScope, previousMonthsRemainingTotal, totalYearlyRemaining])
+
+  function getBudgetStatusBadgeClass(status) {
+    switch (status) {
+      case 'Remaining':
+        return 'badge--positive'
+      case 'Fully Utilized':
+        return 'badge--warn'
+      case 'Over Budget':
+        return 'badge--negative'
+      case 'No Budget Allocated':
+      default:
+        return 'badge--neutral'
+    }
+  }
+
   const summaryCards = [
     {
       label: 'Total Budget',
@@ -280,6 +394,16 @@ function MainDashboardPage() {
       chip: remainingBudget < 0 ? 'Over-allocated' : hasBudgetData ? `${remainingPercent}% available` : 'Not started',
       tone: remainingBudget < 0 ? 'danger' : remainingPercent < 20 ? 'warning' : 'neutral',
       icon: PieChartIcon,
+    },
+    {
+      label: 'Remaining Budgets',
+      emoji: '💰',
+      value: currency.format(previousMonthsRemainingTotal),
+      meta: 'Unused budget from previous months',
+      chip: previousMonthsRemainingTotal > 0 ? 'View breakdown' : 'Clear',
+      tone: previousMonthsRemainingTotal > 0 ? 'positive' : 'neutral',
+      icon: Coins,
+      onClick: () => setIsRemainingBudgetsModalOpen(true),
     },
     {
       label: 'Returned Budget',
@@ -457,19 +581,52 @@ function MainDashboardPage() {
         ) : null}
         {summaryCards.map((card) => {
           const Icon = card.icon
+          const isInteractive = Boolean(card.onClick)
           return (
-            <div key={card.label} className="summary-card">
+            <div
+              key={card.label}
+              className={`summary-card ${isInteractive ? 'is-interactive' : ''}`}
+              onClick={card.onClick}
+              role={isInteractive ? 'button' : undefined}
+              tabIndex={isInteractive ? 0 : undefined}
+              aria-haspopup={isInteractive ? 'dialog' : undefined}
+              title={isInteractive ? 'Click to view the monthly breakdown.' : undefined}
+              onKeyDown={
+                isInteractive
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        card.onClick()
+                      }
+                    }
+                  : undefined
+              }
+            >
               <div className="summary-header">
                 <div className="summary-icon">
                   <Icon size={18} />
                 </div>
-                <span className={`summary-chip ${card.tone}`}>{card.chip}</span>
+                <span className={`summary-chip ${card.tone} ${isInteractive ? 'is-clickable' : ''}`}>
+                  {card.chip}
+                  {isInteractive ? <ChevronRight size={13} className="summary-chip-arrow" aria-hidden="true" /> : null}
+                </span>
               </div>
               <div className="summary-body">
-                <span className="summary-label">{card.label}</span>
+                <span className="summary-label">
+                  {card.emoji ? <span style={{ marginRight: '6px' }} aria-hidden="true">{card.emoji}</span> : null}
+                  {card.label}
+                </span>
                 <span className="summary-value">{card.value}</span>
               </div>
               <span className="summary-meta">{card.meta}</span>
+              {isInteractive && (
+                <div className="summary-card-footer">
+                  <span className="summary-action-btn">
+                    <span>{card.actionLabel || 'View Details'}</span>
+                    <ArrowRight size={14} className="summary-action-arrow" aria-hidden="true" />
+                  </span>
+                </div>
+              )}
             </div>
           )
         })}
@@ -617,6 +774,312 @@ function MainDashboardPage() {
           </table>
         </div>
       </section>
+
+      {/* Remaining Budgets Modal */}
+      {isRemainingBudgetsModalOpen && (
+        <div
+          className="modal-overlay"
+          onClick={() => setIsRemainingBudgetsModalOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="remaining-budgets-modal-title"
+        >
+          <div
+            className="modal-content remaining-budgets-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+              <div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '1.3rem' }} aria-hidden="true">💰</span>
+                  <h2 id="remaining-budgets-modal-title" style={{ margin: 0, fontSize: '1.35rem', fontWeight: 700, color: 'var(--ink-1)' }}>
+                    Remaining Budgets Breakdown
+                  </h2>
+                </div>
+                <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: '0.92rem' }}>
+                  Detailed breakdown of total budgets, approved budgets, and unused funds for {selectedYear}.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setIsRemainingBudgetsModalOpen(false)}
+                aria-label="Close modal"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px',
+                  borderRadius: '8px',
+                  color: 'var(--ink-3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Stat Cards inside modal */}
+              <div className="remaining-budgets-stats-grid">
+                <div className="remaining-budgets-stat-card highlight">
+                  <span className="remaining-budgets-stat-label">
+                    Total Remaining (Previous Months)
+                  </span>
+                  <div className="remaining-budgets-stat-val" style={{ color: 'var(--cuenta-teal, #0f766e)' }}>
+                    {currency.format(previousMonthsRemainingTotal)}
+                  </div>
+                  <span className="remaining-budgets-stat-sub">
+                    Unused budget carried over from completed months
+                  </span>
+                </div>
+
+                <div className="remaining-budgets-stat-card">
+                  <span className="remaining-budgets-stat-label">
+                    Completed Months
+                  </span>
+                  <div className="remaining-budgets-stat-val">
+                    {previousMonths.length} <span style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--ink-3)' }}>months</span>
+                  </div>
+                  <span className="remaining-budgets-stat-sub">
+                    {previousMonths.length > 0 ? `${previousMonths[0].label} – ${previousMonths[previousMonths.length - 1].label}` : 'No past months'}
+                  </span>
+                </div>
+
+                <div className="remaining-budgets-stat-card">
+                  <span className="remaining-budgets-stat-label">
+                    Current Active Month
+                  </span>
+                  <div className="remaining-budgets-stat-val" style={{ fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {monthOptions.find(m => m.value === currentMonth)?.label} {currentYear}
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        backgroundColor: 'var(--cuenta-mint, #ccfbf1)',
+                        color: 'var(--cuenta-teal, #0f766e)',
+                        border: '1px solid rgba(15, 118, 110, 0.25)',
+                      }}
+                    >
+                      Active
+                    </span>
+                  </div>
+                  <span className="remaining-budgets-stat-sub">
+                    Excluded from previous months summary
+                  </span>
+                </div>
+              </div>
+
+              {/* View Scope Toggle */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <div className="filter-toggle" style={{ display: 'inline-flex' }}>
+                  <button
+                    type="button"
+                    className={`filter-toggle-btn ${modalViewScope === 'past' ? 'is-active' : ''}`}
+                    onClick={() => setModalViewScope('past')}
+                  >
+                    Previous Months ({previousMonths.length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`filter-toggle-btn ${modalViewScope === 'all' ? 'is-active' : ''}`}
+                    onClick={() => setModalViewScope('all')}
+                  >
+                    All Months (12)
+                  </button>
+                </div>
+                <span style={{ fontSize: '0.84rem', color: 'var(--ink-3)' }}>
+                  {modalViewScope === 'past'
+                    ? 'Displaying completed past months in chronological order'
+                    : `Displaying all 12 months for fiscal year ${selectedYear}`}
+                </span>
+              </div>
+
+              {/* Monthly Breakdown Table */}
+              <div className="overview-card" style={{ overflowX: 'auto', border: '1px solid var(--line, #e2e8f0)' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left' }}>Month</th>
+                      <th style={{ textAlign: 'right' }}>Total Budget</th>
+                      <th style={{ textAlign: 'right' }}>Approved Budgets</th>
+                      <th style={{ textAlign: 'right' }}>Remaining Budget</th>
+                      <th style={{ textAlign: 'center' }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedMonthlyRows.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" style={{ textAlign: 'center', padding: '28px', color: 'var(--ink-3)', fontStyle: 'italic' }}>
+                          No past months recorded for {selectedYear}.
+                        </td>
+                      </tr>
+                    ) : (
+                      displayedMonthlyRows.map((row) => (
+                        <tr
+                          key={`modal-monthly-budget-${row.month}`}
+                          onClick={() => {
+                            setSelectedMonth(row.month)
+                            setViewMode('monthly')
+                            setIsRemainingBudgetsModalOpen(false)
+                          }}
+                          style={{
+                            cursor: 'pointer',
+                            backgroundColor: row.isCurrentMonth
+                              ? 'rgba(15, 118, 110, 0.05)'
+                              : row.isSelectedMonth
+                              ? 'rgba(37, 99, 235, 0.04)'
+                              : undefined,
+                            transition: 'background-color 0.15s ease',
+                          }}
+                          title={`Click to filter dashboard to ${row.label} ${selectedYear}`}
+                        >
+                          <td data-label="Month" style={{ position: 'relative' }}>
+                            {row.isCurrentMonth && (
+                              <span
+                                style={{
+                                  position: 'absolute',
+                                  left: 0,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: '4px',
+                                  backgroundColor: 'var(--cuenta-teal, #0f766e)',
+                                  borderRadius: '0 2px 2px 0',
+                                }}
+                                aria-hidden="true"
+                              />
+                            )}
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', paddingLeft: row.isCurrentMonth ? '6px' : '0' }}>
+                              <strong style={{ color: 'var(--ink-1)' }}>{row.label}</strong>
+                              {row.isCurrentMonth && (
+                                <span
+                                  style={{
+                                    fontSize: '0.68rem',
+                                    fontWeight: 700,
+                                    letterSpacing: '0.04em',
+                                    textTransform: 'uppercase',
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    backgroundColor: 'var(--cuenta-mint, #ccfbf1)',
+                                    color: 'var(--cuenta-teal, #0f766e)',
+                                    border: '1px solid rgba(15, 118, 110, 0.25)',
+                                  }}
+                                >
+                                  Current Month
+                                </span>
+                              )}
+                              {row.isSelectedMonth && !row.isCurrentMonth && (
+                                <span
+                                  style={{
+                                    fontSize: '0.68rem',
+                                    fontWeight: 600,
+                                    padding: '2px 6px',
+                                    borderRadius: '10px',
+                                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                                    color: '#2563eb',
+                                  }}
+                                >
+                                  Active Filter
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td data-label="Total Budget" style={{ textAlign: 'right', fontWeight: row.allocatedBudget > 0 ? 600 : 400, color: row.allocatedBudget > 0 ? 'var(--ink-1)' : 'var(--ink-3)' }}>
+                            {currency.format(row.allocatedBudget)}
+                          </td>
+                          <td data-label="Approved Budgets" style={{ textAlign: 'right', fontWeight: row.totalExpenses > 0 ? 600 : 400, color: row.totalExpenses > 0 ? 'var(--ink-1)' : 'var(--ink-3)' }}>
+                            {currency.format(row.totalExpenses)}
+                          </td>
+                          <td
+                            data-label="Remaining Budget"
+                            style={{
+                              textAlign: 'right',
+                              fontWeight: 600,
+                              color:
+                                row.remainingBudget > 0
+                                  ? 'var(--positive, #15803d)'
+                                  : row.remainingBudget < 0
+                                  ? 'var(--negative, #b91c1c)'
+                                  : row.allocatedBudget > 0
+                                  ? 'var(--ink-2)'
+                                  : 'var(--ink-3)',
+                            }}
+                          >
+                            {currency.format(row.remainingBudget)}
+                          </td>
+                          <td data-label="Status" style={{ textAlign: 'center' }}>
+                            <span className={`status-pill ${getBudgetStatusBadgeClass(row.status)}`}>
+                              {row.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <th style={{ textAlign: 'left' }}>
+                        {modalViewScope === 'past' ? 'Total (Previous Months)' : `Total (${selectedYear})`}
+                      </th>
+                      <th style={{ textAlign: 'right' }}>{currency.format(scopeAllocatedTotal)}</th>
+                      <th style={{ textAlign: 'right' }}>{currency.format(scopeExpensesTotal)}</th>
+                      <th
+                        style={{
+                          textAlign: 'right',
+                          color:
+                            scopeRemainingTotal > 0
+                              ? 'var(--positive, #15803d)'
+                              : scopeRemainingTotal < 0
+                              ? 'var(--negative, #b91c1c)'
+                              : 'var(--ink-1)',
+                        }}
+                      >
+                        {currency.format(scopeRemainingTotal)}
+                      </th>
+                      <th style={{ textAlign: 'center' }}>
+                        <span className={`status-pill ${
+                          scopeAllocatedTotal <= 0
+                            ? 'badge--neutral'
+                            : scopeRemainingTotal > 0
+                            ? 'badge--positive'
+                            : scopeRemainingTotal === 0
+                            ? 'badge--warn'
+                            : 'badge--negative'
+                        }`}>
+                          {scopeAllocatedTotal <= 0
+                            ? 'No Budget'
+                            : scopeRemainingTotal > 0
+                            ? 'Remaining'
+                            : scopeRemainingTotal === 0
+                            ? 'Fully Utilized'
+                            : 'Over Budget'}
+                        </span>
+                      </th>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.82rem', color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>💡</span> Click any month row to filter the Main Dashboard to that month.
+              </span>
+              <button
+                type="button"
+                className="an-btn an-btn-primary"
+                onClick={() => setIsRemainingBudgetsModalOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </>
