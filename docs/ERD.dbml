@@ -1,12 +1,14 @@
 // Paste this entire file into the dbdiagram.io editor.
 // Diagram model based on ERD.md; selected fields, not a migration.
 // fk_* = confirmed foreign key; app_* = application association only.
-// DBML draws both as relationships. Do not export app_* links as real SQL FKs.
+// DBML draws both as relationships, and may display FK badges for both.
+// Do not export app_* links as real SQL FKs.
+// Supporting-table workflows are drawn in ERD.md, not as column references here.
 // deployment_id is an unresolved type, not a real PostgreSQL data type.
 
 Project cuenta {
   database_type: 'PostgreSQL'
-  Note: 'Cuenta SK Budget Monitoring System. Repository-based ERD; live database not inspected. Application links are named app_. Nullability is not exhaustively modeled. expenses ID type and created_accounts base constraints need live confirmation.'
+  Note: 'Cuenta SK Budget Monitoring System. Repository-based ERD; live database not inspected. Only fk_ links are confirmed database constraints. app_ links are application associations. Supporting-table workflow connections are shown separately in ERD.md because no stored row references are established for these SQL tables. Nullability is not exhaustively modeled. expenses ID type and created_accounts base constraints need live confirmation.'
 }
 
 Table auth.users {
@@ -195,18 +197,20 @@ Table public.notifications {
 
 Table public.project_photos {
   id uuid [pk]
-  project_id text
+  project_id text [note: 'No SQL FK; browser photos use selectedRequestId, but the current uploader does not write this SQL table']
   url text
   caption text
   created_at timestamptz
 
-  Note: 'Migration-defined SQL table with no FK. Current narrative report photos use browser IndexedDB, so no active SQL project link is asserted here.'
+  Note: 'No SQL FK. Current photos live in browser IndexedDB CuentaPhotosDB.photos and store budget_requests.id as project_id. The SQL table has a different shape and is not written by the current uploader. Its persisted project_id values have not been inspected, so a SQL-table relationship is not asserted.'
 }
 
 Table public.document_counters {
   id text [pk]
   last_number integer
   year integer
+
+  Note: 'No SQL FK. Generation maps Purchase Request -> pr_counter; Disbursement Voucher -> dv_counter; Payroll -> payroll_counter; Itinerary of Travel -> itinerary_counter. Documents do not store counter_id and their type values do not equal these IDs. Other document types have no counter. Workflow shown in ERD.md.'
 }
 
 Table public.report_summaries {
@@ -220,7 +224,7 @@ Table public.report_summaries {
     (report_id, model) [unique]
   }
 
-  Note: 'report_id is a text key, not a document FK. Also used for annual report settings.'
+  Note: 'No SQL FK. Annual Report generation loads shared settings using report_id=annual_report_settings AND model=global. Documents do not store a summary row reference; documents.type does not equal report_id. report_id alone is not unique. Workflow shown in ERD.md.'
 }
 
 Table public.verification_codes {
@@ -231,7 +235,7 @@ Table public.verification_codes {
   verified boolean
   created_at timestamptz
 
-  Note: 'May exist before account creation; no user FK.'
+  Note: 'No SQL FK. A code verifies the email used for account creation, may exist before the Auth user exists, and is consumed after account creation. This lifecycle does not establish a persistent user relationship. Workflow shown in ERD.md.'
 }
 
 // CONFIRMED DATABASE FOREIGN KEYS
@@ -261,3 +265,7 @@ Ref app_notification_request: public.notifications.request_id > public.budget_re
 // A reporting-year value has no target table.
 Ref app_document_expense: public.documents.related_entity_id > public.expenses.id
 Ref app_document_request: public.documents.related_entity_id > public.budget_requests.id
+
+// Supporting tables intentionally have no Ref lines. Their workflow connections
+// are shown in ERD.md. A Ref must not substitute a generation step, a selector
+// mapping, or a browser-store relationship for a SQL-table row association.

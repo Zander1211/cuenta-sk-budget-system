@@ -12,6 +12,7 @@ import {
   calculateProjectEventFinancials,
   formatUtilization,
 } from '../../utils/projectEventFinancials'
+import { getReceiptDisplayName } from '../../utils/uploadUtils'
 import CurrencyInput from '../CurrencyInput'
 
 const currency = new Intl.NumberFormat('en-PH', {
@@ -324,7 +325,7 @@ export default function ReceiptOCRDetailsModal({
           <div>
             <p className="eyebrow">OCR Details</p>
             <h2 id="receipt-ocr-title">Extracted Receipt Information</h2>
-            <p>{receipt?.name || 'Uploaded receipt'}</p>
+            <p>{getReceiptDisplayName(receipt, expense)}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {canVerify && onSaveDetails && !isLegacyReceipt && !isEditing ? (

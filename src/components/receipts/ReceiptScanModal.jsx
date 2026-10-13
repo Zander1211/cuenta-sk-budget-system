@@ -19,6 +19,7 @@ import { parseReceiptText } from '../../utils/ocr/receiptParser'
 import ReceiptCropEditor from './ReceiptCropEditor'
 import ReceiptScanPreview from './ReceiptScanPreview'
 import ReceiptOCRReview from './ReceiptOCRReview'
+import { generateReceiptFileName, formatProjectReceiptSlug } from '../../utils/uploadUtils'
 import './ReceiptScanner.css'
 
 /**
@@ -66,7 +67,7 @@ const EMPTY_VALUES = {
   particularsText: '',
 }
 
-export default function ReceiptScanModal({ expense, onClose, onSave }) {
+export default function ReceiptScanModal({ expense, onClose, onSave, suggestedFileName, existingCount }) {
   const [step, setStep] = useState(STEPS.SOURCE)
   const [error, setError] = useState('')
   const [progress, setProgress] = useState({ label: '', value: 0 })
@@ -231,7 +232,8 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
     }
 
     stopCamera()
-    await ingest(new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' }))
+    const prefix = formatProjectReceiptSlug(expense)
+    await ingest(new File([blob], `${prefix}_capture-${Date.now()}.jpg`, { type: 'image/jpeg' }))
   }
 
   /* ── Edge adjustment: rotate and reset ───────────────────────────────
@@ -485,7 +487,11 @@ export default function ReceiptScanModal({ expense, onClose, onSave }) {
 
     try {
       const scanBlob = await imageDataToBlob(filteredRef.current, { type: 'image/jpeg', quality: 0.92 })
-      const scanFile = new File([scanBlob], `scan-${Date.now()}.jpg`, { type: 'image/jpeg' })
+      const finalScanName = suggestedFileName || generateReceiptFileName(expense, {
+        index: existingCount ? existingCount + 1 : null,
+        extension: 'jpg',
+      })
+      const scanFile = new File([scanBlob], finalScanName, { type: 'image/jpeg' })
 
       await onSave({
         scanFile,

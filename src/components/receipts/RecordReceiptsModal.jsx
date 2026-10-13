@@ -13,6 +13,8 @@ import {
   insertScannedReceiptRecord,
   replaceScannedReceiptRecord,
   formatOcrMetadataNote,
+  generateReceiptFileName,
+  getReceiptDisplayName,
 } from '../../utils/uploadUtils'
 import ReceiptOCRDetailsModal from './ReceiptOCRDetailsModal'
 import PaginationControls from '../PaginationControls'
@@ -689,10 +691,17 @@ function RecordReceiptsModal({ record, onClose }) {
                         const status = receiptStatus(receipt)
                         const displayDate = formatDate(receipt.ocrMetadata?.date) || formatDate(receipt.uploadedAt)
                         const amount = Number(receipt.ocrMetadata?.totalAmount)
+                        const receiptIndex = receipts.findIndex((r) => r.id === receipt.id)
+                        const displayName = getReceiptDisplayName(
+                          receipt,
+                          record,
+                          receiptIndex >= 0 ? receiptIndex : (safePage - 1) * PAGE_SIZE + idx,
+                          receipts.length,
+                        )
                         return (
                           <tr key={receipt.id}>
                             <td data-label="Receipt">
-                              <strong title={receipt.name}>{receipt.name || `Receipt #${idx + 1}`}</strong>
+                              <strong title={displayName}>{displayName}</strong>
                               {receipt.requisitionId ? (
                                 <div style={{ fontSize: '0.78rem', color: 'var(--ink-3)' }}>Additional requisition</div>
                               ) : null}
@@ -767,6 +776,22 @@ function RecordReceiptsModal({ record, onClose }) {
         <Suspense fallback={null}>
           <ReceiptScanModal
             expense={record}
+            suggestedFileName={
+              replacingReceipt
+                ? (replacingReceipt.name && !/^scan-\d+/i.test(replacingReceipt.name) && !/^receipt-\d+/i.test(replacingReceipt.name)
+                    ? replacingReceipt.name
+                    : generateReceiptFileName(record, {
+                        index: receipts.findIndex((r) => r.id === replacingReceipt.id) >= 0
+                          ? receipts.findIndex((r) => r.id === replacingReceipt.id) + 1
+                          : null,
+                        extension: 'jpg',
+                      }))
+                : generateReceiptFileName(record, {
+                    index: receipts.length > 0 ? receipts.length + 1 : null,
+                    extension: 'jpg',
+                  })
+            }
+            existingCount={receipts.length}
             onSave={handleScanSave}
             onClose={() => { setScanModalOpen(false); setReplacingReceipt(null) }}
           />

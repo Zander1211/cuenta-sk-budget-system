@@ -11,6 +11,8 @@ import {
   insertScannedReceiptRecord,
   replaceScannedReceiptRecord,
   formatOcrMetadataNote,
+  generateReceiptFileName,
+  getReceiptDisplayName,
 } from '../../utils/uploadUtils'
 import ReceiptOCRDetailsModal from '../../components/receipts/ReceiptOCRDetailsModal'
 import YearSpinner from '../../components/YearSpinner'
@@ -1043,9 +1045,14 @@ function ReceiptsPanel() {
                           {getFileIcon(rcpt.name, rcpt.type)}
                         </div>
                         <div className="receipt-viewer-item-details">
-                          <span className="receipt-viewer-item-name" title={rcpt.name}>
-                            {rcpt.name || `Receipt #${idx + 1}`}
-                          </span>
+                          {(() => {
+                            const displayName = getReceiptDisplayName(rcpt, viewerExpense, idx, (receiptLinks[viewerExpense.id] || []).length)
+                            return (
+                              <span className="receipt-viewer-item-name" title={displayName}>
+                                {displayName}
+                              </span>
+                            )
+                          })()}
                           <span className="receipt-viewer-item-meta">
                             Receipt #{idx + 1} {rcpt.isScanned ? '• Scanned' : ''} {rcpt.type ? `• ${rcpt.type}` : ''}
                             {' • '}{getReceiptScopeLabel(rcpt)}
@@ -1176,6 +1183,22 @@ function ReceiptsPanel() {
         <Suspense fallback={null}>
           <ReceiptScanModal
             expense={activeExpense}
+            suggestedFileName={
+              replacingReceipt
+                ? (replacingReceipt.name && !/^scan-\d+/i.test(replacingReceipt.name) && !/^receipt-\d+/i.test(replacingReceipt.name)
+                    ? replacingReceipt.name
+                    : generateReceiptFileName(activeExpense, {
+                        index: (receiptLinks[activeExpense.id] || []).findIndex((r) => r.id === replacingReceipt.id) >= 0
+                          ? (receiptLinks[activeExpense.id] || []).findIndex((r) => r.id === replacingReceipt.id) + 1
+                          : null,
+                        extension: 'jpg',
+                      }))
+                : generateReceiptFileName(activeExpense, {
+                    index: (receiptLinks[activeExpense.id] || []).length > 0 ? (receiptLinks[activeExpense.id] || []).length + 1 : null,
+                    extension: 'jpg',
+                  })
+            }
+            existingCount={(receiptLinks[activeExpense.id] || []).length}
             onSave={handleScanSave}
             onClose={() => {
               setScanModalOpen(false)

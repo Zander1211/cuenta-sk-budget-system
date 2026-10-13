@@ -277,7 +277,7 @@ export default function FullSummaryReportPanel({ onBack }) {
 
   if (reportData) {
     return (
-      <div style={{ position: 'fixed', inset: 0, zIndex: 999, backgroundColor: 'white', overflowY: 'auto' }}>
+
         <FullSummaryReportPreview
           records={reportData.records}
           receiptLinks={reportData.receiptLinks}
@@ -285,7 +285,7 @@ export default function FullSummaryReportPanel({ onBack }) {
           onSave={handleSaveReport}
           onClose={() => setReportData(null)}
         />
-      </div>
+
     )
   }
 

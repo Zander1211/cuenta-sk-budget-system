@@ -5,7 +5,7 @@ import { useAuditLog } from '../context/AuditLogContext'
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationContext'
 import { supabase } from '../supabase/supabaseClient'
-import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord } from '../utils/uploadUtils'
+import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUploadDebugInfo, insertReceiptRecord, generateReceiptFileName } from '../utils/uploadUtils'
 import ReceiptPrintPreview from '../components/ReceiptPrintPreview'
 import CurrencyInput from '../components/CurrencyInput'
 import YearSpinner from '../components/YearSpinner'
@@ -618,7 +618,7 @@ function ExpensesPage() {
   }
 
   async function handleUpload(expense) {
-    const file = filesById[expense.id]
+    let file = filesById[expense.id]
     
     const validationError = validateReceiptFile(file, role)
     if (validationError) {
@@ -632,6 +632,17 @@ function ExpensesPage() {
     setUploadingId(expense.id)
     setErrorsById((prev) => ({ ...prev, [expense.id]: '' }))
     
+    const ownerId = expense.isAdditional && expense.parentProjectId
+      ? String(expense.parentProjectId)
+      : String(expense.id)
+    const existingCount = Number(receiptLinks[ownerId]) || 0
+    const ext = file.name.split('.').pop() || 'jpg'
+    const newFileName = generateReceiptFileName(expense, {
+      index: existingCount > 0 ? existingCount + 1 : null,
+      extension: ext,
+    })
+    file = new File([file], newFileName, { type: file.type })
+
     const filePath = generateReceiptPath(expense, file)
 
     const { error: uploadError } = await supabase.storage
@@ -1271,6 +1282,11 @@ function ExpensesPage() {
         {scanModalExpense && (
           <ReceiptScanModal
             expense={scanModalExpense}
+            suggestedFileName={generateReceiptFileName(scanModalExpense, {
+              index: receiptLinks[scanModalExpense.id] ? Number(receiptLinks[scanModalExpense.id]) + 1 : null,
+              extension: 'jpg',
+            })}
+            existingCount={Number(receiptLinks[scanModalExpense.id]) || 0}
             onClose={() => setScanModalExpense(null)}
             onSave={handleScanSave}
           />

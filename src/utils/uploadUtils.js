@@ -82,6 +82,91 @@ export function logUploadDebugInfo(error, context) {
 }
 
 /**
+ * Resolves the primary project/event title from any record object.
+ * @param {Object} record
+ * @returns {string}
+ */
+export function getRecordProjectTitle(record) {
+  if (!record) return ''
+  return record.event || record.project || record.title || record.name || record.category || ''
+}
+
+/**
+ * Creates a clean, snake_case slug from a project/event record for receipt naming.
+ * Example: "Fire Symposium" -> "fire_symposium"
+ * @param {Object} record
+ * @returns {string}
+ */
+export function formatProjectReceiptSlug(record) {
+  const rawTitle = getRecordProjectTitle(record) || 'expense'
+  const slug = String(rawTitle)
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s_-]/g, '')
+    .replace(/[\s-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  return slug || 'expense'
+}
+
+/**
+ * Generates a clean receipt file name based on the project/event title.
+ * Examples:
+ * - "Fire Symposium" (single) -> "fire_symposium_receipt.jpg"
+ * - "Fire Symposium" (index 2) -> "fire_symposium_receipt_2.jpg"
+ * @param {Object} record
+ * @param {{ index?: number | null, extension?: string }} options
+ * @returns {string}
+ */
+export function generateReceiptFileName(record, { index = null, extension = 'jpg' } = {}) {
+  const slug = formatProjectReceiptSlug(record)
+  const cleanExt = (extension || 'jpg').replace(/^\./, '')
+  if (index !== null && index !== undefined && Number(index) > 0) {
+    return `${slug}_receipt_${index}.${cleanExt}`
+  }
+  return `${slug}_receipt.${cleanExt}`
+}
+
+/**
+ * Returns a human-friendly receipt display name.
+ * If the stored receipt name is a raw scan number (e.g. scan-1791504160099.jpg),
+ * formats it based on the project/event title.
+ * @param {Object} receipt
+ * @param {Object} record
+ * @param {number|null} index (0-based)
+ * @param {number|null} total
+ * @returns {string}
+ */
+export function getReceiptDisplayName(receipt, record, index = null, total = null) {
+  if (!receipt) return 'Receipt'
+  const name = receipt.name || receipt.file_name || ''
+
+  const isRawScanNumber = !name
+    || /^scan-\d+(\.[a-z0-9]+)?$/i.test(name)
+    || /^capture-\d+(\.[a-z0-9]+)?$/i.test(name)
+    || /^receipt-\d+(\.[a-z0-9]+)?$/i.test(name)
+
+  if (!isRawScanNumber) {
+    return name
+  }
+
+  const extMatch = name.match(/\.([a-z0-9]+)$/i)
+  const ext = extMatch ? extMatch[1] : 'jpg'
+
+  let idx = null
+  if (index !== null && index !== undefined) {
+    if (total === 1) {
+      idx = null
+    } else {
+      idx = Number(index) + 1
+    }
+  }
+
+  return generateReceiptFileName(record, { index: idx, extension: ext })
+}
+
+/**
  * Generates an organized storage path for a receipt based on its category.
  * Target format: receipts/projects/{projectId}/{timestamp}-{filename}
  * @param {Object} record - The expense/project/event record

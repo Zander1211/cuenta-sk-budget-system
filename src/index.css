@@ -7398,7 +7398,12 @@ td.nr-info-label {
 	.dashboard-sidebar,
 	.dashboard-mobile-header,
 	.sidebar-scrim,
-	.dashboard-topbar {
+	.dashboard-topbar,
+	.chat-widget-fab,
+	.chat-widget-panel,
+	#cue-chat-fab,
+	.mobile-bottom-nav,
+	.no-print {
 		display: none !important;
 	}
 

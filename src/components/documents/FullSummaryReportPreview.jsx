@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { X, Printer } from 'lucide-react'
+import { getReceiptDisplayName } from '../../utils/uploadUtils'
 
 const php = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 })
 const pct = (val) => `${Number(val || 0).toFixed(1)}%`
@@ -11,7 +12,7 @@ const MONTH_LABELS = [
 
 function SectionHeader({ children }) {
   return (
-    <div style={{
+    <div className="fsr-section-header" style={{
       backgroundColor: '#1a5c3a',
       color: '#ffffff',
       padding: '8px 16px',
@@ -70,7 +71,7 @@ function RecordSection({ record, index, receiptLinks }) {
     : '—'
 
   return (
-    <div style={{
+    <div className="fsr-record-card" style={{
       marginBottom: '32px',
       border: '1px solid #e2e8f0',
       borderRadius: '8px',
@@ -78,7 +79,7 @@ function RecordSection({ record, index, receiptLinks }) {
       pageBreakInside: 'avoid',
     }}>
       {/* Record Title Bar */}
-      <div style={{
+      <div className="fsr-record-header" style={{
         backgroundColor: '#f8fafc',
         borderBottom: '2px solid #1a5c3a',
         padding: '12px 20px',
@@ -188,9 +189,10 @@ function RecordSection({ record, index, receiptLinks }) {
             <tbody>
               {receipts.map((receipt, i) => {
                 const ocr = receipt.ocrMetadata || {}
+                const displayName = getReceiptDisplayName(receipt, record, i, receipts.length)
                 return (
                   <tr key={receipt.id || i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '7px 10px', color: '#1e293b' }}>{receipt.name || `Receipt ${i + 1}`}</td>
+                    <td style={{ padding: '7px 10px', color: '#1e293b' }}>{displayName}</td>
                     <td style={{ padding: '7px 10px', color: '#475569' }}>{ocr.vendor || ocr.store || ocr.merchant || '—'}</td>
                     <td style={{ padding: '7px 10px', color: '#475569' }}>
                       {ocr.date || (receipt.uploadedAt ? new Date(receipt.uploadedAt).toLocaleDateString('en-PH') : '—')}
@@ -239,14 +241,15 @@ export default function FullSummaryReportPreview({ records = [], receiptLinks = 
           filters,
           generatedAt: now.toISOString(),
         })
-        setTimeout(() => window.print(), 400)
+
       } catch (err) {
         console.error('Failed to save Full Summary Report record:', err)
         setSaveError('Failed to save document record: ' + (err.message || 'Unknown error'))
-        setTimeout(() => window.print(), 400)
+
       } finally {
         setIsSaving(false)
       }
+      setTimeout(() => window.print(), 350)
     } else {
       window.print()
     }
@@ -271,9 +274,9 @@ export default function FullSummaryReportPreview({ records = [], receiptLinks = 
   const totalReceipts = records.reduce((s, r) => s + (receiptLinks[String(r.id)]?.length || 0), 0)
 
   return (
-    <div className="fsr-preview-root">
+    <div className="print-preview-overlay fsr-preview-root">
       {/* Screen toolbar — hidden during print */}
-      <div className="no-print" style={{
+      <div className="no-print fsr-preview-toolbar" style={{
         position: 'fixed',
         top: 0, left: 0, right: 0,
         zIndex: 1000,
@@ -415,6 +418,18 @@ export default function FullSummaryReportPreview({ records = [], receiptLinks = 
       </div>
 
       <style>{`
+        .fsr-preview-root {
+          position: fixed !important;
+          inset: 0 !important;
+          z-index: 9999 !important;
+          background-color: #f1f5f9 !important;
+          backdrop-filter: none !important;
+          display: block !important;
+          overflow-y: auto !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+
         @media print {
           @page {
             size: portrait;
@@ -422,7 +437,7 @@ export default function FullSummaryReportPreview({ records = [], receiptLinks = 
           }
 
           /* Ensure all container elements stay visible and don't get clipped by fixed or scrolling layouts */
-          html, body, #root, .dashboard, .dashboard-shell, .dashboard-layout, .dashboard-main, .fsr-preview-root {
+          html, body, #root, .dashboard, .dashboard-shell, .dashboard-layout, .dashboard-main {
             position: static !important;
             overflow: visible !important;
             height: auto !important;
@@ -435,12 +450,36 @@ export default function FullSummaryReportPreview({ records = [], receiptLinks = 
             print-color-adjust: exact !important;
           }
 
+          .fsr-preview-root,
+          .fsr-preview-root * {
+            visibility: visible !important;
+          }
+
+          .print-preview-overlay.fsr-preview-root,
+          .fsr-preview-root {
+            position: static !important;
+            inset: auto !important;
+            overflow: visible !important;
+            height: auto !important;
+            min-height: auto !important;
+            display: block !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+          }
+
           .no-print,
+          .fsr-preview-toolbar,
           .dashboard-sidebar,
           .dashboard-mobile-header,
           .dashboard-topbar,
-          .sidebar-scrim {
+          .sidebar-scrim,
+          .chat-widget-fab,
+          .chat-widget-panel,
+          #cue-chat-fab,
+          .mobile-bottom-nav {
             display: none !important;
+            visibility: hidden !important;
           }
 
           .fsr-report-wrapper {
@@ -464,8 +503,33 @@ export default function FullSummaryReportPreview({ records = [], receiptLinks = 
           }
 
           /* Keep record sections nicely formatted across pages */
-          .fsr-report-page > div {
-            page-break-inside: auto;
+          .fsr-record-card {
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+            overflow: visible !important;
+            margin-bottom: 24px !important;
+            border: 1px solid #cbd5e1 !important;
+          }
+
+          .fsr-record-header {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          .fsr-section-header {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            background-color: #1a5c3a !important;
+            color: #ffffff !important;
+          }
+
+          table, tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
         }
       `}</style>

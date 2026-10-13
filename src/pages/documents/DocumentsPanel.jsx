@@ -98,14 +98,14 @@ function DocumentsPanel() {
     if (type === 'annual') return <AnnualReportPreview data={data} onClose={onClose} />
     if (type === 'full_summary' || viewingDoc.type === 'Full Summary Report') {
       return (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 999, backgroundColor: 'white', overflowY: 'auto' }}>
+
           <FullSummaryReportPreview
-            records={storedData.records || []}
-            receiptLinks={storedData.receiptLinks || {}}
-            filters={storedData.filters || {}}
+            records={storedData.records || storedData.data?.records || []}
+            receiptLinks={storedData.receiptLinks || storedData.data?.receiptLinks || {}}
+            filters={storedData.filters || storedData.data?.filters || {}}
             onClose={onClose}
           />
-        </div>
+
       )
     }
     return null
