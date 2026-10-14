@@ -3677,6 +3677,24 @@ button:disabled,
 	padding: 8px 0 32px;
 }
 
+.nr-input-error {
+	border-color: var(--negative, #A32C1C) !important;
+	box-shadow: 0 0 0 3px var(--negative-soft, #FBE9E5) !important;
+	background-color: #FEF2F2 !important;
+}
+
+.nr-field-error {
+	display: flex !important;
+	align-items: center;
+	gap: 6px;
+	color: var(--negative, #A32C1C) !important;
+	font-size: 0.82rem !important;
+	font-weight: 600 !important;
+	text-transform: none !important;
+	letter-spacing: normal !important;
+	margin-top: -4px;
+}
+
 /* ═══════════════════════════════════════════════════════ */
 /*  NARRATIVE REPORT — Print Preview                      */
 /* ═══════════════════════════════════════════════════════ */

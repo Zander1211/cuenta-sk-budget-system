@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, PlusCircle, Trash2, Image, Upload } from 'lucide-react'
+import { ArrowLeft, PlusCircle, Trash2, Image, Upload, AlertCircle, FileText } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import { useAuth } from '../context/AuthContext'
@@ -37,6 +37,9 @@ function NarrativeReportPage() {
 
   const [selectedRequestId, setSelectedRequestId] = useState('')
   const [preview, setPreview] = useState(null)
+  const [errors, setErrors] = useState({})
+  const targetBeneficiariesRef = useRef(null)
+  const beneficiariesReachedRef = useRef(null)
 
   // ── 1. Preliminaries ──
   const [projectTitle, setProjectTitle] = useState('')
@@ -161,7 +164,9 @@ function NarrativeReportPage() {
     setGuests('')
     setChallenges('')
     setActionsTaken('')
+    setBeneficiaries('')
     setBeneficiariesReached('')
+    setErrors({})
     setSkillsLearned('')
     setCommunityImpact('')
     setAccomplishments('')
@@ -328,14 +333,45 @@ function NarrativeReportPage() {
     }
   }
 
-  // ── Preview ──
+  // ── Preview & Validation ──
   function handlePreview() {
+    const newErrors = {}
+
+    // Target Beneficiaries validation: required, non-empty, not spaces only
+    if (!beneficiaries || !beneficiaries.trim()) {
+      newErrors.beneficiaries = 'Target Beneficiaries is required.'
+    }
+
+    // Number of Beneficiaries Reached validation: required, numbers only, > 0
+    const trimmedReached = (beneficiariesReached || '').trim()
+    if (!trimmedReached) {
+      newErrors.beneficiariesReached = 'Number of Beneficiaries Reached is required.'
+    } else if (!/^\d+$/.test(trimmedReached)) {
+      newErrors.beneficiariesReached = 'Number of Beneficiaries Reached must contain numbers only.'
+    } else if (parseInt(trimmedReached, 10) <= 0) {
+      newErrors.beneficiariesReached = 'Number of Beneficiaries Reached must be greater than 0.'
+    }
+
+    setErrors(newErrors)
+
+    if (Object.keys(newErrors).length > 0) {
+      // Focus cursor on the first field with an error and scroll into view
+      if (newErrors.beneficiaries && targetBeneficiariesRef.current) {
+        targetBeneficiariesRef.current.focus()
+        targetBeneficiariesRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      } else if (newErrors.beneficiariesReached && beneficiariesReachedRef.current) {
+        beneficiariesReachedRef.current.focus()
+        beneficiariesReachedRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+      return
+    }
+
     setPreview({
       // Preliminaries
       projectTitle,
       activityDate,
       venue,
-      beneficiaries,
+      beneficiaries: beneficiaries.trim(),
       barangay,
       municipality,
       province,
@@ -357,7 +393,7 @@ function NarrativeReportPage() {
       challenges,
       actionsTaken,
       // Results
-      beneficiariesReached,
+      beneficiariesReached: beneficiariesReached.trim(),
       skillsLearned,
       communityImpact,
       accomplishments,
@@ -494,14 +530,32 @@ function NarrativeReportPage() {
                 placeholder="e.g. Barangay Covered Court"
               />
             </label>
-            <label className="field">
-              <span>Target Beneficiaries</span>
+            <label className="field" htmlFor="nr-target-beneficiaries">
+              <span>
+                Target Beneficiaries <span style={{ color: 'var(--negative, #A32C1C)' }}>*</span>
+              </span>
               <input
+                id="nr-target-beneficiaries"
+                ref={targetBeneficiariesRef}
                 type="text"
                 value={beneficiaries}
-                onChange={(e) => setBeneficiaries(e.target.value)}
+                onChange={(e) => {
+                  setBeneficiaries(e.target.value)
+                  if (errors.beneficiaries) {
+                    setErrors((prev) => ({ ...prev, beneficiaries: '' }))
+                  }
+                }}
                 placeholder="e.g. Youth ages 15-30"
+                className={errors.beneficiaries ? 'nr-input-error' : ''}
+                aria-invalid={Boolean(errors.beneficiaries)}
+                aria-describedby={errors.beneficiaries ? 'nr-target-beneficiaries-error' : undefined}
               />
+              {errors.beneficiaries && (
+                <span id="nr-target-beneficiaries-error" className="nr-field-error">
+                  <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                  {errors.beneficiaries}
+                </span>
+              )}
             </label>
             <label className="field">
               <span>Barangay</span>
@@ -740,14 +794,32 @@ function NarrativeReportPage() {
           <p className="eyebrow">Section 5</p>
           <h2>Results, Insights &amp; Recommendations</h2>
           <div className="form-grid">
-            <label className="field">
-              <span>Number of Beneficiaries Reached</span>
+            <label className="field" htmlFor="nr-beneficiaries-reached">
+              <span>
+                Number of Beneficiaries Reached <span style={{ color: 'var(--negative, #A32C1C)' }}>*</span>
+              </span>
               <input
+                id="nr-beneficiaries-reached"
+                ref={beneficiariesReachedRef}
                 type="text"
                 value={beneficiariesReached}
-                onChange={(e) => setBeneficiariesReached(e.target.value)}
-                placeholder="e.g. 142 youth participants"
+                onChange={(e) => {
+                  setBeneficiariesReached(e.target.value)
+                  if (errors.beneficiariesReached) {
+                    setErrors((prev) => ({ ...prev, beneficiariesReached: '' }))
+                  }
+                }}
+                placeholder="e.g. 142"
+                className={errors.beneficiariesReached ? 'nr-input-error' : ''}
+                aria-invalid={Boolean(errors.beneficiariesReached)}
+                aria-describedby={errors.beneficiariesReached ? 'nr-beneficiaries-reached-error' : undefined}
               />
+              {errors.beneficiariesReached && (
+                <span id="nr-beneficiaries-reached-error" className="nr-field-error">
+                  <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                  {errors.beneficiariesReached}
+                </span>
+              )}
             </label>
             <label className="field">
               <span>Skills Learned</span>
@@ -886,12 +958,14 @@ function NarrativeReportPage() {
         {/* ═══════ ACTIONS ═══════ */}
         <div className="nr-actions">
           <button
+            id="nr-generate-btn"
             type="button"
             className="primary-button"
             onClick={handlePreview}
             disabled={!projectTitle.trim()}
           >
-            Preview Document
+            <FileText size={16} />
+            Generate Narrative Report
           </button>
           <button
             type="button"

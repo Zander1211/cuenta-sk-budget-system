@@ -227,6 +227,9 @@ export default function FullSummaryReportPanel({ onBack }) {
     }
   }
 
+  const isQuarterDisabled = filterMonth !== 'all'
+  const isMonthDisabled = filterQuarter !== 'all'
+
   // Build filter description
   function buildFilterDescription() {
     const parts = []
@@ -386,15 +389,41 @@ export default function FullSummaryReportPanel({ onBack }) {
           </div>
 
           {/* Quarter */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '6px' }}>
+          <div style={{ opacity: isQuarterDisabled ? 0.6 : 1, transition: 'opacity 0.2s ease' }}>
+            <label
+              htmlFor="fsr-filter-quarter"
+              style={{
+                display: 'block',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: 'var(--text-secondary)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.4px',
+                marginBottom: '6px',
+              }}
+            >
               Quarter
             </label>
             <select
               id="fsr-filter-quarter"
               value={filterQuarter}
-              onChange={e => setFilterQuarter(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-control)', border: '1px solid var(--border)', fontSize: '0.92rem', backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }}
+              onChange={e => {
+                const val = e.target.value
+                setFilterQuarter(val)
+                if (val !== 'all') setFilterMonth('all')
+              }}
+              disabled={isQuarterDisabled}
+              title={isQuarterDisabled ? 'Quarter filter is disabled while a specific month is selected' : undefined}
+              style={{
+                width: '100%',
+                padding: '9px 12px',
+                borderRadius: 'var(--radius-control)',
+                border: '1px solid var(--border)',
+                fontSize: '0.92rem',
+                backgroundColor: isQuarterDisabled ? 'var(--surface-2, #f8fafc)' : 'var(--surface)',
+                color: isQuarterDisabled ? 'var(--text-secondary)' : 'var(--text-primary)',
+                cursor: isQuarterDisabled ? 'not-allowed' : 'pointer',
+              }}
             >
               <option value="all">All Quarters</option>
               <option value="1">Q1 (Jan – Mar)</option>
@@ -405,15 +434,41 @@ export default function FullSummaryReportPanel({ onBack }) {
           </div>
 
           {/* Month */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '6px' }}>
+          <div style={{ opacity: isMonthDisabled ? 0.6 : 1, transition: 'opacity 0.2s ease' }}>
+            <label
+              htmlFor="fsr-filter-month"
+              style={{
+                display: 'block',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: 'var(--text-secondary)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.4px',
+                marginBottom: '6px',
+              }}
+            >
               Month
             </label>
             <select
               id="fsr-filter-month"
               value={filterMonth}
-              onChange={e => setFilterMonth(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-control)', border: '1px solid var(--border)', fontSize: '0.92rem', backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }}
+              onChange={e => {
+                const val = e.target.value
+                setFilterMonth(val)
+                if (val !== 'all') setFilterQuarter('all')
+              }}
+              disabled={isMonthDisabled}
+              title={isMonthDisabled ? 'Month filter is disabled while a specific quarter is selected' : undefined}
+              style={{
+                width: '100%',
+                padding: '9px 12px',
+                borderRadius: 'var(--radius-control)',
+                border: '1px solid var(--border)',
+                fontSize: '0.92rem',
+                backgroundColor: isMonthDisabled ? 'var(--surface-2, #f8fafc)' : 'var(--surface)',
+                color: isMonthDisabled ? 'var(--text-secondary)' : 'var(--text-primary)',
+                cursor: isMonthDisabled ? 'not-allowed' : 'pointer',
+              }}
             >
               <option value="all">All Months</option>
               {monthOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
