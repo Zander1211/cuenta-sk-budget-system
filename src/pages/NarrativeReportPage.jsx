@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, PlusCircle, Trash2, Image, Upload, AlertCircle, FileText } from 'lucide-react'
+import { ArrowLeft, PlusCircle, Trash2, Image, Upload, AlertCircle, FileText, Sparkles } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import { useAuth } from '../context/AuthContext'
@@ -39,6 +39,8 @@ function NarrativeReportPage() {
   const [preview, setPreview] = useState(null)
   const [errors, setErrors] = useState({})
   const targetBeneficiariesRef = useRef(null)
+  const targetParticipantsRef = useRef(null)
+  const totalParticipantsRef = useRef(null)
   const beneficiariesReachedRef = useRef(null)
 
   // ── 1. Preliminaries ──
@@ -63,6 +65,7 @@ function NarrativeReportPage() {
   // ── 2. Introduction ──
   const [rationale, setRationale] = useState('')
   const [objectives, setObjectives] = useState([''])
+  const [summaryReport, setSummaryReport] = useState('')
 
   // ── 3. Program / Activity Details ──
   const [targetParticipants, setTargetParticipants] = useState('')
@@ -157,6 +160,7 @@ function NarrativeReportPage() {
     // Reset manual fields so they don't bleed into the newly selected project
     setAcknowledgment('')
     setObjectives([''])
+    setSummaryReport('')
     setTotalParticipants('')
     setActivityFlow([{ time: '', activity: '' }])
     setResourceSpeakers('')
@@ -236,6 +240,47 @@ function NarrativeReportPage() {
   }
   function removeObjective(index) {
     setObjectives((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  function handleGenerateSummaryDraft() {
+    const title = projectTitle.trim() || 'the scheduled project/activity'
+    const loc = venue.trim() ? `at ${venue.trim()}` : ''
+    const brgy = barangay || 'Upper Glad 2'
+    const mun = municipality || 'Midsayap'
+    const prov = province || 'Cotabato'
+    let dateFormatted = ''
+    if (activityDate) {
+      const d = new Date(activityDate)
+      if (!Number.isNaN(d.getTime())) {
+        dateFormatted = d.toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      }
+    }
+    const whenText = dateFormatted ? `On ${dateFormatted}` : 'During the scheduled implementation'
+    const validObjectives = objectives.filter((o) => o && o.trim())
+    const target = targetParticipants.trim() || beneficiaries.trim() || 'target youth constituents'
+
+    let draft = `${whenText}, the Sangguniang Kabataan of Barangay ${brgy}, ${mun}, ${prov} conducted "${title}"${loc ? ` ${loc}` : ''}. `
+    if (rationale.trim()) {
+      const cleanRationale = rationale.trim().replace(/\.$/, '')
+      draft += `${cleanRationale}. `
+    }
+    if (validObjectives.length > 0) {
+      if (validObjectives.length === 1) {
+        draft += `The primary objective was to ${validObjectives[0].trim().replace(/^to\s+/i, '')}. `
+      } else {
+        const objList = validObjectives
+          .map((o, i) => `(${i + 1}) ${o.trim().replace(/^to\s+/i, '')}`)
+          .join(', ')
+        draft += `The activity focused on key objectives: ${objList}. `
+      }
+    }
+    draft += `The event was successfully realized with active engagement from ${target}, fulfilling the project goals in accordance with approved guidelines.`
+
+    setSummaryReport(draft)
   }
 
   // ── Activity flow helpers ──
@@ -342,6 +387,21 @@ function NarrativeReportPage() {
       newErrors.beneficiaries = 'Target Beneficiaries is required.'
     }
 
+    // Target Participants validation: required, non-empty, not spaces only
+    if (!targetParticipants || !targetParticipants.trim()) {
+      newErrors.targetParticipants = 'Target Participants is required.'
+    }
+
+    // Total Number of Participants validation: required, numbers only, > 0
+    const trimmedTotal = (totalParticipants || '').trim()
+    if (!trimmedTotal) {
+      newErrors.totalParticipants = 'Total Number of Participants is required.'
+    } else if (!/^\d+$/.test(trimmedTotal)) {
+      newErrors.totalParticipants = 'Total Number of Participants must contain numbers only.'
+    } else if (parseInt(trimmedTotal, 10) <= 0) {
+      newErrors.totalParticipants = 'Total Number of Participants must be greater than 0.'
+    }
+
     // Number of Beneficiaries Reached validation: required, numbers only, > 0
     const trimmedReached = (beneficiariesReached || '').trim()
     if (!trimmedReached) {
@@ -359,6 +419,12 @@ function NarrativeReportPage() {
       if (newErrors.beneficiaries && targetBeneficiariesRef.current) {
         targetBeneficiariesRef.current.focus()
         targetBeneficiariesRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      } else if (newErrors.targetParticipants && targetParticipantsRef.current) {
+        targetParticipantsRef.current.focus()
+        targetParticipantsRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      } else if (newErrors.totalParticipants && totalParticipantsRef.current) {
+        totalParticipantsRef.current.focus()
+        totalParticipantsRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
       } else if (newErrors.beneficiariesReached && beneficiariesReachedRef.current) {
         beneficiariesReachedRef.current.focus()
         beneficiariesReachedRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -382,13 +448,14 @@ function NarrativeReportPage() {
       // Introduction
       rationale,
       objectives: objectives.filter((o) => o.trim()),
+      summaryReport: summaryReport.trim(),
       // Activity Details
-      targetParticipants,
+      targetParticipants: targetParticipants.trim(),
       activityFlow: activityFlow.filter((f) => f.time || f.activity),
       resourceSpeakers,
       facilitators,
       guests,
-      totalParticipants,
+      totalParticipants: totalParticipants.trim(),
       // Challenges
       challenges,
       actionsTaken,
@@ -668,6 +735,40 @@ function NarrativeReportPage() {
               </button>
             </div>
           </div>
+
+          <div className="field" style={{ marginTop: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span style={{ fontWeight: 600 }}>Summary Report</span>
+              <button
+                type="button"
+                className="nr-draft-btn"
+                onClick={handleGenerateSummaryDraft}
+                title="Auto-fill a draft summary based on project details and objectives"
+                style={{
+                  background: 'rgba(18, 128, 92, 0.08)',
+                  border: '1px solid rgba(18, 128, 92, 0.25)',
+                  color: 'var(--brand-green, #12805C)',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <Sparkles size={14} /> Auto-fill Summary Draft
+              </button>
+            </div>
+            <textarea
+              rows={5}
+              value={summaryReport}
+              onChange={(e) => setSummaryReport(e.target.value)}
+              placeholder="Provide a comprehensive summary report of the activity/project proceedings, highlights, attendance, and outcomes..."
+            />
+          </div>
         </div>
 
         {/* ═══════ SECTION 3: PROGRAM / ACTIVITY DETAILS ═══════ */}
@@ -675,23 +776,59 @@ function NarrativeReportPage() {
           <p className="eyebrow">Section 3</p>
           <h2>Program / Activity Details</h2>
           <div className="form-grid">
-            <label className="field">
-              <span>Target Participants</span>
+            <label className="field" htmlFor="nr-target-participants">
+              <span>
+                Target Participants <span style={{ color: 'var(--negative, #A32C1C)' }}>*</span>
+              </span>
               <input
+                id="nr-target-participants"
+                ref={targetParticipantsRef}
                 type="text"
                 value={targetParticipants}
-                onChange={(e) => setTargetParticipants(e.target.value)}
+                onChange={(e) => {
+                  setTargetParticipants(e.target.value)
+                  if (errors.targetParticipants) {
+                    setErrors((prev) => ({ ...prev, targetParticipants: '' }))
+                  }
+                }}
                 placeholder="e.g. 150 youth from the barangay"
+                className={errors.targetParticipants ? 'nr-input-error' : ''}
+                aria-invalid={Boolean(errors.targetParticipants)}
+                aria-describedby={errors.targetParticipants ? 'nr-target-participants-error' : undefined}
               />
+              {errors.targetParticipants && (
+                <span id="nr-target-participants-error" className="nr-field-error">
+                  <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                  {errors.targetParticipants}
+                </span>
+              )}
             </label>
-            <label className="field">
-              <span>Total Number of Participants</span>
+            <label className="field" htmlFor="nr-total-participants">
+              <span>
+                Total Number of Participants <span style={{ color: 'var(--negative, #A32C1C)' }}>*</span>
+              </span>
               <input
+                id="nr-total-participants"
+                ref={totalParticipantsRef}
                 type="text"
                 value={totalParticipants}
-                onChange={(e) => setTotalParticipants(e.target.value)}
+                onChange={(e) => {
+                  setTotalParticipants(e.target.value)
+                  if (errors.totalParticipants) {
+                    setErrors((prev) => ({ ...prev, totalParticipants: '' }))
+                  }
+                }}
                 placeholder="e.g. 142"
+                className={errors.totalParticipants ? 'nr-input-error' : ''}
+                aria-invalid={Boolean(errors.totalParticipants)}
+                aria-describedby={errors.totalParticipants ? 'nr-total-participants-error' : undefined}
               />
+              {errors.totalParticipants && (
+                <span id="nr-total-participants-error" className="nr-field-error">
+                  <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                  {errors.totalParticipants}
+                </span>
+              )}
             </label>
           </div>
 

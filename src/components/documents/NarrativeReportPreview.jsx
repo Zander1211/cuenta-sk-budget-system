@@ -213,7 +213,7 @@ function NarrativeReportPreview({ data, onClose, onSave }) {
             </p>
 
             <h3 className="nr-sub-heading">B. Objectives</h3>
-            {data.objectives.length > 0 ? (
+            {Array.isArray(data.objectives) && data.objectives.length > 0 ? (
               <ol className="nr-objectives-list">
                 {data.objectives.map((obj, idx) => (
                   <li key={idx}>{obj}</li>
@@ -222,6 +222,11 @@ function NarrativeReportPreview({ data, onClose, onSave }) {
             ) : (
               <p className="nr-body-text nr-empty">No objectives listed.</p>
             )}
+
+            <h3 className="nr-sub-heading">C. Summary Report</h3>
+            <p className="nr-body-text">
+              {data.summaryReport || 'No summary report provided.'}
+            </p>
           </div>
         </div>
 
