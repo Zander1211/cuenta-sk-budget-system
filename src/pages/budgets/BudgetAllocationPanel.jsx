@@ -5,6 +5,7 @@ import CurrencyInput from '../../components/CurrencyInput'
 import YearSpinner from '../../components/YearSpinner'
 import PaginationControls from '../../components/PaginationControls'
 import { parseBudgetAmount } from '../../services/monthlyBudget'
+import { getBudgetTotalForPeriod, calculateCarryForwardBudget } from '../../utils/budgetUtils'
 
 const BUDGETS_PAGE_SIZE = 2
 
@@ -14,8 +15,6 @@ const currency = new Intl.NumberFormat('en-PH', {
   minimumFractionDigits: 0,
   maximumFractionDigits: 2,
 })
-
-
 
 const monthOptions = [
   { value: 1, label: 'January' },
@@ -41,7 +40,7 @@ const quarterOptions = [
 
 function BudgetAllocationPanel() {
   const { role } = useAuth()
-  const { budgets, budgetAllocations, addMonthlyBudget } = useBudget()
+  const { budgets, budgetAllocations, addMonthlyBudget, expenses } = useBudget()
   const now = new Date()
   const initialMonth = now.getMonth() + 1
   const [draft, setDraft] = useState(null)
@@ -60,6 +59,17 @@ function BudgetAllocationPanel() {
   const canEdit = role === 'SK Treasurer'
   const periodKey = `${year}-${month}`
   const selectedBudget = budgets.find((budget) => budget.month === month && budget.year === year)
+
+  const monthApprovedBudget = useMemo(() => {
+    return getBudgetTotalForPeriod(budgets, filterMonth, filterYear)
+  }, [budgets, filterMonth, filterYear])
+
+  const monthCarryForward = useMemo(() => {
+    if (viewMode !== 'monthly') return 0
+    return calculateCarryForwardBudget(budgets, expenses, filterMonth, filterYear)
+  }, [budgets, expenses, filterMonth, filterYear, viewMode])
+
+  const monthTotalBudget = monthApprovedBudget + monthCarryForward
   // This form enters an additional allocation, never the existing total.
   const values = draft?.periodKey === periodKey ? draft : {
     amount: '', sourceOption: '', customSource: '', description: '',
@@ -213,6 +223,50 @@ function BudgetAllocationPanel() {
           </div>
         </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+          <div className="overview-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--ink-3)', fontWeight: 600 }}>
+              {viewMode === 'monthly' ? 'Approved Monthly Budget' : 'Quarterly Recorded Budget'}
+            </span>
+            <span style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--ink)' }}>
+              {currency.format(viewMode === 'monthly' ? monthApprovedBudget : displayedTotal)}
+            </span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>
+              Allocated for {periodLabel}
+            </span>
+          </div>
+
+          {viewMode === 'monthly' && (
+            <div className="overview-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--ink-3)', fontWeight: 600 }}>
+                Carried Forward Unused Budget
+              </span>
+              <span style={{ fontSize: '1.4rem', fontWeight: 700, color: monthCarryForward > 0 ? 'var(--positive, #15803d)' : 'var(--ink)' }}>
+                {currency.format(monthCarryForward)}
+              </span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>
+                {monthCarryForward > 0 ? 'Unused funds transferred from past months' : 'No unused funds to carry forward'}
+              </span>
+            </div>
+          )}
+
+          {viewMode === 'monthly' && (
+            <div className="overview-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '4px', borderLeft: '4px solid var(--brand, #0E6B4D)' }}>
+              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--brand, #0E6B4D)', fontWeight: 600 }}>
+                Total Available Budget
+              </span>
+              <span style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--ink)' }}>
+                {currency.format(monthTotalBudget)}
+              </span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--ink-soft)' }}>
+                {monthCarryForward > 0
+                  ? `${currency.format(monthApprovedBudget)} approved + ${currency.format(monthCarryForward)} carried forward`
+                  : `Total available for ${periodLabel}`}
+              </span>
+            </div>
+          )}
+        </div>
+
         {/* Form and history sit side by side on desktop (≥1024px) instead of
             stacking full-width — the form only ever needs a few input-width
             columns, so giving it the whole row wasted the space history could
@@ -224,7 +278,10 @@ function BudgetAllocationPanel() {
             <div>
               <p className="eyebrow">Monthly budget</p>
               <h2 style={{ margin: 0 }}>Add to monthly budget</h2>
-              <p className="form-note">Current total: {currency.format(selectedBudget?.amount || 0)}. The amount entered below will be added to this total.</p>
+              <p className="form-note">
+                Current approved: {currency.format(monthApprovedBudget)}
+                {monthCarryForward > 0 ? ` (Total with carry-forward: ${currency.format(monthTotalBudget)})` : ''}. The amount entered below will be added to this total.
+              </p>
             </div>
             <form className="user-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <fieldset disabled={isSaving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>

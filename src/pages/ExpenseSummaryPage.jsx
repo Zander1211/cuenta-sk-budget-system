@@ -4,7 +4,7 @@ import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 import YearSpinner from '../components/YearSpinner'
 import { summarizeApprovedBudgetFinancials } from '../utils/projectEventFinancials'
-import { getBudgetTotalForPeriod } from '../utils/budgetUtils'
+import { getBudgetTotalForPeriod, getBudgetWithCarryForward, calculateCarryForwardBudget } from '../utils/budgetUtils'
 import ReportSummaryNote from '../components/ReportSummaryNote'
 
 const currency = new Intl.NumberFormat('en-PH', {
@@ -69,12 +69,19 @@ function ExpenseSummaryPage() {
 
   const filteredExpenses = workingFinancials.records
 
-  const monthlyAllocation = useMemo(() => {
+  const carryForward = useMemo(() => {
+    return viewMode === 'monthly'
+      ? calculateCarryForwardBudget(budgets, expenses, selectedMonth, selectedYear)
+      : 0
+  }, [budgets, expenses, selectedMonth, selectedYear, viewMode])
+
+  const approvedMonthly = useMemo(() => {
     return viewMode === 'monthly'
       ? getBudgetTotalForPeriod(budgets, selectedMonth, selectedYear)
       : getBudgetTotalForPeriod(budgets, null, selectedYear)
   }, [budgets, selectedMonth, selectedYear, viewMode])
 
+  const monthlyAllocation = approvedMonthly + carryForward
   const totalApprovedBudgets = workingFinancials.totalApprovedBudget
   const remaining = monthlyAllocation - totalApprovedBudgets
   const utilizationPercent = monthlyAllocation > 0
@@ -238,7 +245,11 @@ function ExpenseSummaryPage() {
             <span className="summary-value">{currency.format(remaining)}</span>
           </div>
           <span className="summary-meta">
-            {monthlyAllocation > 0 ? `Monthly Budget: ${currency.format(monthlyAllocation)}` : 'No monthly budget configured'}
+            {monthlyAllocation > 0
+              ? carryForward > 0
+                ? `${currency.format(approvedMonthly)} approved + ${currency.format(carryForward)} carried forward`
+                : `Monthly Budget: ${currency.format(monthlyAllocation)}`
+              : 'No monthly budget configured'}
           </span>
         </div>
 

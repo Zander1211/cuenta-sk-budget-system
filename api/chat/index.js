@@ -36,13 +36,18 @@ function buildSystemPrompt(ctx) {
 
   const monthlySummariesText = (monthlySummaries && monthlySummaries.length > 0)
     ? monthlySummaries.map(m => {
-        const allocated = Number(m.allocatedBudget || 0)
+        const approvedBudget = Number(m.allocatedBudget || 0)
+        const carryForward = Number(m.carryForwardBudget || 0)
+        const totalBudget = Number(m.totalBudget || (approvedBudget + carryForward))
         const approved = Number(m.approvedBudget || 0)
-        const remainingBal = Number(m.remainingBudget ?? m.remainingBalance ?? (allocated - approved))
+        const remainingBal = Number(m.remainingBudget ?? m.remainingBalance ?? (totalBudget - approved))
         const actualExp = Number(m.totalExpenses ?? m.actualExpenses ?? 0)
-        const util = allocated > 0 ? Math.round((approved / allocated) * 100) : 0
+        const util = totalBudget > 0 ? Math.round((approved / totalBudget) * 100) : 0
         const availablePct = 100 - util
-        return `- ${m.month} ${m.year}: Monthly Budget = ₱${allocated.toLocaleString('en-PH')} | Approved Allocations = ₱${approved.toLocaleString('en-PH')} | REMAINING BUDGET (Monthly Budget minus Approved Allocations) = ₱${remainingBal.toLocaleString('en-PH')} (${availablePct}% available) | Actual Expenses (Verified Receipts) = ₱${actualExp.toLocaleString('en-PH')} | Budget Utilization = ${util}% (Source: ${m.sources || 'Regular SK Budget'})`
+        const carryText = carryForward > 0
+          ? ` (Approved: ₱${approvedBudget.toLocaleString('en-PH')} + Carried Forward from Previous Months: ₱${carryForward.toLocaleString('en-PH')})`
+          : ''
+        return `- ${m.month} ${m.year}: Total Budget = ₱${totalBudget.toLocaleString('en-PH')}${carryText} | Approved Allocations = ₱${approved.toLocaleString('en-PH')} | REMAINING BUDGET (Total Budget minus Approved Allocations) = ₱${remainingBal.toLocaleString('en-PH')} (${availablePct}% available) | Actual Expenses (Verified Receipts) = ₱${actualExp.toLocaleString('en-PH')} | Budget Utilization = ${util}% (Source: ${m.sources || 'Regular SK Budget'})`
       }).join('\n')
     : '- No monthly breakdown recorded yet.'
 
@@ -346,13 +351,14 @@ STRICT FILTERING & RESPONSE ACCURACY RULES:
    - If helpful or requested, provide the completed months breakdown: January (₱24,251), February (₱24,251), March (₱30,000), April (₱0), May (₱0), June (₱0), July (₱30,500), August (₱0), September (₱60,500), totaling ₱169,502.
    - NEVER invent or calculate a different number. Use ₱${Number(prevSummary?.totalRemaining || 0).toLocaleString('en-PH')}.
 
-1F. **MONTHLY REMAINING BUDGET (MONTHLY BUDGET MINUS APPROVED ALLOCATIONS)**:
-   - When asked for the remaining budget of a specific month (e.g., "How much the remaining budget for the month of october?"):
-   - The Remaining Budget is: Monthly Budget minus Approved Allocations.
-   - Look up that specific month in section 1 (MONTHLY BUDGET & SUMMARY BREAKDOWN) above and read the exact REMAINING BUDGET written on that line.
-   - For October 2026: Monthly Budget is ₱150,000, Approved Allocations is ₱25,000, and REMAINING BUDGET is ₱125,000 (83% available).
-   - Answer: "The remaining budget for October 2026 is ₱125,000 (Monthly budget: ₱150,000 minus approved allocations: ₱25,000)."
-   - NEVER confuse the Remaining Budget with the Approved Allocations (₱25,000) or Verified Receipts (₱0).
+1F. **MONTHLY TOTAL BUDGET & REMAINING BUDGET WITH AUTOMATIC CARRY-FORWARD**:
+   - Any unused remaining budget from completed past months is automatically carried forward and added to the current month's Total Budget:
+     Current Month Total Budget = Current Month Approved Budget + Total Remaining Budget from Previous Months.
+   - When asked for the total budget, approved budget, or remaining budget of a specific month (e.g., "What is the total budget for October?" or "How much is the remaining budget for October?"):
+   - Look up that specific month in section 1 (MONTHLY BUDGET & SUMMARY BREAKDOWN) above and read the exact numbers written on that line.
+   - If a month has funds carried forward from previous months, mention both the approved budget and the carried-forward budget when explaining how the Total Budget was calculated.
+   - The Remaining Budget is: Total Budget minus Approved Allocations.
+   - NEVER confuse the Remaining Budget with the Approved Allocations or Verified Receipts.
 
 2. **NEVER AGGREGATE UNRELATED MONTHS**:
    - Never combine or sum budgets from different months unless the user explicitly requests "total budget", "annual budget", "overall budget", "entire year budget", or "all months combined".

@@ -162,10 +162,13 @@ function DocumentGenerator({
   // available from the first render, so there is nothing to wait on).
   const [appliedPresetId, setAppliedPresetId] = useState(null)
 
-  // Default "Approved By" to the active SK Chairman's name, editable.
+  // Automatically retrieve the active SK Chairman's name for new documents,
+  // while preserving historical approvedByName when editing an existing document.
   useEffect(() => {
-    if (activeChairmanName) setApprovedByName((prev) => prev || activeChairmanName)
-  }, [activeChairmanName])
+    if (!initialData && activeChairmanName) {
+      setApprovedByName(activeChairmanName)
+    }
+  }, [activeChairmanName, initialData])
 
 
 
@@ -308,7 +311,7 @@ function DocumentGenerator({
           totalAmount,
           requestedByName: requestedByName || profileName || '',
           requestedByDate: formattedDate,
-          approvedByName,
+          approvedByName: initialData?.approvedByName || approvedByName || activeChairmanName || '',
           approvedByDate: formattedDate,
         },
       }
@@ -656,8 +659,16 @@ function DocumentGenerator({
               <span>Approved By (SK Chairman)</span>
               <input
                 type="text"
-                value={approvedByName}
-                onChange={(e) => setApprovedByName(e.target.value)}
+                value={approvedByName || activeChairmanName || ''}
+                readOnly
+                tabIndex={-1}
+                className="is-readonly"
+                style={{
+                  backgroundColor: 'var(--muted, #f3f4f6)',
+                  cursor: 'not-allowed',
+                  color: 'var(--ink, #1f2937)',
+                }}
+                title="Automatically retrieved from the current SK Chairman account."
               />
             </label>
           </div>

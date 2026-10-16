@@ -62,8 +62,10 @@ function DisbursementVoucherForm({ profileName, role, selectedRequest, onPreview
   const [skTreasurer, setSkTreasurer] = useState(() => initialData?.skTreasurer ?? '')
   const [skChairman, setSkChairman] = useState(() => initialData?.skChairman ?? '')
   useEffect(() => {
-    if (activeChairmanName) setSkChairman((prev) => prev || activeChairmanName)
-  }, [activeChairmanName])
+    if (!initialData && activeChairmanName) {
+      setSkChairman(activeChairmanName)
+    }
+  }, [activeChairmanName, initialData])
   const [certDateA, setCertDateA] = useState(todayISO())
   const [certDateB, setCertDateB] = useState(todayISO())
   const [certDateC, setCertDateC] = useState(todayISO())
@@ -112,7 +114,7 @@ function DisbursementVoucherForm({ profileName, role, selectedRequest, onPreview
         amount: Number(amount) || 0,
         skKagawad,
         skTreasurer,
-        skChairman,
+        skChairman: initialData?.skChairman || skChairman || activeChairmanName || '',
         certDateA,
         certDateB,
         certDateC,
@@ -216,9 +218,17 @@ function DisbursementVoucherForm({ profileName, role, selectedRequest, onPreview
             <span>C. SK Chairman Name</span>
             <input
               type="text"
-              value={skChairman}
-              onChange={(e) => setSkChairman(e.target.value)}
+              value={skChairman || activeChairmanName || ''}
+              readOnly
+              tabIndex={-1}
+              className="is-readonly"
+              style={{
+                backgroundColor: 'var(--muted, #f3f4f6)',
+                cursor: 'not-allowed',
+                color: 'var(--ink, #1f2937)',
+              }}
               placeholder="SK Chairman"
+              title="Automatically retrieved from the current SK Chairman account."
             />
           </label>
           <label className="field">

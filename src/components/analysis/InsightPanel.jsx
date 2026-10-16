@@ -2,15 +2,15 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, Info, Lightbulb, RefreshCw, Sparkles } from 'lucide-react'
 
 const severityMeta = {
-  high: { Icon: AlertTriangle, label: 'High Priority', colorClass: 'high' },
-  medium: { Icon: Info, label: 'Medium Priority', colorClass: 'medium' },
-  low: { Icon: CheckCircle2, label: 'Low / Info', colorClass: 'low' },
+  high: { Icon: AlertTriangle, label: 'High Risk Alert', colorClass: 'high' },
+  medium: { Icon: Info, label: 'Medium Risk Alert', colorClass: 'medium' },
+  low: { Icon: CheckCircle2, label: 'Low Risk Status', colorClass: 'low' },
 }
 
 const severityWhy = {
-  high: 'Flagged as high priority — this may indicate a budget variance or compliance risk requiring attention.',
-  medium: 'Flagged as medium priority — worth monitoring, but not currently exceeding critical thresholds.',
-  low: 'Informational observation — budget and compliance remain within standard ranges.',
+  high: 'Spending has exceeded the approved budget limit or created a deficit condition.',
+  medium: 'Budget utilization is approaching limit or spending velocity is accelerating.',
+  low: 'Spending is within approved budget and utilization is well managed.',
 }
 
 export function InsightItem({ item }) {

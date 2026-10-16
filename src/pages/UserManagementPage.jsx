@@ -359,13 +359,16 @@ function UserManagementPage() {
         return
       }
 
+      const isChairman = pendingUser.role === 'SK Chairman'
       addLog({
-        action: `User Created — ${pendingUser.name}`,
-        actionType: 'User Created',
+        action: isChairman ? 'SK Chairman Updated' : `User Created — ${pendingUser.name}`,
+        actionType: isChairman ? 'SK Chairman Updated' : 'User Created',
         module: 'User Management',
         recordType: 'User',
         recordId: createResult.user?.id,
-        description: `Created account for ${pendingUser.name} (${pendingUser.role})`,
+        description: isChairman
+          ? `Changed SK Chairman to ${pendingUser.name}`
+          : `Created account for ${pendingUser.name} (${pendingUser.role})`,
         newValue: { name: pendingUser.name, email: pendingUser.email, role: pendingUser.role },
       })
 
@@ -480,12 +483,14 @@ function UserManagementPage() {
     const actionType  = isDisabling ? 'User Account Disabled' : 'User Account Enabled'
 
     addLog({
-      action: `${actionLabel} Account — ${account.full_name}`,
-      actionType,
+      action: account.role === 'SK Chairman' ? 'SK Chairman Updated' : `${actionLabel} Account — ${account.full_name}`,
+      actionType: account.role === 'SK Chairman' ? 'SK Chairman Updated' : actionType,
       module: 'User Management',
       recordType: 'User',
       recordId: account.id,
-      description: `${actionLabel} account for ${account.full_name} (${account.email}), Role: ${account.role}`,
+      description: account.role === 'SK Chairman'
+        ? `${actionLabel} SK Chairman account for ${account.full_name} (${account.email})`
+        : `${actionLabel} account for ${account.full_name} (${account.email}), Role: ${account.role}`,
       previousValue: { is_active: isDisabling },
       newValue: { is_active: !isDisabling },
     })

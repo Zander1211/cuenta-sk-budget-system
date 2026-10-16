@@ -25,7 +25,7 @@ import GlobalSearch from '../components/GlobalSearch'
 import YearSpinner from '../components/YearSpinner'
 import { supabase } from '../supabase/supabaseClient'
 import { isBiodataComplete } from '../utils/biodata'
-import { getBudgetTotalForPeriod, getApprovedAllocationTotal } from '../utils/budgetUtils'
+import { getBudgetTotalForPeriod, getApprovedAllocationTotal, calculateCarryForwardBudget } from '../utils/budgetUtils'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -126,7 +126,14 @@ function MainDashboardPage() {
   }
 
   const targetMonth = viewMode === 'monthly' ? selectedMonth : null
-  const { totalBudget, totalExpenses, remainingBalance: remainingBudget, hasBudgetData } = useBudgetCalculations(targetMonth, selectedYear)
+  const {
+    approvedBudget,
+    carryForwardBudget,
+    totalBudget,
+    totalExpenses,
+    remainingBalance: remainingBudget,
+    hasBudgetData,
+  } = useBudgetCalculations(targetMonth, selectedYear)
   const usedPercent = totalBudget > 0
     ? Math.min(100, Math.round((totalExpenses / totalBudget) * 100))
     : 0
@@ -266,11 +273,20 @@ function MainDashboardPage() {
     return monthOptions.map((m) => {
       const monthNum = m.value
       const allocated = getBudgetTotalForPeriod(budgets, monthNum, selectedYear)
+      const carryForward = calculateCarryForwardBudget(budgets, expenses, monthNum, selectedYear)
       const totalExp = getApprovedAllocationTotal(expenses, monthNum, selectedYear)
+
+      const isCurrentMonth = selectedYear === currentYear && monthNum === currentMonth
+      const isSelectedMonth = viewMode === 'monthly' && monthNum === selectedMonth
+
+      // For completed past months, the remaining budget is what remained unused from that month.
+      // For current or selected month, total budget is Approved Budget + Total Remaining from previous months:
+      const totalEffectiveBudget = allocated + carryForward
       const remaining = allocated - totalExp
+      const effectiveRemaining = totalEffectiveBudget - totalExp
 
       let status = 'Remaining'
-      if (allocated <= 0) {
+      if (allocated <= 0 && carryForward <= 0) {
         status = 'No Budget Allocated'
       } else if (remaining === 0) {
         status = 'Fully Utilized'
@@ -280,15 +296,14 @@ function MainDashboardPage() {
         status = 'Remaining'
       }
 
-      const isCurrentMonth = selectedYear === currentYear && monthNum === currentMonth
-      const isSelectedMonth = viewMode === 'monthly' && monthNum === selectedMonth
-
       return {
         month: monthNum,
         label: m.label,
         allocatedBudget: allocated,
+        carryForwardBudget: carryForward,
+        totalBudget: totalEffectiveBudget,
         totalExpenses: totalExp,
-        remainingBudget: remaining,
+        remainingBudget: isCurrentMonth || isSelectedMonth ? effectiveRemaining : remaining,
         status,
         isCurrentMonth,
         isSelectedMonth,
@@ -319,8 +334,8 @@ function MainDashboardPage() {
   }, [monthlyBudgetSummaries, selectedYear, currentYear, currentMonth])
 
   const previousMonthsRemainingTotal = useMemo(() => {
-    return Math.max(0, previousMonths.reduce((sum, m) => sum + m.remainingBudget, 0))
-  }, [previousMonths])
+    return calculateCarryForwardBudget(budgets, expenses, currentMonth, currentYear)
+  }, [budgets, expenses, currentMonth, currentYear])
 
   const previousMonthsAllocatedTotal = useMemo(() => {
     return previousMonths.reduce((sum, m) => sum + m.allocatedBudget, 0)
@@ -365,10 +380,14 @@ function MainDashboardPage() {
       label: 'Total Budget',
       value: currency.format(totalBudget),
       meta: hasBudgetData
-        ? `Allocated for ${periodLabel}`
+        ? carryForwardBudget > 0
+          ? `${currency.format(approvedBudget)} approved + ${currency.format(carryForwardBudget)} carried forward`
+          : `Allocated for ${periodLabel}`
         : 'No budget entries yet',
       chip: hasBudgetData
-        ? viewMode === 'monthly'
+        ? carryForwardBudget > 0
+          ? 'Includes Carry-Forward'
+          : viewMode === 'monthly'
           ? 'Monthly'
           : 'Yearly'
         : 'Empty',
@@ -399,7 +418,7 @@ function MainDashboardPage() {
       label: 'Remaining Budgets',
       emoji: '💰',
       value: currency.format(previousMonthsRemainingTotal),
-      meta: 'Unused budget from previous months',
+      meta: 'Unused budget from previous months (carried forward)',
       chip: previousMonthsRemainingTotal > 0 ? 'View breakdown' : 'Clear',
       tone: previousMonthsRemainingTotal > 0 ? 'positive' : 'neutral',
       icon: Coins,

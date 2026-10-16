@@ -196,25 +196,40 @@ function UpdateDetailsPage() {
     }
 
     // 4. Audit Log
-    addLog({
-      action: 'Profile Updated',
-      actionType: 'Profile Updated',
-      module: 'Authentication',
-      recordType: 'User',
-      recordId: user?.id,
-      description: `Profile name and personal information updated for ${updatedFullName}`,
-      previousValue,
-      newValue: {
-        first_name: trimmedFirst,
-        middle_name: trimmedMiddle,
-        last_name: trimmedLast,
-        nickname: trimmedNick,
-        full_name: updatedFullName,
-        ...biodataPayload,
-      },
-      status: 'Success',
-      actor: updatedFullName,
-    })
+    const oldChairmanName = previousValue?.full_name || profileName || ''
+    if (role === 'SK Chairman' && oldChairmanName && oldChairmanName !== updatedFullName) {
+      addLog({
+        action: 'SK Chairman Updated',
+        actionType: 'SK Chairman Updated',
+        module: 'User Management',
+        recordType: 'User',
+        recordId: user?.id,
+        description: `Changed SK Chairman from ${oldChairmanName} to ${updatedFullName}`,
+        previousValue: { full_name: oldChairmanName },
+        newValue: { full_name: updatedFullName },
+        status: 'Success',
+      })
+    } else {
+      addLog({
+        action: 'Profile Updated',
+        actionType: 'Profile Updated',
+        module: 'Authentication',
+        recordType: 'User',
+        recordId: user?.id,
+        description: `Profile name and personal information updated for ${updatedFullName}`,
+        previousValue,
+        newValue: {
+          first_name: trimmedFirst,
+          middle_name: trimmedMiddle,
+          last_name: trimmedLast,
+          nickname: trimmedNick,
+          full_name: updatedFullName,
+          ...biodataPayload,
+        },
+        status: 'Success',
+        actor: updatedFullName,
+      })
+    }
 
     // 5. Notify any mounted listeners for immediate UI reflection
     window.dispatchEvent(new CustomEvent('cuenta:profile-updated'))

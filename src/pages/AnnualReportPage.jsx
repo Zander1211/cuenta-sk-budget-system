@@ -44,7 +44,7 @@ function AnnualReportPage() {
   const [skKagawads, setSkKagawads] = useState(['', '', '', '', '', '', ''])
 
   useEffect(() => {
-    if (activeChairmanName) setSkChairperson((prev) => prev || activeChairmanName)
+    if (activeChairmanName) setSkChairperson(activeChairmanName)
   }, [activeChairmanName])
 
   const handleKagawadChange = (index, value) => {
@@ -325,7 +325,20 @@ function AnnualReportPage() {
               </label>
               <label className="field">
                 <span>SK Chairperson</span>
-                <input type="text" value={skChairperson} onChange={(e) => setSkChairperson(e.target.value)} />
+                <input
+                  type="text"
+                  value={activeChairmanName || skChairperson || ''}
+                  readOnly
+                  tabIndex={-1}
+                  className="is-readonly"
+                  style={{
+                    backgroundColor: 'var(--muted, #f3f4f6)',
+                    cursor: 'not-allowed',
+                    color: 'var(--ink, #1f2937)',
+                  }}
+                  title="Automatically retrieved from the current SK Chairman account."
+                  placeholder="SK Chairperson"
+                />
               </label>
             </div>
           </div>
@@ -598,7 +611,7 @@ function AnnualReportPage() {
             city: cityMunicipality,
             province: province,
             skTreasurer,
-            skChairperson,
+            skChairperson: activeChairmanName || skChairperson || '',
             skSecretary,
             skKagawads,
             receipts: {

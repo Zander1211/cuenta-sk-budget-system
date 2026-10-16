@@ -8,11 +8,11 @@ function push(list, cond, insight) {
 }
 
 // Short, human-readable justification for a computed budget/utilization severity.
-// Keeps the "Why" line deterministic and consistent with the severity rules.
+// Keeps the "Why" line deterministic and consistent with financial severity rules.
 export function budgetWhy(severity) {
-  if (severity === 'high') return 'Spending has exceeded the selected budget threshold.'
-  if (severity === 'medium') return 'Spending is approaching the approved budget limit.'
-  return 'Budget usage is within a healthy range.'
+  if (severity === 'high') return 'Spending has exceeded the approved budget limit or created a deficit.'
+  if (severity === 'medium') return 'Budget utilization is approaching limit or spending velocity is accelerating.'
+  return 'Spending is within approved budget and utilization is well managed.'
 }
 
 // The one place a performance tone becomes an insight severity. Every builder
@@ -24,61 +24,181 @@ export function severityForTone(tone) {
   return 'low'
 }
 
-// The headline status shown beside "Executive Financial Summary". Rolled up
-// from the insights actually raised rather than from the rate alone, and
-// shared so a record cannot read "Action Needed" on one screen while the same
-// findings read as merely "Fully Utilized" on another.
-export function rollUpHealth({ severityCounts, remainingBalance, utilizationRate }) {
-  if (severityCounts.high > 0 || remainingBalance < 0) {
-    return { label: 'Action Needed', tone: 'danger' }
+// Deterministic Financial Risk Classification.
+// Classifies financial status exclusively using financial indicators:
+// - Low Risk: Spending within approved budget, utilization well managed, no unusual patterns, sufficient remaining balance.
+// - Medium Risk: Utilization approaching limit (>= 80%), spending accelerating, remaining balance limited, or notable concentration/variance.
+// - High Risk: Budget fully utilized or exceeded, overspending detected, remaining budget critically low (>= 95%), or significant financial anomalies.
+// Pending approvals, requests, reviews, and workflow statuses are strictly excluded.
+export function rollUpHealth({
+  severityCounts = { high: 0, medium: 0, low: 0 },
+  remainingBalance = 0,
+  utilizationRate = 0,
+  totalBudget = 0,
+  totalExpenses = 0,
+  spendingTrend = 'Stable',
+}) {
+  const isOverBudget = remainingBalance < 0 || (totalBudget > 0 && totalExpenses > totalBudget) || utilizationRate >= 100
+  const isCriticallyLow = (totalBudget > 0 && utilizationRate >= 95) || (totalBudget > 0 && remainingBalance <= 0)
+  const hasHighAnomalies = (severityCounts.high || 0) > 0
+
+  if (isOverBudget || isCriticallyLow || hasHighAnomalies) {
+    return {
+      label: 'High Risk',
+      tone: 'danger',
+      level: 'high',
+      description: isOverBudget
+        ? 'Budget has been fully utilized or exceeded.'
+        : isCriticallyLow
+          ? 'Remaining budget is critically low.'
+          : 'Significant financial anomalies or unusual spending patterns identified.',
+    }
   }
-  if (severityCounts.medium > 0 || utilizationRate > 80) {
-    return { label: 'Monitor Closely', tone: 'warning' }
+
+  const isApproachingLimit = utilizationRate >= 80
+  const isAccelerating = spendingTrend === 'Increasing'
+  const hasMediumAnomalies = (severityCounts.medium || 0) > 0
+
+  if (isApproachingLimit || isAccelerating || hasMediumAnomalies) {
+    return {
+      label: 'Medium Risk',
+      tone: 'warning',
+      level: 'medium',
+      description: isApproachingLimit
+        ? 'Budget utilization is approaching its limit.'
+        : isAccelerating
+          ? 'Spending is increasing faster than expected.'
+          : 'Certain projects or categories require closer financial monitoring.',
+    }
   }
-  return { label: 'Healthy Status', tone: 'positive' }
+
+  return {
+    label: 'Low Risk',
+    tone: 'positive',
+    level: 'low',
+    description: 'Spending is within approved budget and budget utilization is well managed.',
+  }
 }
 
-export function buildOverviewInsights(summary) {
-  const { utilizationRate, performance, remainingBalance, missingReceipts, pendingRequests, highestCategory, returnedBudget, returnedRecordCount, isProjectScoped } = summary
+export function buildOverviewInsights(summary = {}) {
+  const {
+    utilizationRate = 0,
+    remainingBalance = 0,
+    totalBudget = 0,
+    totalExpenses = 0,
+    highestCategory,
+    returnedBudget = 0,
+    returnedRecordCount = 0,
+    spendingTrend,
+    largestVariance,
+  } = summary
+
   const out = []
-  const perfSeverity = severityForTone(performance.tone)
-  // Scoped to a project the rate is verified spending against that record's
-  // own budget; at period level it is allocation against the monthly budget.
-  const rateSubject = isProjectScoped
-    ? 'of this record’s approved budget has been spent against verified receipts'
-    : 'of the monthly budget has been committed to approved projects and events'
-  out.push({
-    type: 'budget',
-    severity: perfSeverity,
-    title: `Budget performance: ${performance.label}`,
-    why: budgetWhy(perfSeverity),
-    detail: `${formatPercentage(utilizationRate)} ${rateSubject}. ${performance.message}`,
-  })
-  push(out, remainingBalance < 0, {
-    type: 'budget', severity: 'high', title: 'Spending exceeds allocation',
-    why: 'The period is over budget, which is a significant spending risk.',
-    detail: `The period is over budget by ${formatCurrency(Math.abs(remainingBalance))}.`,
-  })
-  push(out, (returnedBudget || 0) > 0, {
-    type: 'budget', severity: 'low', title: 'Unused budget recovered',
-    why: 'This is a favorable recovery and does not indicate a risk.',
-    detail: `${formatCurrency(returnedBudget)} was returned to the monthly budget from ${returnedRecordCount} completed project${returnedRecordCount === 1 ? '' : 's'}/event${returnedRecordCount === 1 ? '' : 's'} and is available for new requests.`,
-  })
-  push(out, highestCategory, {
-    type: 'spending', severity: 'low', title: 'Largest spending category',
-    why: 'This is informational only and does not currently indicate a risk condition.',
-    detail: highestCategory ? `${highestCategory.name} accounts for ${formatCurrency(highestCategory.value)} (${formatPercentage(highestCategory.percent)}).` : '',
-  })
-  push(out, missingReceipts > 0, {
-    type: 'documents', severity: 'high', title: 'Missing receipts detected',
-    why: 'Approved expenses are missing required supporting receipts, which is a compliance risk.',
-    detail: `${missingReceipts} approved expense${missingReceipts === 1 ? '' : 's'} in this period ${missingReceipts === 1 ? 'does' : 'do'} not have an attached receipt.`,
-  })
-  push(out, (pendingRequests?.length || 0) > 0, {
-    type: 'approvals', severity: 'medium', title: 'Pending approvals',
-    why: 'Requests are awaiting review and may affect the budget once approved.',
-    detail: `${pendingRequests.length} budget request${pendingRequests.length === 1 ? '' : 's'} awaiting review.`,
-  })
+
+  // 1. Budget Utilization & Overspending Condition
+  const isOverBudget = remainingBalance < 0 || utilizationRate >= 100
+  const isNearLimit = utilizationRate >= 80 && utilizationRate < 100
+
+  if (isOverBudget) {
+    out.push({
+      type: 'budget',
+      severity: 'high',
+      title: 'Overspending detected: Budget exceeded',
+      why: 'Spending has exceeded the approved budget allocation.',
+      detail: `Total expenditures exceed allocation by ${formatCurrency(Math.abs(remainingBalance))} (${formatPercentage(utilizationRate)} utilized). Corrective financial controls required.`,
+    })
+  } else if (isNearLimit) {
+    out.push({
+      type: 'budget',
+      severity: 'medium',
+      title: 'Budget utilization approaching limit',
+      why: 'Budget utilization is nearing the approved ceiling and remaining balance is limited.',
+      detail: `${formatPercentage(utilizationRate)} of approved funds have been utilized, leaving ${formatCurrency(remainingBalance)}. Projects and events require closer financial monitoring.`,
+    })
+  } else {
+    out.push({
+      type: 'budget',
+      severity: 'low',
+      title: 'Budget utilization is well managed',
+      why: 'Spending is within the approved budget and no overspending risk is detected.',
+      detail: `${formatPercentage(utilizationRate)} utilized (${formatCurrency(totalExpenses)} spent of ${formatCurrency(totalBudget)}). Reserves remain in a healthy condition.`,
+    })
+  }
+
+  // 2. Remaining Budget & Buffer Status
+  if (remainingBalance > 0 && !isNearLimit) {
+    out.push({
+      type: 'budget',
+      severity: 'low',
+      title: 'Sufficient remaining budget available',
+      why: 'Adequate uncommitted funds remain available to support ongoing and upcoming operations.',
+      detail: `${formatCurrency(remainingBalance)} in remaining budget is available for planned essential activities.`,
+    })
+  } else if (remainingBalance > 0 && isNearLimit) {
+    out.push({
+      type: 'budget',
+      severity: 'medium',
+      title: 'Remaining budget is becoming limited',
+      why: 'Available funds are constrained, requiring careful financial allocation.',
+      detail: `Only ${formatCurrency(remainingBalance)} remaining before reaching the approved budget limit.`,
+    })
+  }
+
+  // 3. Returned Budget & Fund Efficiency
+  if ((returnedBudget || 0) > 0) {
+    out.push({
+      type: 'budget',
+      severity: 'low',
+      title: 'Unused budget recovered & optimized',
+      why: 'Unspent funds were returned from completed activities, improving fund utilization efficiency.',
+      detail: `${formatCurrency(returnedBudget)} was returned to the fund from ${returnedRecordCount || 1} completed project(s)/event(s) and is available for reallocation.`,
+    })
+  }
+
+  // 4. Category Spending Pattern & Concentration
+  if (highestCategory) {
+    const isConcentrated = highestCategory.percent > 50
+    out.push({
+      type: 'spending',
+      severity: isConcentrated ? 'medium' : 'low',
+      title: isConcentrated ? `Spending concentration in ${highestCategory.name}` : `Top spending category: ${highestCategory.name}`,
+      why: isConcentrated
+        ? 'A single category represents over half of total expenses, which reduces budget flexibility.'
+        : 'Normal distribution of expenditures across approved programs.',
+      detail: `${highestCategory.name} accounts for ${formatCurrency(highestCategory.value)} (${formatPercentage(highestCategory.percent)}) of actual expenditures.`,
+    })
+  }
+
+  // 5. Spending Trend Velocity
+  if (spendingTrend === 'Increasing') {
+    out.push({
+      type: 'trend',
+      severity: 'medium',
+      title: 'Spending is increasing faster than expected',
+      why: 'Spending velocity is accelerating compared to earlier periods.',
+      detail: 'Expenditures have trended upward. Closer financial monitoring of ongoing projects is advised.',
+    })
+  } else if (spendingTrend === 'Decreasing' || spendingTrend === 'Stable') {
+    out.push({
+      type: 'trend',
+      severity: 'low',
+      title: 'Stable spending velocity',
+      why: 'Spending patterns remain predictable and within expected historical baselines.',
+      detail: 'No unusual spending spikes detected across the active period.',
+    })
+  }
+
+  // 6. Budget Variance (if available)
+  if (largestVariance && largestVariance.status === 'Over Budget') {
+    out.push({
+      type: 'variance',
+      severity: 'high',
+      title: `Budget variance alert: ${largestVariance.label}`,
+      why: 'Actual spending has diverged unfavorably from the budget allocation.',
+      detail: `Variance of ${formatCurrency(Math.abs(largestVariance.variance))} exceeds planned allocation.`,
+    })
+  }
+
   return out.slice(0, 5)
 }
 
@@ -106,11 +226,6 @@ export function buildCategoryInsights(cat) {
     type: 'risk', severity: 'medium', title: 'Concentrated spending',
     why: 'Spending is concentrated in one category, which reduces budget flexibility.',
     detail: cat.highest ? `${cat.highest.name} exceeds half of all spending — consider diversifying allocation.` : '',
-  })
-  push(out, cat.missingReceipts > 0, {
-    type: 'documents', severity: 'high', title: 'Receipts missing',
-    why: 'Missing documentation creates a compliance issue.',
-    detail: `${cat.missingReceipts} expense${cat.missingReceipts === 1 ? '' : 's'} still need supporting receipts.`,
   })
   return out.slice(0, 5)
 }
@@ -161,11 +276,6 @@ export function buildUtilizationInsights(util) {
     type: 'budget', severity: 'medium', title: 'Low utilization',
     why: 'A large share of funds remains unused and may be reallocated to active projects.',
     detail: `Only ${formatPercentage(util.utilizationRate)} used — funds may be reallocated to active projects.`,
-  })
-  push(out, util.missingReceipts > 0, {
-    type: 'documents', severity: 'high', title: 'Compliance gap',
-    why: 'Utilized expenses lack receipts, which is a compliance risk.',
-    detail: `${util.missingReceipts} utilized expense${util.missingReceipts === 1 ? '' : 's'} lack receipts.`,
   })
   return out.slice(0, 5)
 }

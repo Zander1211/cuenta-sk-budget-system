@@ -44,7 +44,6 @@ export default function BudgetUtilizationPage() {
     remainingBudget: Math.round(util.remainingBudget),
     utilizationRate: Number(util.utilizationRate.toFixed(1)),
     performance: util.performance.label,
-    missingReceipts: util.missingReceipts,
     approvedRecords: rows.slice(0, 8).map((r) => ({
       name: r.name,
       type: r.type,

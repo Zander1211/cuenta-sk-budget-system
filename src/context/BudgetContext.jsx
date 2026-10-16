@@ -4,6 +4,11 @@ import { useNotifications } from './NotificationContext'
 import { useAuth } from './AuthContext'
 import { supabase } from '../supabase/supabaseClient'
 import { calculateProjectEventFinancials } from '../utils/projectEventFinancials'
+import {
+  getBudgetTotalForPeriod,
+  getApprovedAllocationTotal,
+  calculateCarryForwardBudget,
+} from '../utils/budgetUtils'
 
 import { mapBudgetRow, mapBudgetAllocationRow, saveMonthlyBudget } from '../services/monthlyBudget'
 
@@ -1714,38 +1719,22 @@ export function useBudgetCalculations(month, year) {
   const { budgets, expenses } = useBudget()
 
   return useMemo(() => {
-    const filteredBudgets = budgets.filter(b => {
-      if (month !== null && month !== undefined) {
-        return b.month === month && b.year === year
-      }
-      return b.year === year
-    })
-    const totalBudgetAmount = filteredBudgets.reduce((sum, b) => sum + Number(b.amount || 0), 0)
+    const isMonthly = month !== null && month !== undefined
+    const approvedBudget = getBudgetTotalForPeriod(budgets, isMonthly ? month : null, year)
+    const carryForwardBudget = isMonthly ? calculateCarryForwardBudget(budgets, expenses, month, year) : 0
+    const totalBudgetAmount = approvedBudget + carryForwardBudget
 
-    const validExpenses = expenses.filter(e => {
-       // Only count expenses that are explicitly Approved budget allocations.
-       // Excludes: Cancelled, Pending, Rejected, and direct 'Recorded' cash expenses
-       // that are not tied to an approved budget request.
-       if (e.status !== 'Approved') return false
-       if (e.archivedAt) return false
-       const eDate = new Date(e.eventDate || e.date || e.approvedAt || e.createdAt)
-       if (isNaN(eDate.getTime())) return false
-
-       if (month !== null && month !== undefined) {
-         return eDate.getMonth() + 1 === month && eDate.getFullYear() === year
-       }
-       return eDate.getFullYear() === year
-    })
-
-    const totalExpensesAmount = validExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
+    const totalExpensesAmount = getApprovedAllocationTotal(expenses, isMonthly ? month : null, year)
     const remainingBalanceAmount = totalBudgetAmount - totalExpensesAmount
 
     return {
+      approvedBudget,
+      carryForwardBudget,
       monthlyBudget: totalBudgetAmount,
       totalBudget: totalBudgetAmount,
       totalExpenses: totalExpensesAmount,
       remainingBalance: remainingBalanceAmount,
-      hasBudgetData: totalBudgetAmount > 0
+      hasBudgetData: totalBudgetAmount > 0,
     }
   }, [budgets, expenses, month, year])
 }

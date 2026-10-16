@@ -77,7 +77,6 @@ export default function ExpensesByCategoryPage() {
     period: label,
     totalExpenses: Math.round(cat.total),
     categories: cat.categories.slice(0, 8).map((c) => ({ name: c.name, total: Math.round(c.value), share: Number(c.percent.toFixed(1)), changePct: c.changePct == null ? null : Number(c.changePct.toFixed(1)) })),
-    missingReceipts: cat.missingReceipts,
   }), [cat, label])
   const ai = useAnalysisAI(aiPayload, { fallback, enabled: cat.categories.length > 0 })
 

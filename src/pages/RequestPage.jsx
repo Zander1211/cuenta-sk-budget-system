@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ChevronDown } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { ChevronDown, CheckCircle2 } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
 import { useBudget } from '../context/BudgetContext'
 
@@ -13,9 +13,18 @@ const currency = new Intl.NumberFormat('en-PH', {
 function RequestPage() {
   const { requests } = useBudget()
   const navigate = useNavigate()
+  const location = useLocation()
   
   const [requestType, setRequestType] = useState('Project') // 'Project', 'Event', 'Payroll'
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [successBanner, setSuccessBanner] = useState(location.state?.successMessage || '')
+
+  useEffect(() => {
+    if (location.state?.successMessage) {
+      setSuccessBanner(location.state.successMessage)
+      window.history.replaceState({}, document.title)
+    }
+  }, [location.state])
 
   const activeRequests = requests.filter((request) => !request.archivedAt && (request.type || 'Project') === requestType)
 
@@ -68,6 +77,46 @@ function RequestPage() {
       </header>
 
       <section className="dashboard-content">
+        {successBanner && (
+          <div
+            role="status"
+            style={{
+              marginBottom: '20px',
+              padding: '14px 18px',
+              borderRadius: 'var(--radius-control)',
+              background: '#ecfdf5',
+              border: '1px solid #a7f3d0',
+              color: '#065f46',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: '0.95rem',
+              fontWeight: 500,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <CheckCircle2 size={18} color="#059669" />
+              <span>{successBanner}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSuccessBanner('')}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#065f46',
+                fontSize: '1.25rem',
+                lineHeight: 1,
+                padding: '0 4px',
+              }}
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         <div className="overview-card" style={{ marginBottom: '24px' }}>
           <div className="filter-group">
             <span className="filter-label" style={{ marginRight: '16px', fontWeight: 600 }}>Filter by Type:</span>

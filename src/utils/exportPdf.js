@@ -1228,14 +1228,21 @@ export async function exportExpensesReportPdf({ reportType, reportTitle, periodL
   // remaining balance, then a plain strip of how many records produced it.
   // Listing a record count under a column headed "Amount" is most of what
   // made the old summary hard to read.
-  y = drawSectionLabel(doc, { text: 'Overall Financial Summary', startY: y, followedBy: amountsTableHeight(3) })
+  const summaryRows = []
+  if (overall.carryForwardBudget > 0) {
+    summaryRows.push({ label: 'Current Month Approved Budget', value: formatCurrency(overall.approvedBudget, { detailed: true }) })
+    summaryRows.push({ label: 'Carried Forward from Previous Months', value: formatCurrency(overall.carryForwardBudget, { detailed: true }) })
+    summaryRows.push({ label: 'Total Available Budget', value: formatCurrency(overall.totalBudget, { detailed: true }) })
+  } else {
+    summaryRows.push({ label: 'Total Approved Budget', value: formatCurrency(overall.totalBudget, { detailed: true }) })
+  }
+  summaryRows.push({ label: 'Actual Expenses', value: formatCurrency(overall.totalExpenses, { detailed: true }) })
+  summaryRows.push({ label: 'Returned Budget', value: formatCurrency(overall.totalReturnedBudget, { detailed: true }) })
+
+  y = drawSectionLabel(doc, { text: 'Overall Financial Summary', startY: y, followedBy: amountsTableHeight(summaryRows.length) })
   y = drawAmountsTable(doc, {
     startY: y,
-    rows: [
-      { label: 'Total Approved Budget', value: formatCurrency(overall.totalBudget, { detailed: true }) },
-      { label: 'Actual Expenses', value: formatCurrency(overall.totalExpenses, { detailed: true }) },
-      { label: 'Returned Budget', value: formatCurrency(overall.totalReturnedBudget, { detailed: true }) },
-    ],
+    rows: summaryRows,
     totalRow: {
       label: 'Remaining Budget',
       value: formatCurrency(overall.remainingBudget, { detailed: true }),

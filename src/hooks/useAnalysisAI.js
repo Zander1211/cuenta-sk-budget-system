@@ -4,13 +4,28 @@ import { supabase } from '../supabase/supabaseClient'
 const normalizeSeverity = (v) =>
   v === 'high' || v === 'medium' || v === 'low' ? v : 'low'
 
+function isFinancialOnly(text) {
+  if (!text) return true
+  const lower = String(text).toLowerCase()
+  return !(
+    lower.includes('pending approval') ||
+    lower.includes('pending budget') ||
+    lower.includes('pending review') ||
+    lower.includes('approval status') ||
+    lower.includes('awaiting review') ||
+    lower.includes('missing receipt') ||
+    lower.includes('receipt compliance')
+  )
+}
+
 function normalize(payload) {
   if (!payload || typeof payload !== 'object') {
     return { summary: '', insights: [], recommendations: [], updatedAt: null }
   }
-  const insights = Array.isArray(payload.insights) ? payload.insights : []
-  const alerts = Array.isArray(payload.alerts) ? payload.alerts : []
-  const recommendations = Array.isArray(payload.recommendations) ? payload.recommendations : []
+  const rawInsights = Array.isArray(payload.insights) ? payload.insights : []
+  const rawAlerts = Array.isArray(payload.alerts) ? payload.alerts : []
+  const rawRecommendations = Array.isArray(payload.recommendations) ? payload.recommendations : []
+
   const mapInsight = (item) => ({
     type: item.type || 'insight',
     title: item.title || item.headline || 'Insight',
@@ -19,11 +34,22 @@ function normalize(payload) {
     why: item.why || item.reason || item.rationale || '',
     severity: normalizeSeverity(item.severity || item.level),
   })
+
+  // Filter out any workflow-related or pending approval items to ensure pure financial analysis
+  const filteredInsights = [...rawInsights.map(mapInsight), ...rawAlerts.map(mapInsight)].filter((item) =>
+    isFinancialOnly(`${item.title} ${item.detail} ${item.why}`)
+  )
+
+  const filteredRecommendations = rawRecommendations
+    .map((r) => (typeof r === 'string' ? r : r.title || r.detail || ''))
+    .filter(Boolean)
+    .filter((r) => isFinancialOnly(r))
+
   return {
     summary: typeof payload.summary === 'string' ? payload.summary : '',
     // Merge alerts into insights list so panels get a single stream.
-    insights: [...insights.map(mapInsight), ...alerts.map(mapInsight)],
-    recommendations: recommendations.map((r) => (typeof r === 'string' ? r : r.title || r.detail || '')).filter(Boolean),
+    insights: filteredInsights,
+    recommendations: filteredRecommendations,
     updatedAt: payload.updatedAt || payload.updated_at || new Date().toISOString(),
   }
 }

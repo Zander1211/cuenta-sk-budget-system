@@ -92,6 +92,7 @@ export const ACTION_TYPE_GROUPS = [
   {
     group: 'User Management',
     options: [
+      { label: 'SK Chairman Updated', values: ['SK Chairman Updated'] },
       { label: 'User Created', values: ['User Created'] },
       { label: 'User Account Enabled', values: ['User Account Enabled'] },
       { label: 'User Account Disabled', values: ['User Account Disabled'] },

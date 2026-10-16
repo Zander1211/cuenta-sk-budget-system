@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useBudget } from '../context/BudgetContext'
-import { getBudgetTotalForPeriod } from '../utils/budgetUtils'
+import { getBudgetTotalForPeriod, calculateCarryForwardBudget } from '../utils/budgetUtils'
 import {
   filterBudgets,
   safeDivide,
@@ -104,7 +104,7 @@ export function useAnalysisData(filters) {
 
 // ---------- Summary metrics (overview + reused everywhere) ----------
 export function useFinancialSummary(filters) {
-  const { budgets } = useBudget()
+  const { budgets, expenses } = useBudget()
   const data = useAnalysisData(filters)
   return useMemo(() => {
     const totalApprovedAllocations = data.approvedFinancials.totalApprovedBudget
@@ -113,7 +113,11 @@ export function useFinancialSummary(filters) {
     // Monthly Budget for the selected period
     const targetMonth = filters?.view === 'yearly' ? null : (filters?.month ?? null)
     const targetYear = filters?.year ?? null
-    const monthlyBudget = getBudgetTotalForPeriod(budgets, targetMonth, targetYear)
+    const approvedMonthlyBudget = getBudgetTotalForPeriod(budgets, targetMonth, targetYear)
+    const carryForwardBudget = targetMonth
+      ? calculateCarryForwardBudget(budgets, expenses, targetMonth, targetYear)
+      : 0
+    const monthlyBudget = approvedMonthlyBudget + carryForwardBudget
 
     // Filtering to one project narrows the numerator but not the monthly
     // budget, so measuring that project against the whole barangay's envelope
@@ -149,6 +153,8 @@ export function useFinancialSummary(filters) {
 
     return {
       ...data,
+      approvedMonthlyBudget,
+      carryForwardBudget,
       monthlyBudget,
       totalBudget,
       totalExpenses,
@@ -164,7 +170,7 @@ export function useFinancialSummary(filters) {
       returnedRecordCount: returnedRecords.length,
       hasBudgetData: totalBudget > 0,
     }
-  }, [data, budgets, filters])
+  }, [data, budgets, expenses, filters])
 }
 
 // ---------- Category analysis ----------
@@ -338,7 +344,9 @@ export function useBudgetVsActual(filters) {
 
     const monthly = MONTHS_SHORT.map((label, i) => {
       const targetMonth = i + 1
-      const monthlyBudget = getBudgetTotalForPeriod(budgets, targetMonth, year)
+      const approvedBudget = getBudgetTotalForPeriod(budgets, targetMonth, year)
+      const carryForwardBudget = calculateCarryForwardBudget(budgets, expenses, targetMonth, year)
+      const monthlyBudget = approvedBudget + carryForwardBudget
 
       const financials = summarizeApprovedBudgetFinancials(
         expenses,
@@ -351,6 +359,8 @@ export function useBudgetVsActual(filters) {
       return {
         key: label,
         label: new Date(year, i, 1).toLocaleString('en-US', { month: 'long' }),
+        approvedBudget,
+        carryForwardBudget,
         budget: monthlyBudget,
         spending: approvedBudgets,
         variance: v.amount,

@@ -57,8 +57,10 @@ function TransmittalLetterForm({ profileName, role, onPreview, initialData = nul
   const [skChairperson, setSkChairperson] = useState(() => initialData?.skChairperson ?? '')
 
   useEffect(() => {
-    if (activeChairmanName) setSkChairperson((prev) => prev || activeChairmanName)
-  }, [activeChairmanName])
+    if (!initialData && activeChairmanName) {
+      setSkChairperson(activeChairmanName)
+    }
+  }, [activeChairmanName, initialData])
 
   // Default body text — skipped when editing an already-generated document,
   // whose bodyText is already seeded above from what was saved.
@@ -118,7 +120,7 @@ function TransmittalLetterForm({ profileName, role, onPreview, initialData = nul
         rcdRows,
         otherRows,
         skTreasurer,
-        skChairperson,
+        skChairperson: initialData?.skChairperson || skChairperson || activeChairmanName || '',
       },
     })
   }
@@ -320,7 +322,20 @@ function TransmittalLetterForm({ profileName, role, onPreview, initialData = nul
           </label>
           <label className="field">
             <span>SK Chairperson</span>
-            <input type="text" value={skChairperson} onChange={(e) => setSkChairperson(e.target.value)} placeholder="SK Chairperson name" />
+            <input
+              type="text"
+              value={skChairperson || activeChairmanName || ''}
+              readOnly
+              tabIndex={-1}
+              className="is-readonly"
+              style={{
+                backgroundColor: 'var(--muted, #f3f4f6)',
+                cursor: 'not-allowed',
+                color: 'var(--ink, #1f2937)',
+              }}
+              placeholder="SK Chairperson name"
+              title="Automatically retrieved from the current SK Chairman account."
+            />
           </label>
         </div>
       </div>

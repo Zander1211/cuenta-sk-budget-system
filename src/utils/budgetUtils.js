@@ -101,3 +101,87 @@ export function getApprovedRequestTotal(requests = [], month, year) {
     return sum + Number(request.approvedAmount ?? request.approved_amount ?? request.amount ?? 0)
   }, 0)
 }
+
+/**
+ * Calculates the total unused (remaining) budget carried forward from completed
+ * past months into a target month.
+ *
+ * Rules:
+ * 1. Only completed past months strictly prior to targetMonth in targetYear (1 .. targetMonth - 1).
+ * 2. Do not include targetMonth's balance.
+ * 3. Exclude months that have no allocated budget (allocated <= 0).
+ * 4. Only unused (remaining > 0) budget is carried forward.
+ * 5. Automatically recalculates whenever past expenses, returned budgets, or adjustments change.
+ */
+export function calculateCarryForwardBudget(budgets = [], expenses = [], targetMonth, targetYear) {
+  if (!targetMonth || !targetYear || Number(targetMonth) <= 1) return 0
+
+  const mTarget = Number(targetMonth)
+  const yTarget = Number(targetYear)
+  let carryForward = 0
+
+  for (let m = 1; m < mTarget; m++) {
+    const allocated = getBudgetTotalForPeriod(budgets, m, yTarget)
+    if (allocated <= 0) continue // Exclude months with no allocated budget
+
+    const approvedExpenses = getApprovedAllocationTotal(expenses, m, yTarget)
+    const remaining = allocated - approvedExpenses
+
+    if (remaining > 0) {
+      carryForward += remaining
+    }
+  }
+
+  return carryForward
+}
+
+/**
+ * Returns detailed breakdown of unspent budgets carried forward from completed past months.
+ */
+export function getCarryForwardBreakdown(budgets = [], expenses = [], targetMonth, targetYear) {
+  if (!targetMonth || !targetYear || Number(targetMonth) <= 1) {
+    return { total: 0, months: [] }
+  }
+
+  const mTarget = Number(targetMonth)
+  const yTarget = Number(targetYear)
+  const months = []
+  let total = 0
+
+  for (let m = 1; m < mTarget; m++) {
+    const allocated = getBudgetTotalForPeriod(budgets, m, yTarget)
+    if (allocated <= 0) continue
+
+    const approvedExpenses = getApprovedAllocationTotal(expenses, m, yTarget)
+    const remaining = allocated - approvedExpenses
+
+    if (remaining > 0) {
+      total += remaining
+      const monthName = new Date(yTarget, m - 1, 1).toLocaleString('en-US', { month: 'long' })
+      months.push({
+        month: m,
+        monthName,
+        year: yTarget,
+        allocatedBudget: allocated,
+        approvedExpenses,
+        remainingBudget: remaining,
+      })
+    }
+  }
+
+  return { total, months }
+}
+
+/**
+ * Returns the effective total budget for a target period, adding carried-forward
+ * unspent balances from prior months when scoped to a specific month.
+ */
+export function getBudgetWithCarryForward(budgets = [], expenses = [], targetMonth, targetYear) {
+  const approvedBudget = getBudgetTotalForPeriod(budgets, targetMonth, targetYear)
+  if (!targetMonth || !targetYear) {
+    return approvedBudget
+  }
+  const carryForward = calculateCarryForwardBudget(budgets, expenses, targetMonth, targetYear)
+  return approvedBudget + carryForward
+}
+

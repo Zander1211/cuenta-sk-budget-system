@@ -9,7 +9,7 @@ import { validateReceiptFile, getUploadErrorMessage, generateReceiptPath, logUpl
 import ReceiptPrintPreview from '../components/ReceiptPrintPreview'
 import CurrencyInput from '../components/CurrencyInput'
 import YearSpinner from '../components/YearSpinner'
-import { getRecordPeriod } from '../utils/budgetUtils'
+import { getRecordPeriod, getBudgetTotalForPeriod, calculateCarryForwardBudget } from '../utils/budgetUtils'
 import { summarizeApprovedBudgetFinancials, materializeActualExpenseRows } from '../utils/projectEventFinancials'
 import '../components/documents/AdditionalDocuments.css'
 
@@ -151,7 +151,7 @@ function buildRecordCard(record, allActualRows) {
 // Overall Summary. Quarterly and Yearly always enumerate every month in
 // range (even ones with no records) so the report's structure matches what
 // was asked for the period, not just whichever months happened to have data.
-function buildExpenseReportData({ expenses, verifiedReceiptTotals, reportType, year, month, quarter }) {
+function buildExpenseReportData({ expenses, verifiedReceiptTotals, budgets = [], reportType, year, month, quarter }) {
   const monthsInScope = reportType === 'monthly'
     ? [Number(month)]
     : reportType === 'quarterly'
@@ -167,22 +167,45 @@ function buildExpenseReportData({ expenses, verifiedReceiptTotals, reportType, y
       .sort((a, b) => String(a.event || a.project || '').localeCompare(String(b.event || b.project || '')))
       .map((record) => buildRecordCard(record, allActualRows))
 
+    const allocatedBudget = getBudgetTotalForPeriod(budgets, m, year)
+    const carryForwardBudget = calculateCarryForwardBudget(budgets, expenses, m, year)
+    const totalEffectiveBudget = allocatedBudget + carryForwardBudget
+
     return {
       month: m,
       label: `${monthLabels[m - 1]} ${year}`,
+      allocatedBudget,
+      carryForwardBudget,
+      totalBudget: totalEffectiveBudget > 0 ? totalEffectiveBudget : monthRecords.reduce((sum, r) => sum + r.approvedBudget, 0),
       records: monthRecords,
     }
   })
 
   const allRecords = months.flatMap((m) => m.records)
-  const totalBudget = allRecords.reduce((sum, r) => sum + r.approvedBudget, 0)
   const totalExpenses = allRecords.reduce((sum, r) => sum + r.totalExpenses, 0)
   const totalReturnedBudget = allRecords.reduce((sum, r) => sum + r.returnedBudget, 0)
+
+  let totalBudget = allRecords.reduce((sum, r) => sum + r.approvedBudget, 0)
+  let approvedBudget = totalBudget
+  let carryForwardBudget = 0
+
+  if (reportType === 'monthly' && month) {
+    const mNum = Number(month)
+    const allocated = getBudgetTotalForPeriod(budgets, mNum, year)
+    const carry = calculateCarryForwardBudget(budgets, expenses, mNum, year)
+    if (allocated > 0 || carry > 0) {
+      approvedBudget = allocated
+      carryForwardBudget = carry
+      totalBudget = allocated + carry
+    }
+  }
 
   return {
     months,
     overall: {
       totalBudget,
+      approvedBudget,
+      carryForwardBudget,
       approvedAllocations: allRecords.length,
       totalExpenses,
       remainingBudget: totalBudget - totalExpenses,
@@ -198,6 +221,7 @@ function buildExpenseReportData({ expenses, verifiedReceiptTotals, reportType, y
 function ExpensesPage() {
   const {
     expenses,
+    budgets,
     expensesSyncStatus,
     verifiedReceiptTotals,
     refreshExpensesFromSupabase,
@@ -327,6 +351,7 @@ function ExpensesPage() {
       const { months, overall } = buildExpenseReportData({
         expenses,
         verifiedReceiptTotals,
+        budgets,
         reportType: exportReportType,
         year: exportYear,
         month: exportMonth,
@@ -577,7 +602,20 @@ function ExpensesPage() {
     const byMonth = {}
     const startMonth = (breakdownQuarter - 1) * 3
     for (let i = 0; i < 3; i++) {
-        byMonth[startMonth + i] = { total: 0, budget: 0, remaining: 0, items: [], categories: {} }
+        const m = startMonth + i
+        const mNum = m + 1
+        const allocated = getBudgetTotalForPeriod(budgets, mNum, breakdownYear)
+        const carry = calculateCarryForwardBudget(budgets, expenses, mNum, breakdownYear)
+        const mBudget = allocated + carry
+        byMonth[m] = {
+          total: 0,
+          budget: mBudget > 0 ? mBudget : 0,
+          allocatedBudget: allocated,
+          carryForward: carry,
+          remaining: mBudget > 0 ? mBudget : 0,
+          items: [],
+          categories: {}
+        }
     }
     quarterExpenses.forEach((e) => {
       const period = getRecordPeriod(e)
@@ -585,8 +623,10 @@ function ExpensesPage() {
       const m = period.month - 1
       if (byMonth[m]) {
           byMonth[m].total += Number(e.amount) || 0
-          byMonth[m].budget += Number(e.approvedBudget) || 0
-          byMonth[m].remaining += Number(e.remainingBudget) || 0
+          if (byMonth[m].budget <= 0) {
+            byMonth[m].budget += Number(e.approvedBudget) || 0
+          }
+          byMonth[m].remaining = byMonth[m].budget - byMonth[m].total
           byMonth[m].items.push(e)
           const cat = e.category || 'Uncategorized'
           if (!byMonth[m].categories[cat]) byMonth[m].categories[cat] = 0
@@ -595,10 +635,15 @@ function ExpensesPage() {
     })
 
     // Get budget for this quarter
-    const totalBudget = quarterRecords.reduce(
+    const quarterBudgets = [1, 2, 3].reduce((sum, offset) => {
+      const mNum = (breakdownQuarter - 1) * 3 + offset
+      return sum + getBudgetTotalForPeriod(budgets, mNum, breakdownYear)
+    }, 0)
+    const recordsBudget = quarterRecords.reduce(
       (sum, record) => sum + Number(record.approvedBudget || 0),
       0,
     )
+    const totalBudget = quarterBudgets > 0 ? quarterBudgets : recordsBudget
 
     return {
       expenses: quarterExpenses,
@@ -609,7 +654,7 @@ function ExpensesPage() {
       remaining: totalBudget - totalSpent,
       utilization: totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0,
     }
-  }, [expenses, verifiedReceiptTotals, breakdownQuarter, breakdownYear])
+  }, [expenses, budgets, verifiedReceiptTotals, breakdownQuarter, breakdownYear])
 
   // Receipt upload handlers
   function handleFileChange(expenseId, file) {

@@ -56,7 +56,7 @@ function NarrativeReportPage() {
   const [otherSignatories, setOtherSignatories] = useState('')
 
   useEffect(() => {
-    if (activeChairmanName) setSkChairperson((prev) => prev || activeChairmanName)
+    if (activeChairmanName) setSkChairperson(activeChairmanName)
   }, [activeChairmanName])
   const [acknowledgment, setAcknowledgment] = useState(
     'We, the undersigned members of the Sangguniang Kabataan Council, hereby acknowledge and certify the contents of this Narrative Report as true and accurate. This report is submitted in compliance with the documentation requirements set forth by the Commission on Audit (COA) and the Department of the Interior and Local Government (DILG).'
@@ -441,7 +441,7 @@ function NarrativeReportPage() {
       barangay,
       municipality,
       province,
-      skChairperson,
+      skChairperson: activeChairmanName || skChairperson || '',
       skKagawad,
       otherSignatories,
       acknowledgment,
@@ -667,9 +667,17 @@ function NarrativeReportPage() {
               <span>SK Chairperson</span>
               <input
                 type="text"
-                value={skChairperson}
-                onChange={(e) => setSkChairperson(e.target.value)}
-                placeholder="Full name"
+                value={activeChairmanName || skChairperson || ''}
+                readOnly
+                tabIndex={-1}
+                className="is-readonly"
+                style={{
+                  backgroundColor: 'var(--muted, #f3f4f6)',
+                  cursor: 'not-allowed',
+                  color: 'var(--ink, #1f2937)',
+                }}
+                placeholder="SK Chairperson"
+                title="Automatically retrieved from the current SK Chairman account."
               />
             </label>
             <label className="field">

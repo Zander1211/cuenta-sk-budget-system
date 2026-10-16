@@ -29,8 +29,10 @@ function ProjectDesignForm({ profileName, role, selectedRequest, onPreview, init
   }, [profileName, initialData])
 
   useEffect(() => {
-    if (activeChairmanName) setNotedBy((prev) => prev || activeChairmanName)
-  }, [activeChairmanName])
+    if (!initialData && activeChairmanName) {
+      setNotedBy(activeChairmanName)
+    }
+  }, [activeChairmanName, initialData])
 
   useEffect(() => {
     // Editing an already-generated document: title/cost/location/budgetItems
@@ -107,7 +109,7 @@ function ProjectDesignForm({ profileName, role, selectedRequest, onPreview, init
         totalBudget,
         sourceOfFund,
         preparedBy,
-        notedBy,
+        notedBy: initialData?.notedBy || notedBy || activeChairmanName || '',
       },
     })
   }
@@ -312,9 +314,17 @@ function ProjectDesignForm({ profileName, role, selectedRequest, onPreview, init
             <span>Noted by (SK Chairman)</span>
             <input
               type="text"
-              value={notedBy}
-              onChange={(e) => setNotedBy(e.target.value)}
+              value={notedBy || activeChairmanName || ''}
+              readOnly
+              tabIndex={-1}
+              className="is-readonly"
+              style={{
+                backgroundColor: 'var(--muted, #f3f4f6)',
+                cursor: 'not-allowed',
+                color: 'var(--ink, #1f2937)',
+              }}
               placeholder="SK Chairman name"
+              title="Automatically retrieved from the current SK Chairman account."
             />
           </label>
         </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import CurrencyInput from '../CurrencyInput';
 import { PlusCircle, Trash2 } from 'lucide-react'
 import { supabase } from '../../supabase/supabaseClient'
+import { useActiveSkChairmanName } from '../../hooks/useActiveSkChairmanName'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -63,6 +64,7 @@ async function getNextItineraryNumber() {
 }
 
 function ItineraryOfTravelForm({ profileName, role, onPreview, initialData = null }) {
+  const activeChairmanName = useActiveSkChairmanName()
   const [itineraryNumber, setItineraryNumber] = useState(() => initialData?.itineraryNumber ?? '')
   const [travelerName, setTravelerName] = useState(() => initialData?.travelerName ?? '')
   const [position, setPosition] = useState(() => initialData?.position ?? '')
@@ -81,6 +83,12 @@ function ItineraryOfTravelForm({ profileName, role, onPreview, initialData = nul
       setPosition(role || '')
     }
   }, [profileName, role, initialData])
+
+  useEffect(() => {
+    if (!initialData && activeChairmanName) {
+      setImmediateSupervisor(activeChairmanName)
+    }
+  }, [activeChairmanName, initialData])
 
   function updateRow(index, field, value) {
     setRows((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)))
@@ -129,7 +137,7 @@ function ItineraryOfTravelForm({ profileName, role, onPreview, initialData = nul
         })),
         grandTotal,
         approvedBy,
-        immediateSupervisor,
+        immediateSupervisor: initialData?.immediateSupervisor || immediateSupervisor || activeChairmanName || '',
       },
     })
   }
@@ -305,12 +313,20 @@ function ItineraryOfTravelForm({ profileName, role, onPreview, initialData = nul
             />
           </label>
           <label className="field">
-            <span>Immediate Supervisor</span>
+            <span>Immediate Supervisor (SK Chairman)</span>
             <input
               type="text"
-              value={immediateSupervisor}
-              onChange={(e) => setImmediateSupervisor(e.target.value)}
-              placeholder="Supervisor name"
+              value={immediateSupervisor || activeChairmanName || ''}
+              readOnly
+              tabIndex={-1}
+              className="is-readonly"
+              style={{
+                backgroundColor: 'var(--muted, #f3f4f6)',
+                cursor: 'not-allowed',
+                color: 'var(--ink, #1f2937)',
+              }}
+              placeholder="SK Chairman name"
+              title="Automatically retrieved from the current SK Chairman account."
             />
           </label>
         </div>

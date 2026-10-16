@@ -86,8 +86,14 @@ export default function AnalysisOverviewPage({ embedded = false }) {
   const hasData = summary.hasAnyData
 
   const fallbackInsights = useMemo(
-    () => buildOverviewInsights({ ...summary, highestCategory: category.highest }),
-    [summary, category.highest]
+    () => buildOverviewInsights({
+      ...summary,
+      highestCategory: category.highest,
+      spendingTrend: trend.trend.direction,
+      trendPct: trend.trend.changePct,
+      largestVariance: bva.largestVariance,
+    }),
+    [summary, category.highest, trend.trend.direction, trend.trend.changePct, bva.largestVariance]
   )
 
   const aiPayload = useMemo(
@@ -96,34 +102,38 @@ export default function AnalysisOverviewPage({ embedded = false }) {
       period: label,
       metrics: {
         totalBudget: summary.totalBudget,
+        approvedMonthlyBudget: summary.approvedMonthlyBudget,
+        carryForwardBudget: summary.carryForwardBudget,
         totalExpenses: summary.totalExpenses,
+        actualExpenses: summary.actualExpenses,
         remainingBalance: summary.remainingBalance,
         utilizationRate: Number(summary.utilizationRate.toFixed(1)),
         performance: summary.performance.label,
-        missingReceipts: summary.missingReceipts,
-        pendingApprovals: summary.pendingRequests.length,
         spendingTrend: trend.trend.direction,
+        spendingTrendPct: trend.trend.changePct,
         returnedBudget: Math.round(summary.returnedBudget || 0),
         returnedFromCompleted: summary.returnedRecordCount || 0,
+        largestVariance: bva.largestVariance ? {
+          label: bva.largestVariance.label,
+          status: bva.largestVariance.status,
+          variance: bva.largestVariance.variance,
+        } : null,
       },
       topCategories: category.categories.slice(0, 5).map((c) => ({
         name: c.name,
         total: Math.round(c.value),
+        percent: c.percent,
       })),
       budgetDistribution: dist.distribution.map(d => ({ name: d.name, value: d.value }))
     }),
-    [summary, category.categories, trend.trend.direction, label, dist.distribution]
+    [summary, category.categories, trend.trend.direction, trend.trend.changePct, label, dist.distribution, bva.largestVariance]
   )
 
   const ai = useAnalysisAI(aiPayload, { fallback: fallbackInsights, enabled: hasData })
 
   // Top 4 summary metric cards for desktop (4-col), tablet (2-col), mobile (1-col).
-  //
-  // Scoped to one project these report that record's own budget against its
-  // verified spending, so they agree with Projects & Events and the record
-  // analysis. At period level they report how much of the monthly envelope has
-  // been committed — a different question, so it is labelled as commitment
-  // rather than as spending.
+  // All cards focus strictly on financial metrics (Approved Budget, Actual Spending,
+  // Remaining Budget, and Budget Utilization).
   const metricCards = summary.isProjectScoped
     ? [
         {
@@ -150,14 +160,12 @@ export default function AnalysisOverviewPage({ embedded = false }) {
           tone: summary.remainingBalance < 0 ? 'danger' : 'positive',
         },
         {
-          icon: Clock,
-          label: 'Pending Approvals',
-          value: `${summary.pendingRequests.length} Pending`,
-          meta: summary.missingReceipts > 0
-            ? `${summary.missingReceipts} missing receipts`
-            : 'All receipts attached',
-          chip: summary.pendingRequests.length > 0 ? 'Action required' : 'Up to date',
-          tone: summary.pendingRequests.length > 0 ? 'warning' : 'positive',
+          icon: Layers,
+          label: 'Budget Utilization',
+          value: formatPercentage(summary.utilizationRate, 1),
+          meta: summary.performance.message || 'Utilization against allocation',
+          chip: summary.performance.label,
+          tone: summary.performance.tone,
         },
       ]
     : [
@@ -165,7 +173,9 @@ export default function AnalysisOverviewPage({ embedded = false }) {
           icon: Wallet,
           label: 'Total Budget',
           value: formatCurrency(summary.totalBudget),
-          meta: `Allocated for ${label}`,
+          meta: summary.carryForwardBudget > 0
+            ? `${formatCurrency(summary.approvedMonthlyBudget)} approved + ${formatCurrency(summary.carryForwardBudget)} carried forward`
+            : `Allocated for ${label}`,
           tone: 'neutral',
         },
         {
@@ -185,14 +195,14 @@ export default function AnalysisOverviewPage({ embedded = false }) {
           tone: summary.remainingBalance < 0 ? 'danger' : 'positive',
         },
         {
-          icon: Clock,
-          label: 'Pending Approvals',
-          value: `${summary.pendingRequests.length} Pending`,
-          meta: summary.missingReceipts > 0
-            ? `${summary.missingReceipts} missing receipts`
-            : 'All receipts attached',
-          chip: summary.pendingRequests.length > 0 ? 'Action required' : 'Up to date',
-          tone: summary.pendingRequests.length > 0 ? 'warning' : 'positive',
+          icon: Layers,
+          label: 'Budget Utilization',
+          value: formatPercentage(summary.utilizationRate, 1),
+          meta: summary.returnedBudget > 0
+            ? `${formatCurrency(summary.returnedBudget)} recovered`
+            : (summary.performance.message || 'Committed allocation rate'),
+          chip: summary.performance.label,
+          tone: summary.performance.tone,
         },
       ]
 
@@ -224,7 +234,10 @@ export default function AnalysisOverviewPage({ embedded = false }) {
     severityCounts,
     remainingBalance: summary.remainingBalance,
     utilizationRate: summary.utilizationRate,
-  }), [severityCounts, summary.remainingBalance, summary.utilizationRate])
+    totalBudget: summary.totalBudget,
+    totalExpenses: summary.totalExpenses,
+    spendingTrend: trend.trend.direction,
+  }), [severityCounts, summary.remainingBalance, summary.utilizationRate, summary.totalBudget, summary.totalExpenses, trend.trend.direction])
 
   // Chart data
   const bvaData = useMemo(() => {
@@ -316,81 +329,133 @@ export default function AnalysisOverviewPage({ embedded = false }) {
       },
       {
         icon: ShieldAlert,
-        label: 'Overspending & Audit Status',
+        label: 'Overspending & Budget Risk',
         value: summary.remainingBalance < 0
           ? `Over by ${formatCurrency(Math.abs(summary.remainingBalance))}`
-          : summary.missingReceipts > 0
-            ? `${summary.missingReceipts} Missing Receipts`
-            : '100% Compliant',
+          : summary.utilizationRate >= 80
+            ? 'Near Budget Limit'
+            : 'Low Risk Status',
         sub: summary.remainingBalance < 0
-          ? 'Requires immediate budget review'
-          : summary.missingReceipts > 0
-            ? 'Supporting documentation pending'
-            : 'Within allocated budget limits',
+          ? 'Overspending detected — immediate review required'
+          : summary.utilizationRate >= 80
+            ? 'Spending is approaching approved budget limit'
+            : 'Spending is safely within approved budget',
       },
     ]
   }, [category, summary])
 
-  // Normalized recommendations
+  // Normalized recommendations focusing exclusively on financial management
   const normalizedRecommendations = useMemo(() => {
     const rawList = ai.recommendations && ai.recommendations.length ? ai.recommendations : []
-    if (!rawList.length) {
-      // Smart default recommendations based on current financial state
+
+    const isFinancialOnly = (text) => {
+      if (!text) return false
+      const lower = String(text).toLowerCase()
+      return !(
+        lower.includes('pending approval') ||
+        lower.includes('pending request') ||
+        lower.includes('pending review') ||
+        lower.includes('approval status') ||
+        lower.includes('awaiting review') ||
+        lower.includes('missing receipt') ||
+        lower.includes('receipt compliance')
+      )
+    }
+
+    const filtered = rawList.filter((r) => {
+      const text = typeof r === 'object' ? `${r.title || ''} ${r.description || r.detail || ''}` : String(r)
+      return isFinancialOnly(text)
+    })
+
+    if (!filtered.length) {
+      // Deterministic financial recommendations based strictly on financial indicators
       const fallbackList = []
-      if (summary.remainingBalance < 0) {
+
+      // 1. Overspending / High-spending projects
+      if (summary.remainingBalance < 0 || summary.utilizationRate >= 100) {
         fallbackList.push({
-          title: 'Implement Spending Moratorium',
-          description: `Expenses exceed allocation by ${formatCurrency(Math.abs(summary.remainingBalance))}. Restrict new disbursement requests until supplemental budget is passed.`,
+          title: 'Monitor High-Spending Projects & Control Disbursements',
+          description: `Total expenses exceed approved budget by ${formatCurrency(Math.abs(summary.remainingBalance))}. Audit high-spending projects immediately and halt non-essential outlays until balances stabilize.`,
           priority: 'High',
-          category: 'Budget Control',
+          category: 'Spending Control',
+        })
+      } else if (summary.utilizationRate >= 80) {
+        fallbackList.push({
+          title: 'Monitor High-Spending Projects',
+          description: `Budget utilization has reached ${formatPercentage(summary.utilizationRate, 1)}. Closely audit ongoing projects to prevent exceeding allocated limits.`,
+          priority: 'High',
+          category: 'Spending Control',
         })
       }
-      if (summary.missingReceipts > 0) {
+
+      // 2. Allocate remaining budget carefully
+      if (summary.remainingBalance > 0 && summary.utilizationRate >= 75) {
         fallbackList.push({
-          title: 'Enforce Receipt Compliance',
-          description: `${summary.missingReceipts} approved transactions are missing supporting documents. Require uploaded receipts before final liquidation.`,
+          title: 'Allocate Remaining Budget Carefully',
+          description: `With only ${formatCurrency(summary.remainingBalance)} remaining, carefully evaluate and prioritize upcoming disbursements for essential activities.`,
           priority: 'High',
-          category: 'Audit & Compliance',
+          category: 'Budget Allocation',
         })
       }
-      if (category.highest && category.highest.percent > 45) {
+
+      // 3. Reduce unnecessary expenses / Category concentration
+      if (category.highest && category.highest.percent > 40) {
         fallbackList.push({
-          title: `Diversify ${category.highest.name} Allocation`,
-          description: `${category.highest.name} accounts for ${formatPercentage(category.highest.percent)} of expenditures. Review multi-vendor quotes to reduce category concentration.`,
+          title: `Reduce Unnecessary Expenses in ${category.highest.name}`,
+          description: `${category.highest.name} accounts for ${formatPercentage(category.highest.percent)} (${formatCurrency(category.highest.value)}) of expenditures. Review line items to trim discretionary costs and diversify spending.`,
           priority: 'Medium',
-          category: 'Resource Optimization',
+          category: 'Cost Optimization',
+        })
+      } else {
+        fallbackList.push({
+          title: 'Reduce Unnecessary Expenses',
+          description: 'Review recurring operational expenditures and eliminate non-essential administrative costs to maximize funds available for community programs.',
+          priority: 'Medium',
+          category: 'Cost Optimization',
         })
       }
+
+      // 4. Prioritize essential activities
       fallbackList.push({
-        title: 'Maintain 10% Emergency Buffer',
-        description: 'Preserve at least 10% of total barangay youth funds as an unencumbered contingency buffer for unforeseen community needs.',
+        title: 'Prioritize Essential Activities & Programs',
+        description: 'Focus available fund allocations on high-impact community initiatives while deferring lower-priority or discretionary activities.',
+        priority: 'Medium',
+        category: 'Strategic Priority',
+      })
+
+      // 5. Improve budget planning for upcoming months
+      fallbackList.push({
+        title: 'Improve Budget Planning for Upcoming Months',
+        description: 'Analyze historical spending trends and velocity to recalibrate future monthly allocations and avoid sudden budget deficits.',
+        priority: 'Low',
+        category: 'Budget Planning',
+      })
+
+      // 6. Emergency contingency reserve
+      fallbackList.push({
+        title: 'Maintain Emergency Contingency Buffer',
+        description: 'Preserve an unencumbered contingency reserve to protect against unexpected financial shocks and operational deficits.',
         priority: 'Low',
         category: 'Contingency Planning',
       })
-      fallbackList.push({
-        title: 'Conduct Monthly Variance Review',
-        description: 'Host a monthly financial review with SK kagawads to align ongoing project milestones with disbursements.',
-        priority: 'Low',
-        category: 'Governance',
-      })
-      return fallbackList
+
+      return fallbackList.slice(0, 4)
     }
 
-    return rawList.map((rec, idx) => {
+    return filtered.map((rec, idx) => {
       if (typeof rec === 'object') {
-        return {
-          title: rec.title || `Recommendation ${idx + 1}`,
-          description: rec.detail || rec.description || rec.text || '',
-          priority: rec.severity || rec.priority || 'Medium',
-          category: rec.category || 'Strategic Planning',
-        }
+        const title = rec.title || `Financial Recommendation #${idx + 1}`
+        const description = rec.detail || rec.description || rec.text || ''
+        const priority = rec.severity === 'high' ? 'High' : rec.severity === 'medium' ? 'Medium' : 'Low'
+        const category = rec.category || (priority === 'High' ? 'Budget Control' : 'Financial Planning')
+        return { title, description, priority, category }
       }
       const str = String(rec).trim()
       const colonIdx = str.indexOf(':')
       const dashIdx = str.indexOf(' - ')
       const splitIdx = colonIdx > 0 && colonIdx < 50 ? colonIdx : dashIdx > 0 && dashIdx < 50 ? dashIdx : -1
 
-      let title = `Strategic Action ${idx + 1}`
+      let title = `Financial Strategy #${idx + 1}`
       let description = str
       if (splitIdx !== -1) {
         title = str.slice(0, splitIdx).trim()
@@ -404,20 +469,20 @@ export default function AnalysisOverviewPage({ embedded = false }) {
 
       const lower = str.toLowerCase()
       let priority = 'Medium'
-      let categoryType = 'Optimization'
+      let categoryType = 'Financial Management'
 
-      if (lower.includes('urgent') || lower.includes('critical') || lower.includes('overspending') || lower.includes('exceed') || lower.includes('missing receipt') || lower.includes('compliance')) {
+      if (lower.includes('urgent') || lower.includes('critical') || lower.includes('overspending') || lower.includes('exceed')) {
         priority = 'High'
-        categoryType = 'Compliance & Risk'
+        categoryType = 'Budget Control'
       } else if (lower.includes('informational') || lower.includes('favorable') || lower.includes('buffer') || lower.includes('contingency')) {
         priority = 'Low'
-        categoryType = 'Contingency'
+        categoryType = 'Contingency Planning'
       } else if (lower.includes('budget') || lower.includes('allocat')) {
         categoryType = 'Budget Planning'
       }
 
       return { title, description, priority, category: categoryType }
-    })
+    }).slice(0, 4)
   }, [ai.recommendations, summary, category])
 
   const distPieData = useMemo(() => {
@@ -597,7 +662,7 @@ export default function AnalysisOverviewPage({ embedded = false }) {
                 <div>
                   <h2 className="an-ai-summary-title">Executive Financial Summary</h2>
                   <div className="an-ai-summary-status" style={{ marginTop: '2px' }}>
-                    Status: <span className={`an-status-badge ${overallHealth.tone}`}>{overallHealth.label}</span>
+                    Risk Level: <span className={`an-status-badge ${overallHealth.tone}`}>{overallHealth.label}</span>
                   </div>
                 </div>
               </div>
@@ -628,7 +693,7 @@ export default function AnalysisOverviewPage({ embedded = false }) {
                 (summary.isProjectScoped
                   ? `For ${label}, ${filters.project} holds an approved budget of ${formatCurrency(summary.totalBudget)} with ${formatCurrency(summary.totalExpenses)} in verified spending (${formatPercentage(summary.utilizationRate, 1)} utilized), leaving ${formatCurrency(summary.remainingBalance)}.`
                   : `For ${label}, total allocated budget is ${formatCurrency(summary.totalBudget)} with ${formatCurrency(summary.totalExpenses)} committed to approved projects and events (${formatPercentage(summary.utilizationRate, 1)} committed) and ${formatCurrency(summary.actualExpenses)} actually spent against verified receipts.`)
-                + ` ${severityCounts.high} high-priority, ${severityCounts.medium} medium-priority, and ${severityCounts.low} informational insights detected.`}
+                + ` Financial status is classified as ${overallHealth.label} with ${severityCounts.high} high risk, ${severityCounts.medium} medium risk, and ${severityCounts.low} low risk observations.`}
             </p>
 
             <div className="an-ai-counts-row">
@@ -639,7 +704,7 @@ export default function AnalysisOverviewPage({ embedded = false }) {
                 <Info size={14} /> Medium Risk ({severityCounts.medium})
               </span>
               <span className="an-ai-count-tag low">
-                <CheckCircle2 size={14} /> Low / Info ({severityCounts.low})
+                <CheckCircle2 size={14} /> Low Risk ({severityCounts.low})
               </span>
             </div>
           </section>
@@ -651,15 +716,13 @@ export default function AnalysisOverviewPage({ embedded = false }) {
               the filter bar above. */}
           <Accordion label="Analytics reports">
             {/* AI Risk & Strategic Analysis — Risk & Anomaly Analysis and
-                Strategic Recommendations combined into one report. They used
-                to be two separate accordion rows; they read the same AI
-                response and are always consulted together, so splitting them
-                only cost an extra click. */}
+                Strategic Recommendations combined into one report. They read
+                the same financial AI response and provide pure financial assessment. */}
             <AccordionSection
               id="an-acc-risk-strategic"
               icon={Bot}
               title="AI Risk & Strategic Analysis"
-              description="AI-detected anomalies, compliance gaps, and strategic recommendations for this period."
+              description="Financial risk assessment, spending velocity anomalies, and budget management recommendations."
               meta={`${ai.insights.length} ${ai.insights.length === 1 ? 'finding' : 'findings'} · ${normalizedRecommendations.length} ${normalizedRecommendations.length === 1 ? 'action' : 'actions'}`}
               open={openSection === 'risk-strategic'}
               onToggle={() => toggleSection('risk-strategic')}
@@ -672,7 +735,7 @@ export default function AnalysisOverviewPage({ embedded = false }) {
                     <div>
                       <h3 className="an-acc-subhead-title">AI Risk &amp; Anomaly Analysis</h3>
                       <p className="an-acc-subhead-desc">
-                        Identified spending anomalies, compliance gaps, and category concentration risks.
+                        Financial health evaluation based on budget utilization, remaining balances, spending velocity, and variance anomalies.
                       </p>
                     </div>
                   </div>
@@ -688,11 +751,23 @@ export default function AnalysisOverviewPage({ embedded = false }) {
                         {summary.performance.label} · {formatPercentage(summary.utilizationRate, 1)}
                       </span>
                     </div>
+                    <div className="an-risk-glance-item">
+                      <span className="an-risk-glance-label">Spending Velocity</span>
+                      <span className="an-status-badge neutral">
+                        {trend.trend.direction} Trend
+                      </span>
+                    </div>
+                    <div className="an-risk-glance-item">
+                      <span className="an-risk-glance-label">Remaining Budget</span>
+                      <span className={`an-status-badge ${summary.remainingBalance < 0 ? 'danger' : 'positive'}`}>
+                        {formatCurrency(summary.remainingBalance)}
+                      </span>
+                    </div>
                   </div>
 
                   {ai.insights && ai.insights.length ? (
                     <>
-                      <h4 className="an-risk-section-title">Detected Budget Anomalies</h4>
+                      <h4 className="an-risk-section-title">Detected Financial Anomalies &amp; Risks</h4>
                       <div className="an-risk-groups">
                         {[
                           { key: 'high', label: 'High Risk Alerts', items: insightsBySeverity.high },
@@ -746,19 +821,19 @@ export default function AnalysisOverviewPage({ embedded = false }) {
                     </>
                   ) : (
                     <div className="an-card" style={{ textAlign: 'center', color: 'var(--ink-3)' }}>
-                      No risks or anomalies detected for this period.
+                      No financial risks or anomalies detected for this period.
                     </div>
                   )}
                 </div>
 
-                {/* AI Strategic Recommendations */}
+                {/* AI Financial Recommendations */}
                 <div className="an-acc-subsection">
                   <div className="an-acc-subhead">
                     <span className="an-acc-subhead-icon"><Lightbulb size={16} /></span>
                     <div>
-                      <h3 className="an-acc-subhead-title">AI Strategic Recommendations</h3>
+                      <h3 className="an-acc-subhead-title">AI Financial Recommendations</h3>
                       <p className="an-acc-subhead-desc">
-                        Actionable steps to optimize budget allocation, mitigate risks, and enhance audit compliance.
+                        Actionable financial strategies to optimize budget allocation, control expenses, and prevent overspending.
                       </p>
                     </div>
                   </div>

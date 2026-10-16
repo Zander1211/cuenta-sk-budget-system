@@ -79,8 +79,10 @@ function PayrollForm({ profileName, role, selectedRequest, onPreview, initialDat
   }, [profileName, role])
 
   useEffect(() => {
-    if (activeChairmanName) setSkChairman((prev) => prev || activeChairmanName)
-  }, [activeChairmanName])
+    if (!initialData && activeChairmanName) {
+      setSkChairman(activeChairmanName)
+    }
+  }, [activeChairmanName, initialData])
 
   useEffect(() => {
     if (selectedRequest) {
@@ -149,7 +151,7 @@ function PayrollForm({ profileName, role, selectedRequest, onPreview, initialDat
         totals,
         skKagawad,
         skTreasurer,
-        skChairman,
+        skChairman: initialData?.skChairman || skChairman || activeChairmanName || '',
         certDateA,
         certDateB,
         certDateC,
@@ -262,7 +264,20 @@ function PayrollForm({ profileName, role, selectedRequest, onPreview, initialDat
           </label>
           <label className="field">
             <span>C. SK Chairman Name</span>
-            <input type="text" value={skChairman} onChange={(e) => setSkChairman(e.target.value)} />
+            <input
+              type="text"
+              value={skChairman || activeChairmanName || ''}
+              readOnly
+              tabIndex={-1}
+              className="is-readonly"
+              style={{
+                backgroundColor: 'var(--muted, #f3f4f6)',
+                cursor: 'not-allowed',
+                color: 'var(--ink, #1f2937)',
+              }}
+              placeholder="SK Chairman"
+              title="Automatically retrieved from the current SK Chairman account."
+            />
           </label>
           <label className="field">
             <span>C. Date</span>

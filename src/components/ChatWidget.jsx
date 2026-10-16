@@ -7,7 +7,7 @@ import { mapBudgetRow } from '../services/monthlyBudget'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase/supabaseClient'
 import { materializeActualExpenseRows, summarizeApprovedBudgetFinancials, buildVerifiedReceiptTotals } from '../utils/projectEventFinancials'
-import { getBudgetTotalForPeriod, getApprovedAllocationTotal } from '../utils/budgetUtils'
+import { getBudgetTotalForPeriod, getApprovedAllocationTotal, calculateCarryForwardBudget } from '../utils/budgetUtils'
 import { useActiveSkChairmanName } from '../hooks/useActiveSkChairmanName'
 
 const PAGE_NAMES = {
@@ -419,9 +419,11 @@ function ChatWidgetInner() {
       for (let m = 1; m <= 12; m++) {
         const mName = MONTH_NAMES[m - 1]
         const mBudgets = budgetsList.filter(b => b.year === yr && (b.monthNumber === m || b.month === mName))
-        const mBudgetTotal = getBudgetTotalForPeriod(effectiveBudgets, m, yr)
+        const mCarryForward = calculateCarryForwardBudget(effectiveBudgets, effectiveExpenses, m, yr)
+        const mApprovedBudget = getBudgetTotalForPeriod(effectiveBudgets, m, yr)
+        const mTotalBudget = mApprovedBudget + mCarryForward
         const mApprovedTotal = getApprovedAllocationTotal(effectiveExpenses, m, yr)
-        const mRemainingBudget = mBudgetTotal - mApprovedTotal
+        const mRemainingBudget = mTotalBudget - mApprovedTotal
         
         const workingBudget = summarizeApprovedBudgetFinancials(
           effectiveExpenses,
@@ -430,12 +432,14 @@ function ChatWidgetInner() {
         )
         const mExpenseTotal = workingBudget.totalExpenses
 
-        if (mBudgetTotal > 0 || mApprovedTotal > 0 || workingBudget.records.length > 0) {
+        if (mTotalBudget > 0 || mApprovedTotal > 0 || workingBudget.records.length > 0) {
           monthlySummaries.push({
             month: mName,
             monthNumber: m,
             year: yr,
-            allocatedBudget: mBudgetTotal,
+            allocatedBudget: mApprovedBudget,
+            carryForwardBudget: mCarryForward,
+            totalBudget: mTotalBudget,
             approvedBudget: mApprovedTotal,
             totalExpenses: mExpenseTotal,
             actualExpenses: mExpenseTotal,
@@ -477,7 +481,7 @@ function ChatWidgetInner() {
         status,
       })
     }
-    const previousMonthsRemainingTotal = Math.max(0, previousMonths.reduce((sum, m) => sum + m.remainingBudget, 0))
+    const previousMonthsRemainingTotal = calculateCarryForwardBudget(effectiveBudgets, effectiveExpenses, currentMonthNum, currentYear)
     const previousMonthsAllocatedTotal = previousMonths.reduce((sum, m) => sum + m.allocatedBudget, 0)
     const previousMonthsApprovedTotal = previousMonths.reduce((sum, m) => sum + m.approvedBudget, 0)
     const previousMonthsSummary = {
@@ -498,8 +502,10 @@ function ChatWidgetInner() {
     }, 0)
 
     const currentMonthAllocated = getBudgetTotalForPeriod(effectiveBudgets, currentMonthNum, currentYear)
+    const currentMonthCarryForward = calculateCarryForwardBudget(effectiveBudgets, effectiveExpenses, currentMonthNum, currentYear)
+    const currentMonthTotalBudget = currentMonthAllocated + currentMonthCarryForward
     const currentMonthApproved = getApprovedAllocationTotal(effectiveExpenses, currentMonthNum, currentYear)
-    const currentMonthRemaining = currentMonthAllocated - currentMonthApproved
+    const currentMonthRemaining = currentMonthTotalBudget - currentMonthApproved
 
     const effectiveTotalBudget = (effectiveBudgets || []).reduce((sum, b) => sum + Number(b.amount || 0), 0)
     const dynUtilization = effectiveTotalBudget > 0
@@ -551,6 +557,10 @@ function ChatWidgetInner() {
       reportSummaries,
       totals: {
         totalBudget: effectiveTotalBudget,
+        currentMonthApprovedBudget: currentMonthAllocated,
+        currentMonthCarryForward: currentMonthCarryForward,
+        currentMonthTotalBudget: currentMonthTotalBudget,
+        currentMonthRemaining: currentMonthRemaining,
         totalApprovedAllocations: totalApprovedAllocationsSum,
         totalExpenses: dynActualExpenseTotal,
         remaining: effectiveTotalBudget - totalApprovedAllocationsSum,

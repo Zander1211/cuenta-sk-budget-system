@@ -3,7 +3,9 @@ import CurrencyInput from '../components/CurrencyInput';
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PlusCircle, Trash2, ArrowLeft, AlertCircle } from 'lucide-react'
 import RoleGate from '../components/RoleGate'
-import { useBudget, useBudgetCalculations } from '../context/BudgetContext'
+import { useBudget, useBudgetCalculations, mapExpenseRow } from '../context/BudgetContext'
+import { mapBudgetRow } from '../services/monthlyBudget'
+import { calculateCarryForwardBudget, getApprovedAllocationTotal } from '../utils/budgetUtils'
 import { supabase } from '../supabase/supabaseClient'
 
 const currency = new Intl.NumberFormat('en-PH', {
@@ -164,19 +166,20 @@ function NewRequestPage() {
     checkRemoteBudget()
   }, [selectedMonth, selectedYear, isValidDate, budgets])
 
-  const { totalExpenses: totalApproved } = useBudgetCalculations(selectedMonth, selectedYear)
-  const remainingBudget = remoteBudgetAmount - totalApproved;
+  const { totalBudget: calcTotalBudget, totalExpenses: totalApproved, carryForwardBudget } = useBudgetCalculations(selectedMonth, selectedYear)
+  const effectiveBudgetAmount = Math.max(remoteBudgetAmount + (carryForwardBudget || 0), calcTotalBudget || 0)
+  const remainingBudget = effectiveBudgetAmount - totalApproved;
   const currentRequestedAmount = requestType === 'Payroll'
     ? totalFromPayroll
     : (Number(amount) > 0 ? Number(amount) : totalFromBreakdown);
 
-  const showNoBudgetWarning = isValidDate && remoteBudgetAmount <= 0 && !isCheckingBudget;
+  const showNoBudgetWarning = isValidDate && effectiveBudgetAmount <= 0 && !isCheckingBudget;
   const showInsufficientBudgetWarning = isValidDate && !showNoBudgetWarning && currentRequestedAmount > remainingBudget && !isCheckingBudget;
 
   // The rail only has real figures once a date has picked out a month and that
   // month has a budget to measure against; until then it shows the running
   // request total and says what is missing.
-  const hasBudgetFigures = isValidDate && remoteBudgetAmount > 0 && !isCheckingBudget
+  const hasBudgetFigures = isValidDate && effectiveBudgetAmount > 0 && !isCheckingBudget
 
 
   function addPayrollRow() {
@@ -210,37 +213,55 @@ function NewRequestPage() {
     }
 
     setIsCheckingBudget(true)
-    let latestRemoteBudgetAmount = 0
+    let latestBaseBudgetAmount = 0
+    let latestCarryForward = carryForwardBudget || 0
+    let latestApprovedTotal = totalApproved
+
     try {
-      const { data, error } = await supabase
-        .from('budgets')
-        .select('amount')
-        .eq('month', selectedMonth)
-        .eq('year', selectedYear)
+      const [budgetsRes, expensesRes] = await Promise.all([
+        supabase
+          .from('budgets')
+          .select('*')
+          .eq('year', selectedYear),
+        supabase
+          .from('expenses')
+          .select('*')
+          .eq('year', selectedYear),
+      ])
 
-      if (error) throw error
+      if (!budgetsRes.error && budgetsRes.data) {
+        const targetBudgets = budgetsRes.data.map(mapBudgetRow)
+        const monthRows = targetBudgets.filter(b => Number(b.month) === selectedMonth)
+        latestBaseBudgetAmount = monthRows.length > 0 ? Math.max(...monthRows.map(b => Number(b.amount) || 0)) : 0
+        setRemoteBudgetAmount(latestBaseBudgetAmount)
 
-      latestRemoteBudgetAmount = data && data.length > 0 ? Math.max(...data.map(b => Number(b.amount) || 0)) : 0
-      setRemoteBudgetAmount(latestRemoteBudgetAmount)
+        if (!expensesRes.error && expensesRes.data) {
+          const targetExpenses = expensesRes.data.map(mapExpenseRow)
+          latestCarryForward = calculateCarryForwardBudget(targetBudgets, targetExpenses, selectedMonth, selectedYear)
+          latestApprovedTotal = getApprovedAllocationTotal(targetExpenses, selectedMonth, selectedYear)
+        }
+      }
     } catch (err) {
-      console.warn('Failed to verify remote budget during submit:', err)
-      const localAmt = budgets.filter(b => b.month === selectedMonth && b.year === selectedYear).reduce((max, b) => Math.max(max, Number(b.amount) || 0), 0)
-      latestRemoteBudgetAmount = localAmt
-      setRemoteBudgetAmount(latestRemoteBudgetAmount)
+      console.warn('Failed to verify remote budget during submit, using local data:', err)
+      latestBaseBudgetAmount = remoteBudgetAmount
     } finally {
       setIsCheckingBudget(false)
     }
 
-    if (latestRemoteBudgetAmount <= 0) {
+    const latestTotalAvailableBudget = Math.max(
+      (latestBaseBudgetAmount || 0) + (latestCarryForward || 0),
+      effectiveBudgetAmount || 0
+    )
+
+    if (latestTotalAvailableBudget <= 0) {
       setFormError('Unable to submit this budget request. No Monthly Budget has been allocated for the selected month. Please add the Monthly Budget first before submitting a budget request.')
       return
     }
 
-    // Deducting valid totalExpenses from the latest fetched budget guarantees consistency
-    const latestRemainingBudget = latestRemoteBudgetAmount - totalApproved;
+    const latestRemainingBudget = latestTotalAvailableBudget - latestApprovedTotal
 
     if (currentRequestedAmount > latestRemainingBudget) {
-      setFormError('Unable to submit this budget request. The requested amount exceeds the remaining available budget for the selected month. Please reduce the requested amount or increase the Monthly Budget before submitting.')
+      setFormError('The requested amount exceeds the remaining available budget for this month.')
       return
     }
 
@@ -304,12 +325,14 @@ function NewRequestPage() {
     } else {
       const { error } = await addRequest(payload)
       if (error) {
-        setFormError(`The request could not be saved: ${error.message}`)
+        setFormError(error.message || `The request could not be saved: ${error.message}`)
         return
       }
     }
 
-    navigate('/dashboard/request')
+    navigate('/dashboard/request', {
+      state: { successMessage: 'Budget request submitted successfully.' }
+    })
   }
 
   return (
@@ -580,7 +603,7 @@ function NewRequestPage() {
                 <dl className="req-summary-rows">
                   <div>
                     <dt>Monthly budget</dt>
-                    <dd>{currency.format(remoteBudgetAmount)}</dd>
+                    <dd>{currency.format(effectiveBudgetAmount)}</dd>
                   </div>
                   <div>
                     <dt>Total approved</dt>
@@ -623,7 +646,7 @@ function NewRequestPage() {
 
               {showInsufficientBudgetWarning && (
                 <p className="req-notice">
-                  Insufficient Monthly Budget. The requested amount exceeds the remaining available budget for the selected month. Please reduce the requested amount or increase the Monthly Budget before submitting this request.
+                  The requested amount exceeds the remaining available budget for this month.
                 </p>
               )}
 
