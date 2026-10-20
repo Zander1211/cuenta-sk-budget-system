@@ -7421,7 +7421,11 @@ td.nr-info-label {
 	.chat-widget-panel,
 	#cue-chat-fab,
 	.mobile-bottom-nav,
-	.no-print {
+	.no-print,
+	.print-preview-toolbar,
+	.print-btn,
+	.save-pdf-btn,
+	.close-btn {
 		display: none !important;
 	}
 

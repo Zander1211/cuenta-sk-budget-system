@@ -38,16 +38,19 @@ function buildSystemPrompt(ctx) {
     ? monthlySummaries.map(m => {
         const approvedBudget = Number(m.allocatedBudget || 0)
         const carryForward = Number(m.carryForwardBudget || 0)
-        const totalBudget = Number(m.totalBudget || (approvedBudget + carryForward))
+        const totalBudget = Number(m.totalBudget || (approvedBudget + (m.isCurrentMonth ? carryForward : 0)))
         const approved = Number(m.approvedBudget || 0)
         const remainingBal = Number(m.remainingBudget ?? m.remainingBalance ?? (totalBudget - approved))
         const actualExp = Number(m.totalExpenses ?? m.actualExpenses ?? 0)
         const util = totalBudget > 0 ? Math.round((approved / totalBudget) * 100) : 0
         const availablePct = 100 - util
-        const carryText = carryForward > 0
-          ? ` (Approved: ₱${approvedBudget.toLocaleString('en-PH')} + Carried Forward from Previous Months: ₱${carryForward.toLocaleString('en-PH')})`
-          : ''
-        return `- ${m.month} ${m.year}: Total Budget = ₱${totalBudget.toLocaleString('en-PH')}${carryText} | Approved Allocations = ₱${approved.toLocaleString('en-PH')} | REMAINING BUDGET (Total Budget minus Approved Allocations) = ₱${remainingBal.toLocaleString('en-PH')} (${availablePct}% available) | Actual Expenses (Verified Receipts) = ₱${actualExp.toLocaleString('en-PH')} | Budget Utilization = ${util}% (Source: ${m.sources || 'Regular SK Budget'})`
+
+        if (m.isCurrentMonth && carryForward > 0) {
+          return `- ${m.month} ${m.year} (CURRENT ACTIVE MONTH): Total Available Budget = ₱${totalBudget.toLocaleString('en-PH')} (Approved Budget: ₱${approvedBudget.toLocaleString('en-PH')} + Carried Forward Unused Budget from Completed Past Months: ₱${carryForward.toLocaleString('en-PH')}) | Approved Allocations = ₱${approved.toLocaleString('en-PH')} | REMAINING BUDGET = ₱${remainingBal.toLocaleString('en-PH')} (${availablePct}% available) | Actual Expenses (Verified Receipts) = ₱${actualExp.toLocaleString('en-PH')}`
+        }
+
+        const tag = m.isPastMonth ? ' [Completed Past Month]' : ''
+        return `- ${m.month} ${m.year}${tag}: Total Budget = ₱${approvedBudget.toLocaleString('en-PH')} | Approved Allocations = ₱${approved.toLocaleString('en-PH')} | REMAINING BUDGET (Unused from this month) = ₱${remainingBal.toLocaleString('en-PH')} (${availablePct}% available) | Actual Expenses (Verified Receipts) = ₱${actualExp.toLocaleString('en-PH')} | Budget Utilization = ${util}% (Source: ${m.sources || 'Regular SK Budget'})`
       }).join('\n')
     : '- No monthly breakdown recorded yet.'
 
@@ -343,12 +346,19 @@ STRICT FILTERING & RESPONSE ACCURACY RULES:
    - Use ONLY the BUDGET PREDICTION section above. NEVER average, extrapolate, or invent your own trend figure.
    - If that section says there is not enough historical data, say so plainly.
 
-1E. **UNUSED BUDGET FROM PREVIOUS MONTHS (REMAINING BUDGETS CARD)**:
-   - When asked about unused budget from previous months, past months carryover, or the "Remaining Budgets" card (e.g., "How much the remaining budgets that unused budget from previous months?"):
-   - ALWAYS state the EXACT Total Remaining (Previous Months) figure: ₱${Number(prevSummary?.totalRemaining || 0).toLocaleString('en-PH')} (e.g. ₱169,502).
-   - Explain clearly that this is the unused budget carried over from completed months (${prevSummary?.completedPeriodLabel || 'January – September'}), calculated as Total Budget (₱${Number(prevSummary?.totalAllocated || 0).toLocaleString('en-PH')}) minus Approved Allocations (₱${Number(prevSummary?.totalApproved || 0).toLocaleString('en-PH')}).
-   - Clarify that the current active month (${prevSummary?.currentActiveMonth || currentMonthName + ' ' + currentYear}) is active and excluded from this previous months summary.
-   - If helpful or requested, provide the completed months breakdown: January (₱24,251), February (₱24,251), March (₱30,000), April (₱0), May (₱0), June (₱0), July (₱30,500), August (₱0), September (₱60,500), totaling ₱169,502.
+1E. **UNUSED BUDGET FROM PREVIOUS MONTHS (REMAINING BUDGETS CARD & BREAKDOWN MODAL)**:
+   - When asked about unused budget from previous months, past months carryover, remaining budgets from previous months, or the "Remaining Budgets" card (e.g., "How much the remaining budgets that unused budget from previous months?", "How much unused budget from past months?", "What is the remaining budget carried over?"):
+   - PRIMARY AUTHORITY: Section 2 ("UNUSED BUDGET FROM PREVIOUS MONTHS") is the SOLE authoritative source for this question.
+   - ALWAYS state the EXACT Total Remaining (Previous Months) figure from Section 2: ₱${Number(prevSummary?.totalRemaining || 0).toLocaleString('en-PH')} (e.g. ₱169,502).
+   - Under NO circumstances should you ever sum up cumulative carryover figures or report an inflated number like ₱774,267. The total unused budget carried over is ₱${Number(prevSummary?.totalRemaining || 0).toLocaleString('en-PH')}.
+   - Explain that this represents the unused budget carried over from completed months (${prevSummary?.completedPeriodLabel || 'January – September ' + currentYear}), calculated as:
+     * Total Budget (Past Months): ₱${Number(prevSummary?.totalAllocated || 0).toLocaleString('en-PH')}
+     * Approved Allocations (Past Months): ₱${Number(prevSummary?.totalApproved || 0).toLocaleString('en-PH')}
+     * Total Remaining Unused Budget: ₱${Number(prevSummary?.totalRemaining || 0).toLocaleString('en-PH')}
+   - State clearly that the current active month (${prevSummary?.currentActiveMonth || currentMonthName + ' ' + currentYear}) is active and is EXCLUDED from the previous months summary.
+   - When providing the monthly breakdown, quote the exact monthly figures from Section 2:
+${(prevSummary?.breakdown || []).map(b => `     - ${b.month}: ₱${Number(b.remainingBudget || 0).toLocaleString('en-PH')} (Total Budget: ₱${Number(b.allocatedBudget || 0).toLocaleString('en-PH')} | Approved: ₱${Number(b.approvedBudget || 0).toLocaleString('en-PH')} | Status: ${b.status})`).join('\n')}
+   - Sum of the completed months remaining budgets: ₱${Number(prevSummary?.totalRemaining || 0).toLocaleString('en-PH')}.
    - NEVER invent or calculate a different number. Use ₱${Number(prevSummary?.totalRemaining || 0).toLocaleString('en-PH')}.
 
 1F. **MONTHLY TOTAL BUDGET & REMAINING BUDGET WITH AUTOMATIC CARRY-FORWARD**:

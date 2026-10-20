@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react'
 import '../PrintPreview.css'
 import './AdditionalDocuments.css'
-import { Printer, X } from 'lucide-react'
+import { Printer, Download, X } from 'lucide-react'
 import logo from '../../assets/logo.png'
 import brgyLogo from '../../assets/brgy-logo-2.png'
-import { capturePrintPagesToPdfBlob } from '../../utils/documentPdfCapture'
+import { capturePrintPagesToPdfBlob, saveDocumentAsPdf } from '../../utils/documentPdfCapture'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -23,20 +23,40 @@ function formatDate(dateStr) {
   })
 }
 
-// Table of contents section numbering
-const tocSections = [
-  { num: 'I', title: 'Preliminaries', page: '1' },
-  { num: 'II', title: 'Introduction', page: '2' },
-  { num: 'III', title: 'Program / Activity Details', page: '3' },
-  { num: 'IV', title: 'Challenges Encountered and Solutions', page: '4' },
-  { num: 'V', title: 'Results, Insights, and Recommendations', page: '5' },
-  { num: 'VI', title: 'Appendices and Attachments', page: '6' },
-]
-
 function NarrativeReportPreview({ data, onClose, onSave }) {
   const [isSaving, setIsSaving] = useState(false)
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [saveError, setSaveError] = useState('')
   const containerRef = useRef(null)
+
+  const showCoverPage = data.includeCoverPage !== false
+  const pageOffset = showCoverPage ? 1 : 0
+
+  const tocSections = [
+    { num: 'I', title: 'Preliminaries (Acknowledgment & TOC)', page: String(1 + pageOffset) },
+    { num: 'II', title: 'Introduction', page: String(2 + pageOffset) },
+    { num: 'III', title: 'Program / Activity Details', page: String(3 + pageOffset) },
+    { num: 'IV', title: 'Challenges Encountered and Solutions', page: String(4 + pageOffset) },
+    { num: 'V', title: 'Results, Insights, and Recommendations', page: String(5 + pageOffset) },
+    { num: 'VI', title: 'Appendices and Attachments', page: String(6 + pageOffset) },
+  ]
+
+  async function handleSavePdf(e) {
+    e?.preventDefault?.()
+    setIsExportingPdf(true)
+    setSaveError('')
+    try {
+      const fileName = `Narrative_Report_${(data.projectTitle || 'Document').replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`
+      const pdfBlob = await saveDocumentAsPdf(containerRef.current, fileName)
+      if (onSave && pdfBlob) {
+        await onSave(data, pdfBlob)
+      }
+    } catch (err) {
+      setSaveError('Failed to generate PDF: ' + err.message)
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
 
   async function handlePrint(e) {
     e.preventDefault()
@@ -64,21 +84,22 @@ function NarrativeReportPreview({ data, onClose, onSave }) {
   const printMode = data.printMode || 'both'
   const showNarrative = printMode === 'both' || printMode === 'narrative'
   const showPhotos = printMode === 'both' || printMode === 'photos'
-  const showCoverPage = data.includeCoverPage !== false
 
   const reportMainTitle = printMode === 'photos' ? 'PHOTO DOCUMENTATION' : printMode === 'both' ? 'NARRATIVE REPORT & PHOTO DOCUMENTATION' : 'NARRATIVE REPORT'
-
 
   return (
     <div className="print-preview-overlay">
       <div className="print-preview-container" style={{ maxWidth: '900px' }} ref={containerRef}>
         <div className="print-preview-toolbar">
           {saveError && <span style={{ color: '#ef4444', marginRight: '16px', fontSize: '0.9rem' }}>{saveError}</span>}
-          <button type="button" className="close-btn" onClick={onClose} disabled={isSaving}>
+          <button type="button" className="close-btn" onClick={onClose} disabled={isSaving || isExportingPdf}>
             <X size={16} /> Close
           </button>
-          <button type="button" className="print-btn" onClick={handlePrint} disabled={isSaving}>
-            <Printer size={16} /> {isSaving ? 'Saving...' : 'Print / Save as PDF'}
+          <button type="button" className="save-pdf-btn" onClick={handleSavePdf} disabled={isSaving || isExportingPdf}>
+            <Download size={16} /> {isExportingPdf ? 'Generating PDF…' : 'Save as PDF'}
+          </button>
+          <button type="button" className="print-btn" onClick={handlePrint} disabled={isSaving || isExportingPdf}>
+            <Printer size={16} /> {isSaving ? 'Preparing…' : 'Print'}
           </button>
         </div>
 
@@ -201,7 +222,7 @@ function NarrativeReportPreview({ data, onClose, onSave }) {
             <div className="print-page nr-print-page" style={{ marginTop: '24px' }}>
           <div className="nr-page-header">
             <span>Narrative Report — {data.projectTitle}</span>
-            <span>Section II</span>
+            <span>Section II · Page {2 + pageOffset}</span>
           </div>
 
           <div className="nr-section">
@@ -236,7 +257,7 @@ function NarrativeReportPreview({ data, onClose, onSave }) {
         <div className="print-page nr-print-page" style={{ marginTop: '24px' }}>
           <div className="nr-page-header">
             <span>Narrative Report — {data.projectTitle}</span>
-            <span>Section III</span>
+            <span>Section III · Page {3 + pageOffset}</span>
           </div>
 
           <div className="nr-section">
@@ -320,7 +341,7 @@ function NarrativeReportPreview({ data, onClose, onSave }) {
         <div className="print-page nr-print-page" style={{ marginTop: '24px' }}>
           <div className="nr-page-header">
             <span>Narrative Report — {data.projectTitle}</span>
-            <span>Section IV</span>
+            <span>Section IV · Page {4 + pageOffset}</span>
           </div>
 
           <div className="nr-section">
@@ -344,7 +365,7 @@ function NarrativeReportPreview({ data, onClose, onSave }) {
         <div className="print-page nr-print-page" style={{ marginTop: '24px' }}>
           <div className="nr-page-header">
             <span>Narrative Report — {data.projectTitle}</span>
-            <span>Section V</span>
+            <span>Section V · Page {5 + pageOffset}</span>
           </div>
 
           <div className="nr-section">
@@ -388,7 +409,7 @@ function NarrativeReportPreview({ data, onClose, onSave }) {
           <div className="print-page nr-print-page" style={{ marginTop: '24px' }}>
             <div className="nr-page-header">
               <span>{reportMainTitle} — {data.projectTitle}</span>
-              <span>{showNarrative ? 'Section VI' : 'Documentation'}</span>
+              <span>{showNarrative ? `Section VI · Page ${6 + pageOffset}` : 'Photo Documentation'}</span>
             </div>
 
             <div className="nr-section">

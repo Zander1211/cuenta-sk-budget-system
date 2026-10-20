@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import '../PrintPreview.css'
+import { Download, Printer, X } from 'lucide-react'
 import './AdditionalDocuments.css'
-import { capturePrintPagesToPdfBlob } from '../../utils/documentPdfCapture'
+import { capturePrintPagesToPdfBlob, saveDocumentAsPdf } from '../../utils/documentPdfCapture'
 
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -11,6 +12,7 @@ const currency = new Intl.NumberFormat('en-PH', {
 
 function ProjectDesignPreview({ data, onClose, onSave, autoSave = false }) {
   const [isSaving, setIsSaving] = useState(false)
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [saveError, setSaveError] = useState('')
   const containerRef = useRef(null)
   const {
@@ -44,6 +46,23 @@ function ProjectDesignPreview({ data, onClose, onSave, autoSave = false }) {
     }
   }
 
+  async function handleSavePdf(e) {
+    e?.preventDefault?.()
+    setIsExportingPdf(true)
+    setSaveError('')
+    try {
+      const fileName = `Project_Design_${(title || 'Document').replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`
+      const pdfBlob = await saveDocumentAsPdf(containerRef.current, fileName)
+      if (onSave && pdfBlob) {
+        await onSave(pdfBlob)
+      }
+    } catch (err) {
+      setSaveError('Failed to generate PDF: ' + err.message)
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
+
   useEffect(() => {
     if (autoSave) performSave()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -69,11 +88,14 @@ function ProjectDesignPreview({ data, onClose, onSave, autoSave = false }) {
       <div className="print-preview-container" ref={containerRef}>
         <div className="print-preview-toolbar">
           {saveError && <span style={{ color: '#ef4444', marginRight: '16px', fontSize: '0.9rem' }}>{saveError}</span>}
-          <button type="button" className="close-btn" onClick={onClose} disabled={isSaving}>
-            Close
+          <button type="button" className="close-btn" onClick={onClose} disabled={isSaving || isExportingPdf}>
+            <X size={16} /> Close
           </button>
-          <button type="button" className="print-btn" onClick={handlePrint} disabled={isSaving}>
-            {isSaving ? 'Saving...' : 'Print / Save as PDF'}
+          <button type="button" className="save-pdf-btn" onClick={handleSavePdf} disabled={isSaving || isExportingPdf}>
+            <Download size={16} /> {isExportingPdf ? 'Generating PDF…' : 'Save as PDF'}
+          </button>
+          <button type="button" className="print-btn" onClick={handlePrint} disabled={isSaving || isExportingPdf}>
+            <Printer size={16} /> {isSaving ? 'Preparing…' : 'Print'}
           </button>
         </div>
 

@@ -1,5 +1,8 @@
 import React, { useRef, useState } from 'react'
-import { X, Printer } from 'lucide-react'
+import { X, Printer, Download } from 'lucide-react'
+import '../PrintPreview.css'
+import { capturePrintPagesToPdfBlob, saveDocumentAsPdf } from '../../utils/documentPdfCapture'
+
 const currency = new Intl.NumberFormat('en-PH', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -12,8 +15,26 @@ function formatCurrency(amount) {
 
 function AnnualReportPreview({ data, onClose, onSave }) {
   const [isSaving, setIsSaving] = useState(false)
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [saveError, setSaveError] = useState('')
   const contentRef = useRef(null)
+
+  async function handleSavePdf(e) {
+    e?.preventDefault?.()
+    setIsExportingPdf(true)
+    setSaveError('')
+    try {
+      const fileName = `Annual_Report_ABYIP_CY_${data.year || 'Report'}.pdf`
+      const pdfBlob = await saveDocumentAsPdf(contentRef.current, fileName)
+      if (onSave && pdfBlob) {
+        await onSave(data, pdfBlob)
+      }
+    } catch (err) {
+      setSaveError('Failed to generate PDF: ' + err.message)
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
 
   async function handlePrint(e) {
     e.preventDefault()
@@ -21,7 +42,8 @@ function AnnualReportPreview({ data, onClose, onSave }) {
       setIsSaving(true)
       setSaveError('')
       try {
-        await onSave(data)
+        const pdfBlob = await capturePrintPagesToPdfBlob(contentRef.current)
+        await onSave(data, pdfBlob)
         setTimeout(() => window.print(), 500)
       } catch (err) {
         setSaveError('Failed to save document record: ' + err.message)
@@ -92,23 +114,27 @@ function AnnualReportPreview({ data, onClose, onSave }) {
       <div className="print-preview-container" ref={contentRef} style={{ overflowX: 'hidden' }}>
         <div className="print-preview-toolbar">
           {saveError && <span style={{ color: '#ef4444', marginRight: '16px', fontSize: '0.9rem' }}>{saveError}</span>}
-          <button type="button" className="close-btn" onClick={onClose} disabled={isSaving}>
+          <button type="button" className="close-btn" onClick={onClose} disabled={isSaving || isExportingPdf}>
             <X size={16} /> Close
           </button>
-          <button type="button" className="print-btn" onClick={handlePrint} disabled={isSaving}>
-            <Printer size={16} /> {isSaving ? 'Saving...' : 'Print / Save as PDF'}
+          <button type="button" className="save-pdf-btn" onClick={handleSavePdf} disabled={isSaving || isExportingPdf}>
+            <Download size={16} /> {isExportingPdf ? 'Generating PDF…' : 'Save as PDF'}
+          </button>
+          <button type="button" className="print-btn" onClick={handlePrint} disabled={isSaving || isExportingPdf}>
+            <Printer size={16} /> {isSaving ? 'Preparing…' : 'Print'}
           </button>
         </div>
 
         <style>{`
           @media print {
-            @page { size: portrait; margin: 0.5in; }
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white !important; }
-            .print-preview-overlay { background: white !important; overflow: visible !important; position: static !important; }
+            @page { size: A4 portrait; margin: 0; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white !important; margin: 0 !important; padding: 0 !important; }
+            .print-preview-overlay { background: white !important; overflow: visible !important; position: static !important; padding: 0 !important; margin: 0 !important; }
             .print-preview-toolbar { display: none !important; }
             .print-preview-container { padding: 0 !important; margin: 0 !important; box-shadow: none !important; width: 100% !important; max-width: 100% !important; overflow: visible !important; }
-            .print-page { box-shadow: none !important; margin: 0 !important; padding: 0 !important; border: none !important; min-height: auto !important; width: 100% !important; }
-            .resolution-section { page-break-before: always; }
+            .print-page { box-shadow: none !important; margin: 0 !important; padding: 32px 36px !important; border: none !important; min-height: auto !important; width: 100% !important; box-sizing: border-box !important; }
+            .resolution-section { break-before: page !important; page-break-before: always !important; }
+            tr, th, td { break-inside: avoid !important; page-break-inside: avoid !important; }
           }
           
           .abyip-container {

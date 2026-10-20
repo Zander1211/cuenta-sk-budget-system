@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { X, Printer } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { X, Printer, Download } from 'lucide-react'
 import { getReceiptDisplayName } from '../../utils/uploadUtils'
+import { capturePrintPagesToPdfBlob, saveDocumentAsPdf } from '../../utils/documentPdfCapture'
 
 const php = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 })
 const pct = (val) => `${Number(val || 0).toFixed(1)}%`
@@ -226,8 +227,32 @@ function RecordSection({ record, index, receiptLinks }) {
 
 export default function FullSummaryReportPreview({ records = [], receiptLinks = {}, filters = {}, onClose, onSave }) {
   const [isSaving, setIsSaving] = useState(false)
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const reportRef = useRef(null)
   const now = new Date()
+
+  async function handleSavePdf() {
+    setIsExportingPdf(true)
+    setSaveError('')
+    try {
+      const fileName = `Full_Summary_Report_${buildFilterLabel().replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`
+      const pdfBlob = await saveDocumentAsPdf(reportRef.current, fileName)
+      if (onSave) {
+        await onSave({
+          records,
+          receiptLinks,
+          filters,
+          generatedAt: now.toISOString(),
+        }, pdfBlob)
+      }
+    } catch (err) {
+      console.error('Failed to export Full Summary Report PDF:', err)
+      setSaveError('Failed to generate PDF: ' + (err.message || 'Unknown error'))
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
 
   async function handlePrint(e) {
     if (e) e.preventDefault()
@@ -235,17 +260,16 @@ export default function FullSummaryReportPreview({ records = [], receiptLinks = 
       setIsSaving(true)
       setSaveError('')
       try {
+        const pdfBlob = await capturePrintPagesToPdfBlob(reportRef.current)
         await onSave({
           records,
           receiptLinks,
           filters,
           generatedAt: now.toISOString(),
-        })
-
+        }, pdfBlob)
       } catch (err) {
         console.error('Failed to save Full Summary Report record:', err)
         setSaveError('Failed to save document record: ' + (err.message || 'Unknown error'))
-
       } finally {
         setIsSaving(false)
       }
@@ -301,41 +325,59 @@ export default function FullSummaryReportPreview({ records = [], receiptLinks = 
           )}
           <button
             type="button"
-            onClick={handlePrint}
-            disabled={isSaving}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '8px 18px', borderRadius: '6px',
-              backgroundColor: 'white', color: '#1a5c3a',
-              border: 'none', cursor: isSaving ? 'not-allowed' : 'pointer',
-              fontWeight: 600, fontSize: '0.88rem',
-              opacity: isSaving ? 0.7 : 1,
-            }}
-          >
-            <Printer size={14} />
-            {isSaving ? 'Saving & Printing…' : 'Print / Export PDF'}
-          </button>
-          <button
-            type="button"
             onClick={onClose}
-            disabled={isSaving}
+            disabled={isSaving || isExportingPdf}
             style={{
               display: 'flex', alignItems: 'center', gap: '6px',
               padding: '8px 14px', borderRadius: '6px',
               backgroundColor: 'rgba(255,255,255,0.15)', color: 'white',
-              border: '1px solid rgba(255,255,255,0.3)', cursor: isSaving ? 'not-allowed' : 'pointer',
+              border: '1px solid rgba(255,255,255,0.3)', cursor: (isSaving || isExportingPdf) ? 'not-allowed' : 'pointer',
               fontWeight: 500, fontSize: '0.88rem',
             }}
           >
             <X size={14} />
             Close
           </button>
+          <button
+            type="button"
+            onClick={handleSavePdf}
+            disabled={isSaving || isExportingPdf}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 18px', borderRadius: '6px',
+              backgroundColor: '#0f172a', color: 'white',
+              border: 'none', cursor: (isSaving || isExportingPdf) ? 'not-allowed' : 'pointer',
+              fontWeight: 600, fontSize: '0.88rem',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+              opacity: (isSaving || isExportingPdf) ? 0.7 : 1,
+            }}
+          >
+            <Download size={14} />
+            {isExportingPdf ? 'Generating PDF…' : 'Save as PDF'}
+          </button>
+          <button
+            type="button"
+            onClick={handlePrint}
+            disabled={isSaving || isExportingPdf}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 18px', borderRadius: '6px',
+              backgroundColor: 'white', color: '#1a5c3a',
+              border: 'none', cursor: (isSaving || isExportingPdf) ? 'not-allowed' : 'pointer',
+              fontWeight: 600, fontSize: '0.88rem',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+              opacity: (isSaving || isExportingPdf) ? 0.7 : 1,
+            }}
+          >
+            <Printer size={14} />
+            {isSaving ? 'Preparing…' : 'Print'}
+          </button>
         </div>
       </div>
 
       {/* Printable Report Body */}
       <div className="fsr-report-wrapper" style={{ paddingTop: '64px', minHeight: '100vh', backgroundColor: '#f1f5f9' }}>
-        <div className="fsr-report-page" style={{
+        <div className="fsr-report-page" ref={reportRef} style={{
           maxWidth: '920px',
           margin: '0 auto',
           padding: '32px 24px 80px',

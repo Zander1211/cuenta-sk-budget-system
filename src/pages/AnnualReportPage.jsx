@@ -12,6 +12,7 @@ import YearSpinner from '../components/YearSpinner'
 import { supabase } from '../supabase/supabaseClient'
 import { summarizeApprovedBudgetFinancials } from '../utils/projectEventFinancials'
 import { useActiveSkChairmanName } from '../hooks/useActiveSkChairmanName'
+import { uploadGeneratedDocumentPdf } from '../utils/uploadUtils'
 
 const currentYear = new Date().getFullYear()
 
@@ -32,6 +33,36 @@ function AnnualReportPage() {
   
   const fullName = profileName
   const surname = profileSurname || fullName.split(' ').filter(Boolean).slice(-1)[0] || ''
+
+  async function handleSaveDocument(reportData, pdfBlob) {
+    const docName = `Annual Report CY ${selectedYear}`
+    const fileName = `Annual_Report_ABYIP_CY_${selectedYear}.pdf`
+    let filePath = null
+
+    if (pdfBlob) {
+      const { path, error } = await uploadGeneratedDocumentPdf(supabase, {
+        kind: 'annual',
+        recordId: selectedYear,
+        blob: pdfBlob,
+        fileName,
+      })
+      if (!error && path) {
+        filePath = path
+      }
+    }
+
+    await addDocument({
+      name: docName,
+      project: `ABYIP CY ${selectedYear}`,
+      generatedBy: fullName || role,
+      type: 'Annual Report',
+      data: { type: 'annual', data: reportData },
+      relatedEntityType: 'annual',
+      relatedEntityId: String(selectedYear),
+      fileName: filePath ? fileName : null,
+      filePath,
+    })
+  }
   
   // Basic Info
   const [barangayName, setBarangayName] = useState('UPPER GLAD 2')

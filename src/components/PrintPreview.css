@@ -39,11 +39,20 @@
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.2s;
+  transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.print-preview-toolbar button:hover {
+.print-preview-toolbar button:hover:not(:disabled) {
   transform: translateY(-1px);
+}
+
+.print-preview-toolbar button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .print-btn {
@@ -52,9 +61,19 @@
   box-shadow: 0 4px 14px rgba(18, 128, 92, 0.35);
 }
 
+.save-pdf-btn {
+  background: #1e293b;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25);
+}
+
+.save-pdf-btn:hover:not(:disabled) {
+  background: #0f172a;
+}
+
 .close-btn {
   background: rgba(255, 255, 255, 0.92);
-  color: var(--ink);
+  color: var(--ink, #0f1f36);
   box-shadow: 0 4px 14px rgba(6, 10, 20, 0.12);
 }
 
@@ -70,6 +89,7 @@
   color: #000;
   font-size: 13px;
   line-height: 1.4;
+  box-sizing: border-box;
 }
 
 /* Upper Glad 2 seal watermark used by the official Purchase Request form. */
@@ -326,91 +346,170 @@
 
 /* ── @media print ── */
 @media print {
-  /* Hide everything except the print page */
-  body * {
-    visibility: hidden;
+  @page {
+    size: A4 portrait;
+    margin: 0;
   }
 
-  /* Make sure the main layout elements don't constrain the print overlay */
-  html, body, #root, .dashboard, .dashboard-shell, .dashboard-layout, .dashboard-main, .fsr-preview-root {
+  @page payroll-landscape {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  /* Reset body and layout elements so nothing clips or shifts the printed document */
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide navigation, sidebars, topbars, floating tools, and all forms behind the overlay */
+  .dashboard-sidebar,
+  .dashboard-mobile-header,
+  .sidebar-scrim,
+  .dashboard-topbar,
+  .chat-widget-fab,
+  .chat-widget-panel,
+  #cue-chat-fab,
+  .mobile-bottom-nav,
+  .no-print,
+  .print-preview-toolbar,
+  .print-btn,
+  .save-pdf-btn,
+  .close-btn,
+  .dashboard-header,
+  .doc-gen-section,
+  .doc-gen-form,
+  .doc-gen-actions,
+  .doc-type-toggle,
+  .overview-card:not(:has(.print-preview-overlay, .fsr-preview-root)),
+  .modal-overlay:not(:has(.print-preview-overlay)) {
+    display: none !important;
+  }
+
+  #root,
+  .dashboard,
+  .dashboard-shell,
+  .dashboard-layout,
+  .dashboard-main,
+  .dashboard-content {
     position: static !important;
     overflow: visible !important;
     height: auto !important;
-    min-height: auto !important;
+    min-height: 0 !important;
     display: block !important;
     padding: 0 !important;
     margin: 0 !important;
-  }
-
-  .print-preview-overlay,
-  .print-preview-overlay *,
-  .fsr-preview-root,
-  .fsr-preview-root * {
-    visibility: visible !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
   }
 
   .print-preview-overlay,
   .fsr-preview-root {
-    position: relative !important;
-    background: #fff;
-    padding: 0;
-    margin: 0;
+    position: static !important;
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
     overflow: visible !important;
     display: block !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
-  .print-preview-toolbar,
-  .no-print,
-  .chat-widget-fab,
-  .chat-widget-panel,
-  #cue-chat-fab {
-    display: none !important;
-  }
-
-  /* The container of the actual page */
   .print-preview-container {
-    max-width: 100%;
-    margin: 0;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
     display: block !important;
+    box-shadow: none !important;
   }
 
+  /* Each .print-page is an exact physical page matching the screen preview */
   .print-page {
-    box-shadow: none;
-    border: none;
-    border-radius: 0;
-    padding: 0;
-    margin: 0;
-    min-height: auto;
-    page-break-after: avoid;
-    width: 100%;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 48px 52px !important;
+    margin: 0 !important;
+    min-height: auto !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    break-after: page !important;
+    page-break-after: always !important;
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
+    background: #fff !important;
   }
 
+  .print-page:last-child,
+  .print-page:last-of-type {
+    break-after: auto !important;
+    page-break-after: auto !important;
+  }
+
+  /* Multi-page preview sheet reset: no top margin between pages in print */
+  .print-page + .print-page {
+    margin-top: 0 !important;
+  }
+
+  /* Headings never orphan at the bottom of a page */
+  h1, h2, h3, h4,
+  .doc-title,
+  .doc-section-title,
+  .nr-section-heading,
+  .nr-sub-heading {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  /* Tables and table rows never slice in half across pages */
+  tr, th, td {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Photo documentation items stay together */
+  .nr-photo-doc-item {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Signatures and certifications never split */
+  .nr-sig-block,
+  .nr-sig-grid,
+  .doc-signatures,
+  .doc-sig-block,
+  .transmittal-signature-group,
+  .payroll-reference-certifications,
+  .dv-form-certifications,
+  .nr-report-footer {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Watermark position identical to screen preview */
   .purchase-request-document {
     position: relative !important;
     overflow: hidden !important;
     isolation: isolate;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .purchase-request-watermark {
-    top: 155px;
-    width: 72%;
-    max-width: 500px;
-    opacity: 0.09;
-  }
-
-  /* Hide all siblings of the tree that leads to print-preview-overlay to prevent extra blank pages */
-  #root *:not(:has(.print-preview-overlay, .fsr-preview-root)):not(.print-preview-overlay, .fsr-preview-root):not(.print-preview-overlay *, .fsr-preview-root *) {
-    display: none !important;
-  }
-
-  /* Reset padding/margin on the tree leading to the overlay */
-  #root, .dashboard, .dashboard-shell, .dashboard-layout, .dashboard-main, .dashboard-content, .overview-card, .doc-gen-section {
-    padding: 0 !important;
-    margin: 0 !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
+    top: 205px !important;
+    left: calc(50% - 15px) !important;
+    width: min(72%, 500px) !important;
+    opacity: 0.085 !important;
   }
 }

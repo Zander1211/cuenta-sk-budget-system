@@ -1208,7 +1208,8 @@
 @media print {
   .dv-document {
     min-height: auto;
-    padding: 0 !important;
+    padding: 28px 30px !important;
+    box-sizing: border-box !important;
   }
 
   .dv-form-scroll {
@@ -1449,7 +1450,8 @@
   .payroll-document {
     page: payroll-landscape;
     min-height: auto;
-    padding: 0 !important;
+    padding: 24px 30px !important;
+    box-sizing: border-box !important;
   }
 
   .payroll-table-wrap {

@@ -1,6 +1,10 @@
+import { useRef, useState } from 'react'
 import './PrintPreview.css'
+import { Download, Printer, X } from 'lucide-react'
 import logo from '../assets/logo.png'
 import brgyLogo from '../assets/brgy-logo.png'
+import { saveDocumentAsPdf } from '../utils/documentPdfCapture'
+
 const currency = new Intl.NumberFormat('en-PH', {
   style: 'currency',
   currency: 'PHP',
@@ -8,8 +12,27 @@ const currency = new Intl.NumberFormat('en-PH', {
 })
 
 function ReceiptPrintPreview({ expense, receiptUrl, onClose }) {
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
+  const [pdfError, setPdfError] = useState('')
+  const reportRef = useRef(null)
+
   const projectName = expense.event || expense.project || 'Untitled'
   const uploadDate = expense.eventDate || expense.date || expense.approvedAt
+
+  async function handleSavePdf(e) {
+    e?.preventDefault?.()
+    setIsExportingPdf(true)
+    setPdfError('')
+    try {
+      const cleanName = (projectName || 'Receipt_Report').replace(/[^a-zA-Z0-9_-]/g, '_')
+      const fileName = `Receipt_Report_${cleanName}.pdf`
+      await saveDocumentAsPdf(reportRef.current, fileName)
+    } catch (err) {
+      setPdfError('Failed to generate PDF: ' + err.message)
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
 
   function handlePrint(e) {
     e.preventDefault()
@@ -18,13 +41,17 @@ function ReceiptPrintPreview({ expense, receiptUrl, onClose }) {
 
   return (
     <div className="print-preview-overlay">
-      <div className="print-preview-container">
+      <div className="print-preview-container" ref={reportRef}>
         <div className="print-preview-toolbar">
-          <button type="button" className="close-btn" onClick={onClose}>
-            Close
+          {pdfError && <span style={{ color: '#ef4444', marginRight: '16px', fontSize: '0.9rem' }}>{pdfError}</span>}
+          <button type="button" className="close-btn" onClick={onClose} disabled={isExportingPdf}>
+            <X size={16} /> Close
           </button>
-          <button type="button" className="print-btn" onClick={handlePrint}>
-            Print / Save as PDF
+          <button type="button" className="save-pdf-btn" onClick={handleSavePdf} disabled={isExportingPdf}>
+            <Download size={16} /> {isExportingPdf ? 'Generating PDF…' : 'Save as PDF'}
+          </button>
+          <button type="button" className="print-btn" onClick={handlePrint} disabled={isExportingPdf}>
+            <Printer size={16} /> Print
           </button>
         </div>
 

@@ -419,11 +419,18 @@ function ChatWidgetInner() {
       for (let m = 1; m <= 12; m++) {
         const mName = MONTH_NAMES[m - 1]
         const mBudgets = budgetsList.filter(b => b.year === yr && (b.monthNumber === m || b.month === mName))
+        const isPastMonth = yr < currentYear || (yr === currentYear && m < currentMonthNum)
+        const isCurrentActiveMonth = yr === currentYear && m === currentMonthNum
+
         const mCarryForward = calculateCarryForwardBudget(effectiveBudgets, effectiveExpenses, m, yr)
         const mApprovedBudget = getBudgetTotalForPeriod(effectiveBudgets, m, yr)
-        const mTotalBudget = mApprovedBudget + mCarryForward
         const mApprovedTotal = getApprovedAllocationTotal(effectiveExpenses, m, yr)
-        const mRemainingBudget = mTotalBudget - mApprovedTotal
+        const monthlyRemaining = mApprovedBudget - mApprovedTotal
+
+        // For completed past months, the remaining budget is what remained unused from that month (Allocated - Approved).
+        // For the current active month, total available budget includes carried forward unused funds from past months:
+        const mTotalBudget = isCurrentActiveMonth ? (mApprovedBudget + mCarryForward) : mApprovedBudget
+        const mRemainingBudget = isCurrentActiveMonth ? (mTotalBudget - mApprovedTotal) : monthlyRemaining
         
         const workingBudget = summarizeApprovedBudgetFinancials(
           effectiveExpenses,
@@ -432,11 +439,13 @@ function ChatWidgetInner() {
         )
         const mExpenseTotal = workingBudget.totalExpenses
 
-        if (mTotalBudget > 0 || mApprovedTotal > 0 || workingBudget.records.length > 0) {
+        if (mTotalBudget > 0 || mApprovedBudget > 0 || mApprovedTotal > 0 || workingBudget.records.length > 0) {
           monthlySummaries.push({
             month: mName,
             monthNumber: m,
             year: yr,
+            isPastMonth,
+            isCurrentMonth: isCurrentActiveMonth,
             allocatedBudget: mApprovedBudget,
             carryForwardBudget: mCarryForward,
             totalBudget: mTotalBudget,
@@ -445,7 +454,7 @@ function ChatWidgetInner() {
             actualExpenses: mExpenseTotal,
             remainingBalance: mRemainingBudget,
             remainingBudget: mRemainingBudget,
-            remainingMonthlyAllocation: mRemainingBudget,
+            remainingMonthlyAllocation: monthlyRemaining,
             sources: mBudgets.map(b => b.source).join(', ') || 'Regular SK Budget',
             approvedRecordCount: workingBudget.records.length,
           })
@@ -862,16 +871,21 @@ function ChatWidgetInner() {
     // -------------------------------------------------------------
     // RULE 0: PREVIOUS MONTHS UNUSED BUDGET ("Remaining Budgets" card & breakdown modal)
     // -------------------------------------------------------------
-    const isPreviousMonthsQuery = /\b(previous month|previous months|past month|past months|prior month|prior months|unused budget|remaining budgets|carried over|carryover)\b/.test(text)
+    const isPreviousMonthsQuery = /\b(previous months?|past months?|prior months?|unused budget|remaining budgets?|carried over|carryover|nakaraang buwan|nakaraang mga buwan)\b/i.test(text)
     if (isPreviousMonthsQuery) {
       const prev = systemCtx.previousMonthsSummary
       if (prev && prev.totalRemaining !== undefined) {
         const fmt = (n) => `₱${Number(n).toLocaleString('en-PH')}`
-        let reply = `The total unused (remaining) budget from the months prior to ${systemCtx.currentMonthName || 'October'} ${systemCtx.currentYear || currentYear} is ${fmt(prev.totalRemaining)}.\n\n`
-        reply += `This represents the unused budget carried over from ${prev.completedMonthsCount} completed months (${prev.completedPeriodLabel}) with a total budget of ${fmt(prev.totalAllocated)} minus approved allocations of ${fmt(prev.totalApproved)}. The current active month (${prev.currentActiveMonth}) is excluded from this summary.\n\n`
-        reply += `Completed Months Breakdown:\n`
+        let reply = `The total unused (remaining) budget from previous months (${prev.completedPeriodLabel || 'January – September ' + currentYear}) is ${fmt(prev.totalRemaining)}.\n\n`
+        reply += `Summary:\n`
+        reply += `• Total Remaining (Previous Months): ${fmt(prev.totalRemaining)}\n`
+        reply += `• Completed Months: ${prev.completedMonthsCount} months (${prev.completedPeriodLabel})\n`
+        reply += `• Total Budget for Past Months: ${fmt(prev.totalAllocated)}\n`
+        reply += `• Approved Budgets for Past Months: ${fmt(prev.totalApproved)}\n`
+        reply += `• Current Active Month: ${prev.currentActiveMonth} (Excluded from previous months summary)\n\n`
+        reply += `Breakdown by Month:\n`
         for (const row of prev.breakdown || []) {
-          reply += `• ${row.month}: Total Budget ${fmt(row.allocatedBudget)} | Approved ${fmt(row.approvedBudget)} | Remaining ${fmt(row.remainingBudget)} (${row.status})\n`
+          reply += `• ${row.month}: Total Budget ${fmt(row.allocatedBudget)} | Approved Budgets ${fmt(row.approvedBudget)} | Remaining Budget ${fmt(row.remainingBudget)} (${row.status})\n`
         }
         return reply.trim()
       }
@@ -1541,6 +1555,17 @@ function ChatWidgetInner() {
         }
       } catch {
         // reply is already plain text, use as-is
+      }
+
+      // Validate that previous months unused budget queries strictly quote the authoritative total
+      const isPrevMonthsQuery = /\b(previous months?|past months?|prior months?|unused budget|remaining budgets?|carried over|carryover|nakaraang buwan|nakaraang mga buwan)\b/i.test(userText)
+      if (isPrevMonthsQuery && systemCtx.previousMonthsSummary?.totalRemaining !== undefined) {
+        const expectedTotal = systemCtx.previousMonthsSummary.totalRemaining
+        const formattedTotal = Number(expectedTotal).toLocaleString('en-PH')
+        // If the reply does not contain the expected total or contains an erroneous sum like 774,267, replace with authoritative breakdown
+        if (!replyText.includes(formattedTotal) || replyText.includes('774,267') || replyText.includes('774267')) {
+          replyText = processFinancialQuery(userText, systemCtx)
+        }
       }
 
       // An empty reply means the model returned nothing usable; fall back, but

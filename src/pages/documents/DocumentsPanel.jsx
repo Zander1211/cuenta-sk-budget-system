@@ -5,6 +5,13 @@ import { useAuth } from '../../context/AuthContext'
 import { useDocuments } from '../../context/DocumentContext'
 import AnnualReportPreview from '../../components/documents/AnnualReportPreview'
 import FullSummaryReportPreview from '../../components/documents/FullSummaryReportPreview'
+import PurchaseRequestPreview from '../../components/PurchaseRequestPreview'
+import DisbursementVoucherPreview from '../../components/documents/DisbursementVoucherPreview'
+import PayrollPreview from '../../components/documents/PayrollPreview'
+import ProjectDesignPreview from '../../components/documents/ProjectDesignPreview'
+import ItineraryOfTravelPreview from '../../components/documents/ItineraryOfTravelPreview'
+import TransmittalLetterPreview from '../../components/documents/TransmittalLetterPreview'
+import NarrativeReportPreview from '../../components/documents/NarrativeReportPreview'
 import PaginationControls from '../../components/PaginationControls'
 import FullSummaryReportPanel from './FullSummaryReportPanel'
 
@@ -91,23 +98,41 @@ function DocumentsPanel() {
   function renderViewingDoc() {
     if (!viewingDoc) return null
     const storedData = viewingDoc.data || {}
-    const type = storedData.type || (viewingDoc.type === 'Annual Report' ? 'annual' : viewingDoc.type === 'Full Summary Report' ? 'full_summary' : null)
+    const rawType = storedData.type || viewingDoc.type
+    const type = (
+      rawType === 'annual' || rawType === 'Annual Report' ? 'annual' :
+      rawType === 'full_summary' || rawType === 'Full Summary Report' ? 'full_summary' :
+      rawType === 'pr' || rawType === 'Purchase Request' ? 'pr' :
+      rawType === 'dv' || rawType === 'Disbursement Voucher' ? 'dv' :
+      rawType === 'payroll' || rawType === 'Payroll' ? 'payroll' :
+      rawType === 'project' || rawType === 'Project Design' ? 'project' :
+      rawType === 'itinerary' || rawType === 'Itinerary of Travel' ? 'itinerary' :
+      rawType === 'transmittal' || rawType === 'Transmittal Letter' ? 'transmittal' :
+      rawType === 'narrative' || rawType === 'Narrative Report' ? 'narrative' : null
+    )
     const data = storedData.data || storedData
     const onClose = () => setViewingDoc(null)
+    const props = { data, onClose }
 
     if (type === 'annual') return <AnnualReportPreview data={data} onClose={onClose} />
-    if (type === 'full_summary' || viewingDoc.type === 'Full Summary Report') {
+    if (type === 'full_summary') {
       return (
-
-          <FullSummaryReportPreview
-            records={storedData.records || storedData.data?.records || []}
-            receiptLinks={storedData.receiptLinks || storedData.data?.receiptLinks || {}}
-            filters={storedData.filters || storedData.data?.filters || {}}
-            onClose={onClose}
-          />
-
+        <FullSummaryReportPreview
+          records={storedData.records || storedData.data?.records || []}
+          receiptLinks={storedData.receiptLinks || storedData.data?.receiptLinks || {}}
+          filters={storedData.filters || storedData.data?.filters || {}}
+          onClose={onClose}
+        />
       )
     }
+    if (type === 'pr') return <PurchaseRequestPreview {...props} />
+    if (type === 'dv') return <DisbursementVoucherPreview {...props} />
+    if (type === 'payroll') return <PayrollPreview {...props} />
+    if (type === 'project') return <ProjectDesignPreview {...props} />
+    if (type === 'itinerary') return <ItineraryOfTravelPreview {...props} />
+    if (type === 'transmittal') return <TransmittalLetterPreview {...props} />
+    if (type === 'narrative') return <NarrativeReportPreview {...props} />
+
     return null
   }
 
