@@ -25,7 +25,7 @@ import {
 } from '../hooks/useAnalysisData'
 import { useAnalysisAI } from '../hooks/useAnalysisAI'
 import { MetricCard } from '../components/analysis/AnalysisUI'
-import { buildOverviewInsights, rollUpHealth } from '../utils/insights'
+import { buildOverviewInsights, rollUpHealth, RISK_DEFINITIONS } from '../utils/insights'
 import {
   formatCurrency,
   formatPercentage,
@@ -463,6 +463,12 @@ export default function AiAnalysisPage() {
   }, [ai.recommendations, summary, category])
 
   // ---------- Health badge ----------
+  const activeFinancialObservations = useMemo(() => {
+    return (ai.insights || []).filter((item) => {
+      return Boolean(item.title && (item.detail || item.why))
+    }).slice(0, 4)
+  }, [ai.insights])
+
   const severityCounts = useMemo(() =>
     ai.insights.reduce((acc, item) => {
       const s = item.severity === 'high' || item.severity === 'medium' ? item.severity : 'low'
@@ -478,7 +484,8 @@ export default function AiAnalysisPage() {
     totalBudget: summary.totalBudget,
     totalExpenses: summary.totalExpenses,
     spendingTrend: trend.trend.direction,
-  }), [severityCounts, summary.remainingBalance, summary.utilizationRate, summary.totalBudget, summary.totalExpenses, trend.trend.direction])
+    returnedBudget: summary.returnedBudget,
+  }), [severityCounts, summary.remainingBalance, summary.utilizationRate, summary.totalBudget, summary.totalExpenses, trend.trend.direction, summary.returnedBudget])
 
   // ---------- Render ----------
   return (
@@ -894,37 +901,146 @@ export default function AiAnalysisPage() {
             <Section
               icon={ShieldAlert}
               title="AI Risk & Anomaly Analysis"
-              desc="Financial health evaluation based on budget utilization, remaining balances, spending velocity, and variance anomalies."
+              desc="Single overall financial risk assessment based on budget utilization, remaining balances, spending velocity, and variance anomalies."
             >
-              <div className="an-risk-grid">
-                {ai.insights && ai.insights.length ? (
-                  ai.insights.map((item, index) => {
-                    const sev = item.severity === 'high' || item.severity === 'medium' ? item.severity : 'low'
-                    const meta = SEVERITY_META[sev]
-                    const IconComp = meta.Icon
-                    return (
-                      <div key={`${item.title}-${index}`} className={`an-risk-card ${meta.colorClass}`}>
-                        <div className="an-risk-card-head">
-                          <h3 className="an-risk-card-title">{item.title}</h3>
-                          <span className={`an-chip ${sev}`}>
-                            <IconComp size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: '-1px' }} />
-                            {meta.label}
-                          </span>
-                        </div>
-                        {item.why && (
-                          <p className="an-risk-why">
-                            <span className="an-risk-why-tag">Why:</span>{item.why}
-                          </p>
-                        )}
-                        {item.detail && <p className="an-risk-detail">{item.detail}</p>}
-                      </div>
-                    )
-                  })
-                ) : (
-                  <div className="an-card" style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--ink-3)' }}>
-                    No financial risks or anomalies detected for this period.
+              <div className={`an-overall-risk-banner ${overallHealth.colorClass}`} style={{ gridColumn: '1 / -1' }}>
+                <div className="an-overall-risk-header">
+                  <div className="an-overall-risk-badge-group">
+                    <span className={`an-overall-risk-pill ${overallHealth.colorClass}`}>
+                      <span className="an-risk-emoji" aria-hidden="true">{overallHealth.emoji}</span>
+                      <span className="an-risk-pill-text">Overall Financial Risk: {overallHealth.label}</span>
+                    </span>
+                    <span className="an-overall-risk-subtitle">Active Financial Assessment</span>
+                  </div>
+                  <div className="an-overall-risk-meta">
+                    Evaluated from latest financial records
+                  </div>
+                </div>
+
+                <div className="an-overall-risk-body">
+                  {/* Risk Description */}
+                  <div className="an-overall-risk-desc-box">
+                    <h4 className="an-overall-risk-section-label">Risk Assessment Rationale</h4>
+                    <p className="an-overall-risk-desc-text">{overallHealth.description}</p>
+                  </div>
+
+                  {/* AI Recommendation */}
+                  <div className="an-overall-risk-reco-box">
+                    <div className="an-overall-risk-reco-head">
+                      <Lightbulb size={16} />
+                      <span>AI Financial Recommendation</span>
+                    </div>
+                    <p className="an-overall-risk-reco-text">{overallHealth.recommendation}</p>
+                  </div>
+                </div>
+
+                {/* Financial Basis Only Section */}
+                <div className="an-overall-risk-basis">
+                  <div className="an-overall-risk-basis-head">
+                    <span className="an-overall-risk-basis-title">Financial Basis &amp; Key Indicators</span>
+                    <span className="an-overall-risk-basis-note">Administrative data (pending approvals/requests) is strictly excluded</span>
+                  </div>
+                  <div className="an-overall-risk-basis-grid">
+                    <div className="an-basis-card">
+                      <span className="an-basis-card-label">Approved Budget</span>
+                      <span className="an-basis-card-value">{formatCurrency(summary.totalBudget)}</span>
+                    </div>
+                    <div className="an-basis-card">
+                      <span className="an-basis-card-label">Total Expenses</span>
+                      <span className="an-basis-card-value">{formatCurrency(summary.totalExpenses)}</span>
+                    </div>
+                    <div className="an-basis-card">
+                      <span className="an-basis-card-label">Remaining Budget</span>
+                      <span className={`an-basis-card-value ${summary.remainingBalance < 0 ? 'danger' : 'positive'}`}>
+                        {formatCurrency(summary.remainingBalance)}
+                      </span>
+                    </div>
+                    <div className="an-basis-card">
+                      <span className="an-basis-card-label">Budget Utilization</span>
+                      <span className={`an-basis-card-value ${summary.performance.tone}`}>
+                        {formatPercentage(summary.utilizationRate, 1)} ({summary.performance.label})
+                      </span>
+                    </div>
+                    <div className="an-basis-card">
+                      <span className="an-basis-card-label">Returned Budget</span>
+                      <span className="an-basis-card-value">
+                        {summary.returnedBudget > 0 ? formatCurrency(summary.returnedBudget) : '₱0.00'}
+                      </span>
+                    </div>
+                    <div className="an-basis-card">
+                      <span className="an-basis-card-label">Spending Trend</span>
+                      <span className="an-basis-card-value">
+                        {trend.trend.direction} Trend
+                      </span>
+                    </div>
+                    <div className="an-basis-card">
+                      <span className="an-basis-card-label">Financial Anomalies</span>
+                      <span className={`an-basis-card-value ${overallHealth.level === 'high' ? 'danger' : overallHealth.level === 'medium' ? 'warning' : 'positive'}`}>
+                        {overallHealth.level === 'high' ? 'Significant Anomaly' : overallHealth.level === 'medium' ? 'Attention Needed' : 'None Detected'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Supporting Financial Observations */}
+                {activeFinancialObservations.length > 0 && (
+                  <div className="an-overall-risk-observations">
+                    <h5 className="an-observations-title">Supporting Financial Observations</h5>
+                    <ul className="an-observations-list">
+                      {activeFinancialObservations.map((obs, idx) => (
+                        <li key={idx} className="an-observation-item">
+                          <strong>{obs.title}:</strong> {obs.detail || obs.why}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
+              </div>
+
+              {/* Risk Level Reference Section */}
+              <div className="an-risk-ref-section" style={{ gridColumn: '1 / -1' }}>
+                <div className="an-risk-ref-head">
+                  <div>
+                    <h4 className="an-risk-ref-title">Risk Level Reference</h4>
+                    <p className="an-risk-ref-subtitle" style={{ margin: '2px 0 0' }}>
+                      Standard risk definitions guide. Only the current Overall Financial Risk (<strong>{overallHealth.label}</strong>) is active and highlighted below.
+                    </p>
+                  </div>
+                </div>
+                <div className="an-risk-ref-grid">
+                  {[
+                    { key: 'low', meta: RISK_DEFINITIONS.low },
+                    { key: 'medium', meta: RISK_DEFINITIONS.medium },
+                    { key: 'high', meta: RISK_DEFINITIONS.high },
+                  ].map(({ key, meta }) => {
+                    const isActive = overallHealth.level === key
+                    return (
+                      <div
+                        key={key}
+                        className={`an-ref-card ${key} ${isActive ? 'is-active' : 'is-reference'}`}
+                      >
+                        <div className="an-ref-card-header">
+                          <h5 className="an-ref-card-title">
+                            <span className="an-risk-emoji" aria-hidden="true">{meta.emoji}</span>
+                            {meta.label}
+                          </h5>
+                          {isActive ? (
+                            <span className={`an-ref-tag active-${key}`}>
+                              ● Highlighted (Current Risk)
+                            </span>
+                          ) : (
+                            <span className="an-ref-tag reference">
+                              Reference Only
+                            </span>
+                          )}
+                        </div>
+                        <p className="an-ref-card-desc">
+                          {meta.description}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </Section>
 

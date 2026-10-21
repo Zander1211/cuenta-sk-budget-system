@@ -26,10 +26,50 @@ export function severityForTone(tone) {
 
 // Deterministic Financial Risk Classification.
 // Classifies financial status exclusively using financial indicators:
-// - Low Risk: Spending within approved budget, utilization well managed, no unusual patterns, sufficient remaining balance.
-// - Medium Risk: Utilization approaching limit (>= 80%), spending accelerating, remaining balance limited, or notable concentration/variance.
-// - High Risk: Budget fully utilized or exceeded, overspending detected, remaining budget critically low (>= 95%), or significant financial anomalies.
-// Pending approvals, requests, reviews, and workflow statuses are strictly excluded.
+// - Low Risk (🟢): Spending within approved budget, utilization well managed, no unusual patterns, sufficient remaining balance.
+// - Medium Risk (🟡): Utilization approaching limit (>= 80%), spending accelerating, remaining balance limited, or notable concentration/variance.
+// - High Risk (🔴): Budget fully utilized or exceeded, overspending detected, remaining budget critically low (>= 95%), or significant financial anomalies.
+// Pending approvals, requests, reviews, workflow status, and user activities are strictly excluded.
+
+export const RISK_DEFINITIONS = {
+  high: {
+    level: 'high',
+    label: 'High Risk',
+    emoji: '🔴',
+    tone: 'danger',
+    colorClass: 'high',
+    chipTone: 'danger',
+    description:
+      'The approved budget has been fully utilized, exceeded, or significant financial anomalies have been detected. Immediate financial review and corrective action are recommended.',
+    recommendation:
+      'Immediate financial review and corrective action are recommended. Reduce unnecessary expenditures and evaluate budget allocations to prevent overspending.',
+  },
+  medium: {
+    level: 'medium',
+    label: 'Medium Risk',
+    emoji: '🟡',
+    tone: 'warning',
+    colorClass: 'medium',
+    chipTone: 'warning',
+    description:
+      'Budget utilization is increasing and should be monitored closely. While spending remains within the approved budget, the remaining budget is becoming limited or spending is increasing faster than expected.',
+    recommendation:
+      'Review current spending trends, prioritize essential expenses, and continue monitoring the remaining budget to avoid reaching a high-risk financial condition.',
+  },
+  low: {
+    level: 'low',
+    label: 'Low Risk',
+    emoji: '🟢',
+    tone: 'positive',
+    colorClass: 'low',
+    chipTone: 'positive',
+    description:
+      'Financial performance is stable. Spending is well within the approved budget, sufficient funds remain available, and no unusual financial activity has been detected.',
+    recommendation:
+      'Continue monitoring expenses and maintain responsible budget utilization.',
+  },
+}
+
 export function rollUpHealth({
   severityCounts = { high: 0, medium: 0, low: 0 },
   remainingBalance = 0,
@@ -37,21 +77,19 @@ export function rollUpHealth({
   totalBudget = 0,
   totalExpenses = 0,
   spendingTrend = 'Stable',
+  returnedBudget = 0,
+  largestVariance = null,
 }) {
-  const isOverBudget = remainingBalance < 0 || (totalBudget > 0 && totalExpenses > totalBudget) || utilizationRate >= 100
+  const isOverBudget = remainingBalance < 0 || (totalBudget > 0 && totalExpenses > totalBudget) || (totalBudget > 0 && utilizationRate >= 100)
   const isCriticallyLow = (totalBudget > 0 && utilizationRate >= 95) || (totalBudget > 0 && remainingBalance <= 0)
-  const hasHighAnomalies = (severityCounts.high || 0) > 0
+  const hasHighAnomalies = (severityCounts.high || 0) > 0 || (largestVariance && largestVariance.status === 'Over Budget')
 
   if (isOverBudget || isCriticallyLow || hasHighAnomalies) {
     return {
-      label: 'High Risk',
-      tone: 'danger',
-      level: 'high',
-      description: isOverBudget
-        ? 'Budget has been fully utilized or exceeded.'
-        : isCriticallyLow
-          ? 'Remaining budget is critically low.'
-          : 'Significant financial anomalies or unusual spending patterns identified.',
+      ...RISK_DEFINITIONS.high,
+      isOverBudget,
+      isCriticallyLow,
+      hasHighAnomalies,
     }
   }
 
@@ -61,22 +99,15 @@ export function rollUpHealth({
 
   if (isApproachingLimit || isAccelerating || hasMediumAnomalies) {
     return {
-      label: 'Medium Risk',
-      tone: 'warning',
-      level: 'medium',
-      description: isApproachingLimit
-        ? 'Budget utilization is approaching its limit.'
-        : isAccelerating
-          ? 'Spending is increasing faster than expected.'
-          : 'Certain projects or categories require closer financial monitoring.',
+      ...RISK_DEFINITIONS.medium,
+      isApproachingLimit,
+      isAccelerating,
+      hasMediumAnomalies,
     }
   }
 
   return {
-    label: 'Low Risk',
-    tone: 'positive',
-    level: 'low',
-    description: 'Spending is within approved budget and budget utilization is well managed.',
+    ...RISK_DEFINITIONS.low,
   }
 }
 
