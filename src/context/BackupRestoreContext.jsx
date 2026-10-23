@@ -23,7 +23,7 @@ const SUPABASE_TABLES = [
   'project_photos',
   'notifications',
   'chat_history',
-  'audit_trail',
+  'activity_logs',
   'backups',
   'restore_history',
 ]
@@ -663,9 +663,7 @@ export function BackupRestoreProvider({ children }) {
   }
 
   function normalizeBackupData(parsed) {
-    if (isNewFormat(parsed)) return parsed
-
-    return {
+    const data = isNewFormat(parsed) ? { ...parsed } : {
       meta: {
         version: '1.0',
         appName: 'Cuenta',
@@ -675,6 +673,12 @@ export function BackupRestoreProvider({ children }) {
       supabase: parsed,
       localStorage: {},
     }
+
+    if (data.supabase && data.supabase.audit_trail && !data.supabase.activity_logs) {
+      data.supabase.activity_logs = data.supabase.audit_trail
+    }
+
+    return data
   }
 
   // ── Restore from Backup ──────────────────────────────────────

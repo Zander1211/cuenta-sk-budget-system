@@ -18,21 +18,26 @@ function addToPeriod(map, period, amount) {
   map.set(period, current)
 }
 
+let auditRes = await supabase.from('activity_logs').select('id, user_name, action, action_type, module, record_type, record_id, description, new_value, created_at').order('created_at', { ascending: true })
+if (auditRes.error) {
+  auditRes = await supabase.from('audit_trail').select('id, user_name, action, action_type, module, record_type, record_id, description, new_value, created_at').order('created_at', { ascending: true })
+}
+const auditRows = auditRes.data
+const auditError = auditRes.error
+
 const [
   { data: budgets, error: budgetError },
   { data: expenses, error: expenseError },
   { data: requests, error: requestError },
-  { data: auditRows, error: auditError },
   { data: restoreRows, error: restoreError },
 ] = await Promise.all([
   supabase.from('budgets').select('id, month, year, amount, source, created_at'),
   supabase.from('expenses').select('id, request_id, type, amount, approved_budget, status, archived_at, is_additional, event_date, date, approved_at, created_at'),
   supabase.from('budget_requests').select('id, type, amount, approved_amount, status, archived_at, event_date, approved_at, created_at'),
-  supabase.from('audit_trail').select('id, user_name, action, action_type, module, record_type, record_id, description, new_value, created_at').order('created_at', { ascending: true }),
   supabase.from('restore_history').select('id, filename, restored_at, snapshot').order('restored_at', { ascending: true }),
 ])
 
-for (const [label, error] of [['budgets', budgetError], ['expenses', expenseError], ['budget_requests', requestError], ['audit_trail', auditError], ['restore_history', restoreError]]) {
+for (const [label, error] of [['budgets', budgetError], ['expenses', expenseError], ['budget_requests', requestError], ['activity_logs', auditError], ['restore_history', restoreError]]) {
   if (error) throw new Error(`${label}: ${error.message}`)
 }
 

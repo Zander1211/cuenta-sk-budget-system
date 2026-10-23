@@ -50,24 +50,32 @@ export async function logAuditEvent({
   // Use action as actionType fallback if not provided
   const resolvedActionType = actionType || action
 
+  const logPayload = {
+    user_id:        resolvedUserId,
+    user_name:      resolvedName,
+    user_role:      resolvedRole,
+    action,
+    action_type:    resolvedActionType,
+    module,
+    record_type:    recordType,
+    record_id:      String(recordId || ''),
+    description,
+    previous_value: previousValue || null,
+    new_value:      newValue || null,
+    ip_address:     ipAddress || '',
+    device_info:    resolvedDevice || '',
+    status,
+    remarks,
+  }
+
   try {
-    const { error } = await supabase.from('audit_trail').insert({
-      user_id:        resolvedUserId,
-      user_name:      resolvedName,
-      user_role:      resolvedRole,
-      action,
-      action_type:    resolvedActionType,
-      module,
-      record_type:    recordType,
-      record_id:      String(recordId || ''),
-      description,
-      previous_value: previousValue || null,
-      new_value:      newValue || null,
-      ip_address:     ipAddress || '',
-      device_info:    resolvedDevice || '',
-      status,
-      remarks,
-    })
+    let { error } = await supabase.from('activity_logs').insert(logPayload)
+
+    // Fallback to legacy audit_trail table if activity_logs is not available
+    if (error && (error.code === 'PGRST205' || error.code === '42P01' || error.message?.includes('schema cache'))) {
+      const fallback = await supabase.from('audit_trail').insert(logPayload)
+      error = fallback.error
+    }
 
     if (error) {
       console.warn('[auditLogger] Insert failed:', error.message)

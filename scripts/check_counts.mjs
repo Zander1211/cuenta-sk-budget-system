@@ -28,7 +28,7 @@ async function checkAllTables() {
   const candidateTables = [
     'expenses', 'requests', 'budget_requests', 'budgets', 'projects',
     'project_photos', 'documents', 'document_counters', 'report_summaries',
-    'receipt_records', 'chat_history', 'audit_trail', 'backups',
+    'receipt_records', 'chat_history', 'activity_logs', 'audit_trail', 'backups',
     'restore_history', 'notifications', 'created_accounts', 'member_biodata'
   ];
 

@@ -538,9 +538,9 @@ function BudgetProvider({ children }) {
           }
         )
 
-        // 3. Insert into audit_trail
+        // 3. Insert into activity_logs
         try {
-          await supabase.from('audit_trail').insert({
+          const logPayload = {
             user_id: user?.id || null,
             user_name: actorName,
             user_role: actorRole,
@@ -558,7 +558,11 @@ function BudgetProvider({ children }) {
               approvedBudget: approvedAmount,
             },
             status: 'Success',
-          })
+          }
+          let { error: logErr } = await supabase.from('activity_logs').insert(logPayload)
+          if (logErr && (logErr.code === 'PGRST205' || logErr.code === '42P01' || logErr.message?.includes('schema cache'))) {
+            await supabase.from('audit_trail').insert(logPayload)
+          }
         } catch (auditErr) {
           console.warn('Failed to insert audit trail to database:', auditErr)
         }
@@ -694,7 +698,7 @@ function BudgetProvider({ children }) {
     }
 
     try {
-      await supabase.from('audit_trail').insert({
+      const logPayload = {
         user_id: user?.id || null,
         user_name: actorName,
         user_role: actorRole,
@@ -708,7 +712,11 @@ function BudgetProvider({ children }) {
         new_value: { status: 'Rejected' },
         remarks: reason,
         status: 'Success',
-      })
+      }
+      let { error: logErr } = await supabase.from('activity_logs').insert(logPayload)
+      if (logErr && (logErr.code === 'PGRST205' || logErr.code === '42P01' || logErr.message?.includes('schema cache'))) {
+        await supabase.from('audit_trail').insert(logPayload)
+      }
     } catch (auditErr) {
       console.warn('Failed to insert audit log for rejection:', auditErr)
     }
@@ -839,7 +847,7 @@ function BudgetProvider({ children }) {
       if (expErr) console.warn('Failed to update expense cancellation in Supabase:', expErr)
 
       try {
-        await supabase.from('audit_trail').insert({
+        const logPayload = {
           user_id: user?.id || null,
           user_name: actorName,
           user_role: actorRole,
@@ -853,7 +861,11 @@ function BudgetProvider({ children }) {
           new_value: { status: 'Cancelled', projectStatus: 'Cancelled' },
           remarks: reason,
           status: 'Success',
-        })
+        }
+        let { error: logErr } = await supabase.from('activity_logs').insert(logPayload)
+        if (logErr && (logErr.code === 'PGRST205' || logErr.code === '42P01' || logErr.message?.includes('schema cache'))) {
+          await supabase.from('audit_trail').insert(logPayload)
+        }
       } catch (auditErr) {
         console.warn('Failed to insert audit trail for cancellation:', auditErr)
       }

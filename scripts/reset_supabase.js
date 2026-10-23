@@ -85,6 +85,7 @@ const targetTables = [
   'report_summaries',
   'receipt_records',
   'chat_history',
+  'activity_logs',
   'audit_trail',
   'backups',
   'restore_history',

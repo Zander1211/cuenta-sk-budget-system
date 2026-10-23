@@ -76,87 +76,97 @@ function AuditLogProvider({ children }) {
       const from = (page - 1) * PAGE_SIZE
       const to   = from + PAGE_SIZE - 1
 
-      let query = supabase
-        .from('audit_trail')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(from, to)
+      const buildQuery = (tableName) => {
+        let q = supabase
+          .from(tableName)
+          .select('*', { count: 'exact' })
+          .order('created_at', { ascending: false })
+          .range(from, to)
 
-      // ── Full-text search ─────────────────────────────
-      if (filters.search) {
-        const s = filters.search
-        const clauses = [
-          `action.ilike.%${s}%`,
-          `user_name.ilike.%${s}%`,
-          `description.ilike.%${s}%`,
-          `record_id.ilike.%${s}%`,
-          `action_type.ilike.%${s}%`,
-          `module.ilike.%${s}%`,
-        ]
-        // Text that reads as a date ("Sept. 21, 2026") also matches that
-        // day's entries — created_at is a timestamp, so it can't be ilike'd.
-        const searchedDate = parseSearchDate(s)
-        if (searchedDate) {
-          clauses.push(
-            `and(created_at.gte.${searchedDate.start.toISOString()},created_at.lt.${searchedDate.end.toISOString()})`
-          )
+        // ── Full-text search ─────────────────────────────
+        if (filters.search) {
+          const s = filters.search
+          const clauses = [
+            `action.ilike.%${s}%`,
+            `user_name.ilike.%${s}%`,
+            `description.ilike.%${s}%`,
+            `record_id.ilike.%${s}%`,
+            `action_type.ilike.%${s}%`,
+            `module.ilike.%${s}%`,
+          ]
+          // Text that reads as a date ("Sept. 21, 2026") also matches that
+          // day's entries — created_at is a timestamp, so it can't be ilike'd.
+          const searchedDate = parseSearchDate(s)
+          if (searchedDate) {
+            clauses.push(
+              `and(created_at.gte.${searchedDate.start.toISOString()},created_at.lt.${searchedDate.end.toISOString()})`
+            )
+          }
+          q = q.or(clauses.join(','))
         }
-        query = query.or(clauses.join(','))
+
+        // ── Dropdown filters ──────────────────────────────
+        if (filters.userRole && filters.userRole !== 'All') {
+          q = q.eq('user_role', filters.userRole)
+        }
+        if (filters.userName && filters.userName !== 'All') {
+          q = q.eq('user_name', filters.userName)
+        }
+        // Each option maps to the exact action_type strings it covers (including
+        // the legacy spelling of anything that has since been renamed), so the
+        // filter can no longer half-match or silently miss older rows.
+        const actionTypeValues = resolveActionTypeValues(filters.actionType)
+        if (actionTypeValues) {
+          q = actionTypeValues.length === 1
+            ? q.eq('action_type', actionTypeValues[0])
+            : q.in('action_type', actionTypeValues)
+        }
+        const moduleValues = resolveModuleValues(filters.module)
+        if (moduleValues) {
+          q = moduleValues.length === 1
+            ? q.eq('module', moduleValues[0])
+            : q.in('module', moduleValues)
+        }
+        const recordTypeValues = resolveRecordTypeValues(filters.recordType)
+        if (recordTypeValues) {
+          q = recordTypeValues.length === 1
+            ? q.eq('record_type', recordTypeValues[0])
+            : q.in('record_type', recordTypeValues)
+        }
+        if (filters.status && filters.status !== 'All') {
+          q = q.eq('status', filters.status)
+        }
+
+        // ── Year / Month ─────────────────────────────────
+        const monthYearWindow = resolveMonthYearWindow(filters)
+        if (monthYearWindow) {
+          q = q
+            .gte('created_at', monthYearWindow.start.toISOString())
+            .lt('created_at', monthYearWindow.end.toISOString())
+        }
+
+        // ── Date range ────────────────────────────────────
+        if (filters.dateFrom) {
+          const fromDate = new Date(filters.dateFrom)
+          fromDate.setHours(0, 0, 0, 0)
+          q = q.gte('created_at', fromDate.toISOString())
+        }
+        if (filters.dateTo) {
+          const toDate = new Date(filters.dateTo)
+          toDate.setHours(23, 59, 59, 999)
+          q = q.lte('created_at', toDate.toISOString())
+        }
+
+        return q
       }
 
-      // ── Dropdown filters ──────────────────────────────
-      if (filters.userRole && filters.userRole !== 'All') {
-        query = query.eq('user_role', filters.userRole)
-      }
-      if (filters.userName && filters.userName !== 'All') {
-        query = query.eq('user_name', filters.userName)
-      }
-      // Each option maps to the exact action_type strings it covers (including
-      // the legacy spelling of anything that has since been renamed), so the
-      // filter can no longer half-match or silently miss older rows.
-      const actionTypeValues = resolveActionTypeValues(filters.actionType)
-      if (actionTypeValues) {
-        query = actionTypeValues.length === 1
-          ? query.eq('action_type', actionTypeValues[0])
-          : query.in('action_type', actionTypeValues)
-      }
-      const moduleValues = resolveModuleValues(filters.module)
-      if (moduleValues) {
-        query = moduleValues.length === 1
-          ? query.eq('module', moduleValues[0])
-          : query.in('module', moduleValues)
-      }
-      const recordTypeValues = resolveRecordTypeValues(filters.recordType)
-      if (recordTypeValues) {
-        query = recordTypeValues.length === 1
-          ? query.eq('record_type', recordTypeValues[0])
-          : query.in('record_type', recordTypeValues)
-      }
-      if (filters.status && filters.status !== 'All') {
-        query = query.eq('status', filters.status)
+      let res = await buildQuery('activity_logs')
+      // Fallback to legacy audit_trail if activity_logs is not in schema cache
+      if (res.error && (res.error.code === 'PGRST205' || res.error.code === '42P01' || res.error.message?.includes('schema cache'))) {
+        res = await buildQuery('audit_trail')
       }
 
-      // ── Year / Month ─────────────────────────────────
-      const monthYearWindow = resolveMonthYearWindow(filters)
-      if (monthYearWindow) {
-        query = query
-          .gte('created_at', monthYearWindow.start.toISOString())
-          .lt('created_at', monthYearWindow.end.toISOString())
-      }
-
-      // ── Date range ────────────────────────────────────
-      if (filters.dateFrom) {
-        const fromDate = new Date(filters.dateFrom)
-        fromDate.setHours(0, 0, 0, 0)
-        query = query.gte('created_at', fromDate.toISOString())
-      }
-      if (filters.dateTo) {
-        const toDate = new Date(filters.dateTo)
-        toDate.setHours(23, 59, 59, 999)
-        query = query.lte('created_at', toDate.toISOString())
-      }
-
-      const { data, error, count } = await query
+      const { data, error, count } = res
 
       if (error) {
         console.warn('[AuditLogContext] Fetch failed:', error.message)

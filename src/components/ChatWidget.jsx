@@ -617,7 +617,7 @@ function ChatWidgetInner() {
         supabase.from('receipt_records').select('*').order('uploaded_at', { ascending: false }).limit(100),
         supabase.from('documents').select('id, name, type, generated_by, date_generated, related_entity_id').is('archived_at', null).order('date_generated', { ascending: false }).limit(50),
         supabase.from('created_accounts').select('id, full_name, email, role, is_active, created_at').order('created_at', { ascending: false }),
-        supabase.from('audit_trail').select('id, action, action_type, user_name, user_role, description, module, created_at').order('created_at', { ascending: false }).limit(30),
+        supabase.from('activity_logs').select('id, action, action_type, user_name, user_role, description, module, created_at').order('created_at', { ascending: false }).limit(30),
         supabase.from('report_summaries').select('id, report_id, model, summary, updated_at').order('updated_at', { ascending: false }).limit(10),
       ])
 

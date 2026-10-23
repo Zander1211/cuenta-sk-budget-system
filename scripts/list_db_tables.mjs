@@ -34,6 +34,7 @@ async function inspectAllPublicTables() {
     'receipt_records',
     'report_summaries',
     'chat_history',
+    'activity_logs',
     'audit_trail',
     'backups',
     'restore_history',
